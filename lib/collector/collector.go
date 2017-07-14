@@ -145,6 +145,7 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 
 	pts := make([]*pb.TSPoint, len(points))
 	var ptsMtx sync.Mutex
+	var errMtx sync.Mutex
 
 	mm := make(map[string]*pb.Meta)
 	var mtx sync.RWMutex
@@ -170,7 +171,9 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 					Datapoint: rcvMsg,
 					Error:     gerr.Message(),
 				}
+				errMtx.Lock()
 				returnPoints.Errors = append(returnPoints.Errors, reu)
+				errMtx.Unlock()
 
 				ks := "default"
 				if v, ok := rcvMsg.Tags["ksid"]; ok {
