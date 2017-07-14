@@ -5,28 +5,28 @@ import (
 )
 
 func statsQueryThreshold(ks string) {
-	go statsIncrement(
+	statsIncrement(
 		"mycenae.query.threshold",
 		map[string]string{"keyspace": ks},
 	)
 }
 
 func statsQueryLimit(ks string) {
-	go statsIncrement(
+	statsIncrement(
 		"mycenae.query.limit",
 		map[string]string{"keyspace": ks},
 	)
 }
 
 func statsSelectQerror(ks, cf string) {
-	go statsIncrement(
+	statsIncrement(
 		"cassandra.query.error",
 		map[string]string{"keyspace": ks, "column_family": cf, "operation": "select"},
 	)
 }
 
 func statsSelectFerror(ks, cf string) {
-	go statsIncrement(
+	statsIncrement(
 		"cassandra.fallback.error",
 		map[string]string{"keyspace": ks, "column_family": cf, "operation": "select"},
 	)
@@ -37,7 +37,7 @@ func statsIndexError(i, t, m string) {
 	if t != "" {
 		tags["type"] = t
 	}
-	go statsIncrement("elastic.request.error", tags)
+	statsIncrement("elastic.request.error", tags)
 }
 
 func statsIndex(i, t, m string, d time.Duration) {
@@ -45,8 +45,8 @@ func statsIndex(i, t, m string, d time.Duration) {
 	if t != "" {
 		tags["type"] = t
 	}
-	go statsIncrement("elastic.request", tags)
-	go statsValueAdd(
+	statsIncrement("elastic.request", tags)
+	statsValueAdd(
 		"elastic.request.duration",
 		tags,
 		float64(d.Nanoseconds())/float64(time.Millisecond),
@@ -54,8 +54,8 @@ func statsIndex(i, t, m string, d time.Duration) {
 }
 
 func statsSelect(ks, cf string, d time.Duration) {
-	go statsIncrement("cassandra.query", map[string]string{"keyspace": ks, "column_family": cf, "operation": "select"})
-	go statsValueAdd(
+	statsIncrement("cassandra.query", map[string]string{"keyspace": ks, "column_family": cf, "operation": "select"})
+	statsValueAdd(
 		"cassandra.query.duration",
 		map[string]string{"keyspace": ks, "column_family": cf, "operation": "select"},
 		float64(d.Nanoseconds())/float64(time.Millisecond),

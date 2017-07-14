@@ -1,17 +1,12 @@
 package structs
 
 import (
-	"github.com/Sirupsen/logrus"
-	"github.com/uol/gobol/cassandra"
 	"github.com/uol/gobol/rubber"
-	"github.com/uol/gobol/saw"
 	"github.com/uol/gobol/snitch"
+	"github.com/uol/mycenae/lib/cluster"
+	"github.com/uol/mycenae/lib/depot"
+	"github.com/uol/mycenae/lib/meta"
 )
-
-type TsLog struct {
-	General *logrus.Logger
-	Stats   *logrus.Logger
-}
 
 type SettingsHTTP struct {
 	Path string
@@ -28,26 +23,27 @@ type Settings struct {
 	ReadConsistency         []string
 	WriteConsisteny         []string
 	BoltPath                string
+	WALPath                 string
 	MaxTimeseries           int
 	MaxConcurrentTimeseries int
 	MaxConcurrentReads      int
-	LogQueryTSthreshold     int
 	MaxConcurrentPoints     int
-	MaxConcurrentBulks      int
-	MaxMetaBulkSize         int
-	MetaBufferSize          int
-	MetaSaveInterval        string
+	LogQueryTSthreshold     int
+	MaxRateLimit            int
+	Burst                   int
 	CompactionStrategy      string
+	Meta                    *meta.Settings
 	HTTPserver              SettingsHTTP
 	UDPserver               SettingsUDP
 	UDPserverV2             SettingsUDP
-	Cassandra               cassandra.Settings
+	Depot                   depot.Settings
+	Cluster                 cluster.Config
 	TTL                     struct {
 		Max int
 	}
 	Logs struct {
-		General saw.Settings
-		Stats   saw.Settings
+		Environment string
+		LogLevel    string
 	}
 	Stats     snitch.Settings
 	StatsFile struct {

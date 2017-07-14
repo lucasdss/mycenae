@@ -12,6 +12,7 @@ import (
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rip"
 
+	"github.com/uol/mycenae/lib/gorilla"
 	"github.com/uol/mycenae/lib/parser"
 	"github.com/uol/mycenae/lib/structs"
 )
@@ -157,20 +158,13 @@ func (plot *Plot) Query(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 
 	rip.AddStatsMap(r, map[string]string{"path": "/keyspaces/#keyspace/api/query", "keyspace": keyspace})
 
-	strTUUID, found, gerr := plot.boltc.GetKeyspace(keyspace)
+	_, found, gerr := plot.boltc.GetKeyspace(keyspace)
 	if gerr != nil {
 		rip.Fail(w, gerr)
 		return
 	}
 	if !found {
 		gerr := errNotFound("Query")
-		rip.Fail(w, gerr)
-		return
-	}
-
-	tuuid, err := strconv.ParseBool(strTUUID)
-	if err != nil {
-		gerr := errValidationE("Query", err)
 		rip.Fail(w, gerr)
 		return
 	}
@@ -183,7 +177,7 @@ func (plot *Plot) Query(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 		return
 	}
 
-	resps, gerr := plot.getTimeseries(keyspace, tuuid, query)
+	resps, gerr := plot.getTimeseries(keyspace, query)
 	if gerr != nil {
 		rip.Fail(w, gerr)
 		return
@@ -200,7 +194,6 @@ func (plot *Plot) Query(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 
 func (plot *Plot) getTimeseries(
 	keyspace string,
-	tuuid bool,
 	query structs.TSDBqueryPayload,
 ) (resps TSDBresponses, gerr gobol.Error) {
 
@@ -210,19 +203,35 @@ func (plot *Plot) getTimeseries(
 		if gerr != nil {
 			return resps, gerr
 		}
-		query.Start = start.UnixNano() / 1e+6
-		query.End = now.UnixNano() / 1e+6
+		query.Start = start.Unix()
+		query.End = now.Unix()
 	} else {
+
 		if query.Start == 0 {
 			return resps, errValidationS("getTimeseries", "start cannot be zero")
 		}
 
+		t0, err := gorilla.MilliToSeconds(query.Start)
+		if err != nil {
+			return resps, errValidationS("getTimeseries", err.Error())
+		}
+		query.Start = t0
+
 		if query.End == 0 {
-			query.End = time.Now().UnixNano() / 1e+6
+			query.End = time.Now().Unix()
+		} else {
+			tn, err := gorilla.MilliToSeconds(query.End)
+			if err != nil {
+				return resps, errValidationS("getTimeseries", err.Error())
+			}
+			query.End = tn
 		}
 
 		if query.End < query.Start {
-			return resps, errValidationS("getTimeseries", "end date should be equal or bigger than start date")
+			return resps, errValidationS(
+				"getTimeseries",
+				fmt.Sprintf("end date %v should be equal or bigger than start date %v", query.End, query.Start),
+			)
 		}
 	}
 
@@ -252,7 +261,7 @@ func (plot *Plot) getTimeseries(
 
 			switch unit {
 			case "ms":
-				oldDs.Options.Unit = "ms"
+				oldDs.Options.Unit = "sec"
 			case "s":
 				oldDs.Options.Unit = "sec"
 			case "m":
@@ -280,8 +289,6 @@ func (plot *Plot) getTimeseries(
 			oldDs.Enabled = true
 
 		}
-
-		m := fmt.Sprintf("%v", q.Metric)
 
 		for k, v := range q.Tags {
 
@@ -317,14 +324,14 @@ func (plot *Plot) getTimeseries(
 			}
 		}
 
-		tsobs, total, gerr := plot.MetaFilterOpenTSDB(keyspace, "", m, q.Filters, int64(plot.MaxTimeseries))
+		tsobs, total, gerr := plot.MetaFilterOpenTSDB(keyspace, "", q.Metric, q.Filters, int64(plot.MaxTimeseries))
 		if gerr != nil {
 			return resps, gerr
 		}
 
 		if total > plot.LogQueryThreshold {
 			statsQueryThreshold(keyspace)
-			gblog.Warnf("TS THRESHOLD EXEECED: %+v", query)
+			gblog.Sugar().Warnf("TS THRESHOLD EXEECED: %+v", query)
 		}
 
 		if total > plot.MaxTimeseries {
@@ -378,19 +385,19 @@ func (plot *Plot) getTimeseries(
 			if q.FilterValue != "" {
 				filterV.Enabled = true
 				if q.FilterValue[:2] == ">=" || q.FilterValue[:2] == "<=" || q.FilterValue[:2] == "==" {
-					val, err := strconv.ParseFloat(q.FilterValue[2:], 64)
+					val, err := strconv.ParseFloat(q.FilterValue[2:], 32)
 					if err != nil {
 						return resps, errValidationE("getTimeseries", err)
 					}
 					filterV.BoolOper = q.FilterValue[:2]
-					filterV.Value = val
+					filterV.Value = float32(val)
 				} else if q.FilterValue[:1] == ">" || q.FilterValue[:1] == "<" {
 					val, err := strconv.ParseFloat(q.FilterValue[1:], 64)
 					if err != nil {
 						return resps, errValidationE("getTimeseries", err)
 					}
 					filterV.BoolOper = q.FilterValue[:1]
-					filterV.Value = val
+					filterV.Value = float32(val)
 				}
 			}
 
@@ -423,7 +430,6 @@ func (plot *Plot) getTimeseries(
 				query.Start,
 				query.End,
 				opers,
-				tuuid,
 				query.MsResolution,
 				keepEmpty,
 			)
@@ -438,36 +444,8 @@ func (plot *Plot) getTimeseries(
 			}
 
 			sort.Strings(aggTags)
-
-			points := map[string]interface{}{}
-
-			for _, point := range serie.Data {
-
-				k := point.Date
-
-				if !query.MsResolution {
-					k = point.Date / 1000
-				}
-
-				ksrt := strconv.FormatInt(k, 10)
-				if point.Empty {
-					switch oldDs.Options.Fill {
-					case "null":
-						points[ksrt] = nil
-					case "nan":
-						points[ksrt] = "NaN"
-					default:
-						points[ksrt] = point.Value
-					}
-				} else {
-					points[ksrt] = point.Value
-				}
-
-			}
-
-			if len(points) > 0 {
+			if serie.Data.Len() > 0 {
 				tagsU := make(map[string]string)
-
 				for k, kv := range tagK {
 					if len(kv) == 1 {
 						for v := range kv {
@@ -480,22 +458,22 @@ func (plot *Plot) getTimeseries(
 					Metric:         q.Metric,
 					Tags:           tagsU,
 					AggregatedTags: aggTags,
-					Dps:            points,
+					Dps: &TSMarshaler{
+						fill:  oldDs.Options.Fill,
+						milli: query.MsResolution,
+						data:  serie.Data,
+					},
 				}
 
 				if query.ShowTSUIDs {
 					resp.Tsuids = ids
 				}
-
 				resps = append(resps, resp)
 			}
-
 		}
-
 	}
 
 	sort.Sort(resps)
-
 	return resps, gerr
 }
 

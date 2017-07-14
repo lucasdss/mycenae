@@ -2,20 +2,21 @@ package collector
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sync/atomic"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/uol/gobol"
+	"github.com/uol/mycenae/lib/gorilla"
+
+	"go.uber.org/zap"
 )
 
 func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
-	go func() {
-		collector.saveMutex.Lock()
-		collector.saving++
-		collector.saveMutex.Unlock()
-	}()
 
-	rcvMsg := TSDBpoint{}
+	atomic.AddInt64(&collector.saving, 1)
+
+	rcvMsg := gorilla.TSDBpoint{}
 
 	var gerr gobol.Error
 
@@ -26,7 +27,7 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 		if gr := collector.saveError(
 			map[string]string{},
 			"",
-			collector.settings.Cassandra.Keyspace,
+			collector.settings.Depot.Cassandra.Keyspace,
 			collector.settings.ElasticSearch.Index,
 			"noKey",
 			string(buf),
@@ -47,12 +48,21 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 
 	isNumber := true
 
-	gerr = collector.HandlePacket(rcvMsg, isNumber)
+	pts := gorilla.TSDBpoints{rcvMsg}
+
+	rErr := collector.HandlePoint(pts)
+	if len(rErr.Errors) > 0 {
+		gerr = errISE(
+			"HandleUDPpacket",
+			"unable to process udp point",
+			errors.New(rErr.Errors[0].Error),
+		)
+	}
 	if gerr != nil {
 
 		collector.fail(gerr, addr)
 
-		keyspace := collector.settings.Cassandra.Keyspace
+		keyspace := collector.settings.Depot.Cassandra.Keyspace
 		esIndex := collector.settings.ElasticSearch.Index
 
 		if msgKs != "" {
@@ -66,7 +76,7 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 			}
 		}
 
-		id := GenerateID(rcvMsg)
+		id := GenerateID(&rcvMsg)
 		if !isNumber {
 			id = fmt.Sprintf("T%v", id)
 		}
@@ -88,27 +98,23 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 		statsUDP(msgKs, "number")
 	}
 
-	go func() {
-		collector.saveMutex.Lock()
-		collector.saving--
-		collector.saveMutex.Unlock()
-	}()
+	atomic.AddInt64(&collector.saving, -1)
+
 }
 
 func (collector *Collector) fail(gerr gobol.Error, addr string) {
 	defer func() {
 		if r := recover(); r != nil {
-			gblog.WithFields(
-				logrus.Fields{
-					"func":    "fail",
-					"pacakge": "Collector",
-				},
-			).Errorf("Panic: %v", r)
+			gblog.Error(
+				fmt.Sprintf("Panic: %v", r),
+				zap.String("func", "fail"),
+				zap.String("package", "Collector"),
+			)
 		}
 	}()
 
 	fields := gerr.LogFields()
 	fields["addr"] = addr
 
-	gblog.WithFields(fields).Error(gerr.Error())
+	gblog.Error(gerr.Error(), zap.Any("fields", fields))
 }

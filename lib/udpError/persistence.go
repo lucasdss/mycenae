@@ -3,10 +3,11 @@ package udpError
 import (
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/gocql/gocql"
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rubber"
+
+	"go.uber.org/zap"
 )
 
 type persistence struct {
@@ -42,10 +43,12 @@ func (persist *persistence) GetErrorInfo(key string) ([]ErrorInfo, gobol.Error) 
 
 		if err := iter.Close(); err != nil {
 
-			gblog.WithFields(logrus.Fields{
-				"package": "udpError/persistence",
-				"func":    "GetErrorInfo",
-			}).Error(err)
+			gblog.Error(
+				"",
+				zap.String("package", "udpError/persistence"),
+				zap.String("func", "GetErrorInfo"),
+				zap.Error(err),
+			)
 
 			if err == gocql.ErrNotFound {
 				statsSelct("default", "ts_error", time.Since(start))

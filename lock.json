@@ -1,0 +1,267 @@
+{
+    "memo": "3c4396ff2f3205c09af1f54404eeeaffb97f8db54acef64cc50b946f2ac9a260",
+    "projects": [
+        {
+            "name": "github.com/BurntSushi/toml",
+            "branch": "master",
+            "revision": "b26d9c308763d68093482582cea63d69be07a0f0",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/Sirupsen/logrus",
+            "branch": "master",
+            "revision": "10f801ebc38b33738c9d17d50860f484a0988ff5",
+            "packages": [
+                ".",
+                "hooks/syslog"
+            ]
+        },
+        {
+            "name": "github.com/asaskevich/govalidator",
+            "branch": "master",
+            "revision": "2c14e1cca90af49b3b21fe2d7aaa8cc7f9da2ff8",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/billhathaway/consistentHash",
+            "branch": "master",
+            "revision": "addea16d2229dba874111898b45be7f4a78af631",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/boltdb/bolt",
+            "branch": "master",
+            "revision": "e9cf4fae01b5a8ff89d0ec6b32f0d9c9f79aefdd",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/braintree/manners",
+            "branch": "master",
+            "revision": "82a8879fc5fd0381fa8b2d8033b19bf255252088",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/gocql/gocql",
+            "branch": "master",
+            "revision": "f8b6dcaf4f8a770652c11e7e94b517fcb706fce8",
+            "packages": [
+                ".",
+                "internal/lru",
+                "internal/murmur",
+                "internal/streams"
+            ]
+        },
+        {
+            "name": "github.com/golang/protobuf",
+            "branch": "master",
+            "revision": "2bba0603135d7d7f5cb73b2125beeda19c09f4ef",
+            "packages": [
+                "proto",
+                "ptypes/any"
+            ]
+        },
+        {
+            "name": "github.com/golang/snappy",
+            "branch": "master",
+            "revision": "553a641470496b2327abcac10b36396bd98e45c9",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/google/go-genproto",
+            "branch": "master",
+            "revision": "411e09b969b1170a9f0c467558eb4c4c110d9c77",
+            "packages": [
+                "googleapis/rpc/status"
+            ]
+        },
+        {
+            "name": "github.com/hailocab/go-hostpool",
+            "branch": "master",
+            "revision": "e80d13ce29ede4452c43dea11e79b9bc8a15b478",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/hashicorp/consul",
+            "branch": "master",
+            "revision": "f13fc99852e55289533cb3d5225712b3aba70b0c",
+            "packages": [
+                "api"
+            ]
+        },
+        {
+            "name": "github.com/hashicorp/go-cleanhttp",
+            "branch": "master",
+            "revision": "3573b8b52aa7b37b9358d966a898feb387f62437",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/hashicorp/serf",
+            "branch": "master",
+            "revision": "19f2c401e122352c047a84d6584dd51e2fb8fcc4",
+            "packages": [
+                "coordinate"
+            ]
+        },
+        {
+            "name": "github.com/julienschmidt/httprouter",
+            "branch": "master",
+            "revision": "6f3f3919c8781ce5c0509c83fffc887a7830c938",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/pborman/uuid",
+            "branch": "master",
+            "revision": "1b00554d822231195d1babd97ff4a781231955c9",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/robfig/cron",
+            "branch": "master",
+            "revision": "df38d32658d8788cd446ba74db4bb5375c4b0cb3",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/spaolacci/murmur3",
+            "branch": "master",
+            "revision": "0d12bf811670bf6a1a63828dfbd003eded177fce",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/uol/go-bits",
+            "branch": "master",
+            "revision": "682291818aca844c73aca20086d0276c3e0c8b96",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/uol/go-tsz",
+            "branch": "master",
+            "revision": "fbb3e22ff841065db7a0b060a2ea762dfa2cd8f4",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/uol/gobol",
+            "branch": "master",
+            "revision": "57c42436a6913ba28cc922ccf4492a5802666113",
+            "packages": [
+                ".",
+                "cassandra",
+                "loader",
+                "rip",
+                "rotate",
+                "rubber",
+                "saw",
+                "snitch"
+            ]
+        },
+        {
+            "name": "golang.org/x/net",
+            "branch": "master",
+            "revision": "d1e1b351919c6738fdeb9893d5c998b161464f0c",
+            "packages": [
+                "context",
+                "http2",
+                "http2/hpack",
+                "idna",
+                "internal/timeseries",
+                "lex/httplex",
+                "trace"
+            ]
+        },
+        {
+            "name": "golang.org/x/sys",
+            "branch": "master",
+            "revision": "f3918c30c5c2cb527c0b071a27c35120a6c0719a",
+            "packages": [
+                "unix"
+            ]
+        },
+        {
+            "name": "golang.org/x/text",
+            "branch": "master",
+            "revision": "f4b4367115ec2de254587813edaa901bc1c723a8",
+            "packages": [
+                "internal/gen",
+                "internal/triegen",
+                "internal/ucd",
+                "secure/bidirule",
+                "transform",
+                "unicode/bidi",
+                "unicode/cldr",
+                "unicode/norm",
+                "unicode/rangetable"
+            ]
+        },
+        {
+            "name": "google.golang.org/grpc",
+            "branch": "master",
+            "revision": "9f9c1906922195abfc35b3791d0aa106af88b6ab",
+            "packages": [
+                ".",
+                "codes",
+                "credentials",
+                "grpclog",
+                "internal",
+                "keepalive",
+                "metadata",
+                "naming",
+                "peer",
+                "stats",
+                "status",
+                "tap",
+                "transport"
+            ]
+        },
+        {
+            "name": "gopkg.in/inf.v0",
+            "branch": "master",
+            "revision": "3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "gopkg.in/robfig/cron.v2",
+            "branch": "v2",
+            "revision": "be2e0b0deed5a68ffee390b4583a13aff8321535",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "gopkg.in/yaml.v2",
+            "branch": "master",
+            "revision": "a3f3340b5840cee44f372bddb5880fcbc419b46a",
+            "packages": [
+                "."
+            ]
+        }
+    ]
+}

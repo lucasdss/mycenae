@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"runtime"
 	"strings"
@@ -204,22 +205,6 @@ func ParseConsistency(s string) Consistency {
 	}
 }
 
-// ParseConsistencyWrapper wraps gocql.ParseConsistency to provide an err
-// return instead of a panic
-func ParseConsistencyWrapper(s string) (consistency Consistency, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			var ok bool
-			err, ok = r.(error)
-			if !ok {
-				err = fmt.Errorf("ParseConsistencyWrapper: %v", r)
-			}
-		}
-	}()
-	consistency = ParseConsistency(s)
-	return consistency, nil
-}
-
 type SerialConsistency uint16
 
 const (
@@ -246,8 +231,6 @@ var (
 	ErrFrameTooBig = errors.New("frame length is bigger than the maximum allowed")
 )
 
-const maxFrameHeaderSize = 9
-
 func writeInt(p []byte, n int32) {
 	p[0] = byte(n >> 24)
 	p[1] = byte(n >> 16)
@@ -269,13 +252,11 @@ func readShort(p []byte) uint16 {
 }
 
 type frameHeader struct {
-	version       protoVersion
-	flags         byte
-	stream        int
-	op            frameOp
-	length        int
-	customPayload map[string][]byte
-	warnings      []string
+	version protoVersion
+	flags   byte
+	stream  int
+	op      frameOp
+	length  int
 }
 
 func (f frameHeader) String() string {
@@ -357,34 +338,23 @@ type frame interface {
 }
 
 func readHeader(r io.Reader, p []byte) (head frameHeader, err error) {
-	_, err = io.ReadFull(r, p[:1])
+	_, err = io.ReadFull(r, p)
 	if err != nil {
-		return frameHeader{}, err
+		return
 	}
 
 	version := p[0] & protoVersionMask
 
 	if version < protoVersion1 || version > protoVersion4 {
-		return frameHeader{}, fmt.Errorf("gocql: unsupported protocol response version: %d", version)
+		err = fmt.Errorf("gocql: invalid version: %d", version)
+		return
 	}
-
-	headSize := 9
-	if version < protoVersion3 {
-		headSize = 8
-	}
-
-	_, err = io.ReadFull(r, p[1:headSize])
-	if err != nil {
-		return frameHeader{}, err
-	}
-
-	p = p[:headSize]
 
 	head.version = protoVersion(p[0])
 	head.flags = p[1]
 
 	if version > protoVersion2 {
-		if len(p) != 9 {
+		if len(p) < 9 {
 			return frameHeader{}, fmt.Errorf("not enough bytes to read header require 9 got: %d", len(p))
 		}
 
@@ -392,7 +362,7 @@ func readHeader(r io.Reader, p []byte) (head frameHeader, err error) {
 		head.op = frameOp(p[4])
 		head.length = int(readInt(p[5:]))
 	} else {
-		if len(p) != 8 {
+		if len(p) < 8 {
 			return frameHeader{}, fmt.Errorf("not enough bytes to read header require 8 got: %d", len(p))
 		}
 
@@ -401,7 +371,7 @@ func readHeader(r io.Reader, p []byte) (head frameHeader, err error) {
 		head.length = int(readInt(p[4:]))
 	}
 
-	return head, nil
+	return
 }
 
 // explicitly enables tracing for the framers outgoing requests
@@ -430,9 +400,9 @@ func (f *framer) readFrame(head *frameHeader) error {
 	}
 
 	// assume the underlying reader takes care of timeouts and retries
-	n, err := io.ReadFull(f.r, f.rbuf)
+	_, err := io.ReadFull(f.r, f.rbuf)
 	if err != nil {
-		return fmt.Errorf("unable to read frame body: read %d/%d bytes: %v", n, head.length, err)
+		return err
 	}
 
 	if head.flags&flagCompress == flagCompress {
@@ -469,11 +439,11 @@ func (f *framer) parseFrame() (frame frame, err error) {
 	}
 
 	if f.header.flags&flagWarning == flagWarning {
-		f.header.warnings = f.readStringList()
-	}
-
-	if f.header.flags&flagCustomPayload == flagCustomPayload {
-		f.header.customPayload = f.readBytesMap()
+		warnings := f.readStringList()
+		// what to do with warnings?
+		for _, v := range warnings {
+			log.Println(v)
+		}
 	}
 
 	// assumes that the frame body has been read into rbuf
@@ -558,7 +528,7 @@ func (f *framer) parseErrorFrame() frame {
 		stmtId := f.readShortBytes()
 		return &RequestErrUnprepared{
 			errorFrame:  errD,
-			StatementId: copyBytes(stmtId), // defensively copy
+			StatementId: copyBytes(stmtId), // defensivly copy
 		}
 	case errReadFailure:
 		res := &RequestErrReadFailure{
@@ -569,16 +539,6 @@ func (f *framer) parseErrorFrame() frame {
 		res.BlockFor = f.readInt()
 		res.DataPresent = f.readByte() != 0
 		return res
-	case errWriteFailure:
-		res := &RequestErrWriteFailure{
-			errorFrame: errD,
-		}
-		res.Consistency = f.readConsistency()
-		res.Received = f.readInt()
-		res.BlockFor = f.readInt()
-		res.NumFailures = f.readInt()
-		res.WriteType = f.readString()
-		return res
 	case errFunctionFailure:
 		res := RequestErrFunctionFailure{
 			errorFrame: errD,
@@ -587,12 +547,8 @@ func (f *framer) parseErrorFrame() frame {
 		res.Function = f.readString()
 		res.ArgTypes = f.readStringList()
 		return res
-	case errInvalid, errBootstrapping, errConfig, errCredentials, errOverloaded,
-		errProtocol, errServer, errSyntax, errTruncate, errUnauthorized:
-		// TODO(zariel): we should have some distinct types for these errors
-		return errD
 	default:
-		panic(fmt.Errorf("unknown error code: 0x%x", errD.code))
+		return &errD
 	}
 }
 
@@ -1268,8 +1224,7 @@ type queryParams struct {
 	pagingState       []byte
 	serialConsistency SerialConsistency
 	// v3+
-	defaultTimestamp      bool
-	defaultTimestampValue int64
+	defaultTimestamp bool
 }
 
 func (q queryParams) String() string {
@@ -1341,12 +1296,7 @@ func (f *framer) writeQueryParams(opts *queryParams) {
 
 	if f.proto > protoVersion2 && opts.defaultTimestamp {
 		// timestamp in microseconds
-		var ts int64
-		if opts.defaultTimestampValue != 0 {
-			ts = opts.defaultTimestampValue
-		} else {
-			ts = time.Now().UnixNano() / 1000
-		}
+		ts := time.Now().UnixNano() / 1000
 		f.writeLong(ts)
 	}
 }
@@ -1426,9 +1376,8 @@ type writeBatchFrame struct {
 	consistency Consistency
 
 	// v3+
-	serialConsistency     SerialConsistency
-	defaultTimestamp      bool
-	defaultTimestampValue int64
+	serialConsistency SerialConsistency
+	defaultTimestamp  bool
 }
 
 func (w *writeBatchFrame) writeFrame(framer *framer, streamID int) error {
@@ -1482,15 +1431,9 @@ func (f *framer) writeBatchFrame(streamID int, w *writeBatchFrame) error {
 		if w.serialConsistency > 0 {
 			f.writeConsistency(Consistency(w.serialConsistency))
 		}
-
 		if w.defaultTimestamp {
-			var ts int64
-			if w.defaultTimestampValue != 0 {
-				ts = w.defaultTimestampValue
-			} else {
-				ts = time.Now().UnixNano() / 1000
-			}
-			f.writeLong(ts)
+			now := time.Now().UnixNano() / 1000
+			f.writeLong(now)
 		}
 	}
 
@@ -1686,19 +1629,6 @@ func (f *framer) readStringMap() map[string]string {
 	return m
 }
 
-func (f *framer) readBytesMap() map[string][]byte {
-	size := f.readShort()
-	m := make(map[string][]byte)
-
-	for i := 0; i < int(size); i++ {
-		k := f.readString()
-		v := f.readBytes()
-		m[k] = v
-	}
-
-	return m
-}
-
 func (f *framer) readStringMultiMap() map[string][]string {
 	size := f.readShort()
 	m := make(map[string][]string)
@@ -1714,15 +1644,6 @@ func (f *framer) readStringMultiMap() map[string][]string {
 
 func (f *framer) writeByte(b byte) {
 	f.wbuf = append(f.wbuf, b)
-}
-
-func appendBytes(p []byte, d []byte) []byte {
-	if d == nil {
-		return appendInt(p, -1)
-	}
-	p = appendInt(p, int32(len(d)))
-	p = append(p, d...)
-	return p
 }
 
 func appendShort(p []byte, n uint16) []byte {

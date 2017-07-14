@@ -3,19 +3,17 @@ package govalidator
 import (
 	"reflect"
 	"regexp"
-	"sync"
 )
 
 // Validator is a wrapper for a validator function that returns bool and accepts string.
 type Validator func(str string) bool
 
 // CustomTypeValidator is a wrapper for validator functions that returns bool and accepts any type.
-// The second parameter should be the context (in the case of validating a struct: the whole object being validated).
-type CustomTypeValidator func(i interface{}, o interface{}) bool
+type CustomTypeValidator func(i interface{}) bool
 
 // ParamValidator is a wrapper for validator functions that accepts additional parameters.
 type ParamValidator func(str string, params ...string) bool
-type tagOptionsMap map[string]string
+type tagOptions []string
 
 // UnsupportedTypeError is a wrapper for reflect.Type
 type UnsupportedTypeError struct {
@@ -29,44 +27,20 @@ type stringValues []reflect.Value
 // ParamTagMap is a map of functions accept variants parameters
 var ParamTagMap = map[string]ParamValidator{
 	"length":       ByteLength,
-	"runelength":   RuneLength,
 	"stringlength": StringLength,
 	"matches":      StringMatches,
-	"in":           isInRaw,
 }
 
-// ParamTagRegexMap maps param tags to their respective regexes.
 var ParamTagRegexMap = map[string]*regexp.Regexp{
 	"length":       regexp.MustCompile("^length\\((\\d+)\\|(\\d+)\\)$"),
-	"runelength":   regexp.MustCompile("^runelength\\((\\d+)\\|(\\d+)\\)$"),
 	"stringlength": regexp.MustCompile("^stringlength\\((\\d+)\\|(\\d+)\\)$"),
-	"in":           regexp.MustCompile(`^in\((.*)\)`),
-	"matches":      regexp.MustCompile(`^matches\((.+)\)$`),
-}
-
-type customTypeTagMap struct {
-	validators map[string]CustomTypeValidator
-
-	sync.RWMutex
-}
-
-func (tm *customTypeTagMap) Get(name string) (CustomTypeValidator, bool) {
-	tm.RLock()
-	defer tm.RUnlock()
-	v, ok := tm.validators[name]
-	return v, ok
-}
-
-func (tm *customTypeTagMap) Set(name string, ctv CustomTypeValidator) {
-	tm.Lock()
-	defer tm.Unlock()
-	tm.validators[name] = ctv
+	"matches":      regexp.MustCompile(`matches\(([^)]+)\)`),
 }
 
 // CustomTypeTagMap is a map of functions that can be used as tags for ValidateStruct function.
 // Use this to validate compound or custom types that need to be handled as a whole, e.g.
 // `type UUID [16]byte` (this would be handled as an array of bytes).
-var CustomTypeTagMap = &customTypeTagMap{validators: make(map[string]CustomTypeValidator)}
+var CustomTypeTagMap = map[string]CustomTypeValidator{}
 
 // TagMap is a map of functions, that can be used as tags for ValidateStruct function.
 var TagMap = map[string]Validator{
@@ -117,9 +91,6 @@ var TagMap = map[string]Validator{
 	"longitude":      IsLongitude,
 	"ssn":            IsSSN,
 	"semver":         IsSemver,
-	"rfc3339":        IsRFC3339,
-	"ISO3166Alpha2":  IsISO3166Alpha2,
-	"ISO3166Alpha3":  IsISO3166Alpha3,
 }
 
 // ISO3166Entry stores country codes

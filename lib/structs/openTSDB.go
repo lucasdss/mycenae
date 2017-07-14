@@ -248,6 +248,26 @@ func (query TSDBqueryPayload) Validate() gobol.Error {
 
 	}
 
+	i := 0
+	msTime := query.Start
+
+	for {
+		msTime = msTime / 10
+		if msTime == 0 {
+			break
+		}
+		i++
+	}
+
+	if i > 13 {
+		return errValidation(errors.New("the maximum resolution suported for timestamp is milliseconds"))
+
+	}
+
+	if i > 10 {
+		query.Start = query.Start / 1000
+	}
+
 	return nil
 }
 

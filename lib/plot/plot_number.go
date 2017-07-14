@@ -1,17 +1,12 @@
 package plot
 
 import (
-	"fmt"
 	"sort"
-	"time"
 
 	"github.com/uol/gobol"
 
 	"github.com/uol/mycenae/lib/structs"
-)
-
-const (
-	milliWeek = 6.048e+8
+	"go.uber.org/zap"
 )
 
 func (plot *Plot) GetTimeSeries(
@@ -20,32 +15,9 @@ func (plot *Plot) GetTimeSeries(
 	start,
 	end int64,
 	opers structs.DataOperations,
-	tuuid,
 	ms,
 	keepEmpties bool,
 ) (serie TS, gerr gobol.Error) {
-
-	w := start
-
-	index := 0
-
-	buckets := []string{}
-
-	for {
-		t := time.Unix(0, w*1e+6)
-
-		year, week := t.ISOWeek()
-
-		buckets = append(buckets, fmt.Sprintf("%v%v", year, week))
-
-		if w > end {
-			break
-		}
-
-		w += milliWeek
-
-		index++
-	}
 
 	tsChan := make(chan TS, len(keys))
 
@@ -54,10 +26,8 @@ func (plot *Plot) GetTimeSeries(
 		go plot.getTimeSerie(
 			keyspace,
 			key,
-			buckets,
 			start,
 			end,
-			tuuid,
 			ms,
 			keepEmpties,
 			opers,
@@ -118,59 +88,22 @@ func (plot *Plot) GetTimeSeries(
 }
 
 func (plot *Plot) getTimeSerie(
-	keyspace,
+	keyspace string,
 	key string,
-	buckets []string,
-	start,
+	start int64,
 	end int64,
-	tuuid,
-	ms,
+	ms bool,
 	keepEmpties bool,
 	opers structs.DataOperations,
 	tsChan chan TS,
 ) {
 
-	serie := TS{}
-
-	chanSize := len(buckets)
-	if chanSize == 0 {
-		chanSize = 1
+	pts, err := plot.persist.cluster.Read(keyspace, key, start, end)
+	if err != nil {
+		gblog.Error("", zap.Error(err))
 	}
 
-	bucketChan := make(chan TS, chanSize)
-
-	if len(buckets) > 0 {
-		for i, bucket := range buckets {
-			buckID := fmt.Sprintf("%v%v", bucket, key)
-			plot.concReads <- struct{}{}
-			go plot.getTimeSerieBucket(i, keyspace, buckID, start, end, tuuid, ms, bucketChan)
-		}
-	} else {
-		plot.concReads <- struct{}{}
-		go plot.getTimeSerieBucket(0, keyspace, key, start, end, tuuid, ms, bucketChan)
-	}
-
-	bucketList := make([]TS, chanSize)
-
-	for i := 0; i < chanSize; i++ {
-		buck := <-bucketChan
-		bucketList[buck.index] = buck
-	}
-
-	for _, bl := range bucketList {
-		if bl.gerr != nil {
-			serie.gerr = bl.gerr
-			tsChan <- serie
-			<-plot.concTimeseries
-			return
-		}
-
-		serie.Data = append(serie.Data, bl.Data...)
-
-		serie.Total += bl.Total
-
-	}
-
+	serie := TS{Data: pts, Total: len(pts)}
 	for _, oper := range opers.Order {
 		switch oper {
 		case "downsample":
@@ -211,11 +144,11 @@ func (plot *Plot) getTimeSerieBucket(
 	bucketChan chan TS,
 ) {
 
-	resultSet, count, gerr := plot.persist.GetTS(keyspace, key, start, end, tuuid, ms)
+	resultSet, gerr := plot.persist.cluster.Read(keyspace, key, start, end)
 
 	bucketChan <- TS{
 		index: index,
-		Total: count,
+		Total: len(resultSet),
 		Data:  resultSet,
 		gerr:  gerr,
 	}

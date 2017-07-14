@@ -71,7 +71,6 @@ func (plot *Plot) ListPoints(w http.ResponseWriter, r *http.Request, ps httprout
 			query.Start,
 			query.End,
 			opers,
-			tuuid,
 			true,
 			true,
 		)
@@ -89,7 +88,7 @@ func (plot *Plot) ListPoints(w http.ResponseWriter, r *http.Request, ps httprout
 
 			var pointArray []interface{}
 
-			pointArray = append(pointArray, point.Date)
+			pointArray = append(pointArray, point.Date*1000)
 
 			if point.Empty {
 				pointArray = append(pointArray, nil)
@@ -145,7 +144,7 @@ func (plot *Plot) ListPoints(w http.ResponseWriter, r *http.Request, ps httprout
 
 			var pointArray []interface{}
 
-			pointArray = append(pointArray, point.Date)
+			pointArray = append(pointArray, point.Date*1000)
 
 			pointArray = append(pointArray, point.Value)
 
@@ -206,7 +205,7 @@ func (plot *Plot) ListPoints(w http.ResponseWriter, r *http.Request, ps httprout
 
 					var pointArray []interface{}
 
-					pointArray = append(pointArray, point.Date)
+					pointArray = append(pointArray, point.Date*1000)
 
 					pointArray = append(pointArray, point.Value)
 
@@ -237,7 +236,6 @@ func (plot *Plot) ListPoints(w http.ResponseWriter, r *http.Request, ps httprout
 					query.Start,
 					query.End,
 					opers,
-					tuuid,
 					true,
 					true,
 				)
@@ -252,7 +250,7 @@ func (plot *Plot) ListPoints(w http.ResponseWriter, r *http.Request, ps httprout
 
 					var pointArray []interface{}
 
-					pointArray = append(pointArray, point.Date)
+					pointArray = append(pointArray, point.Date*1000)
 
 					if point.Empty {
 						pointArray = append(pointArray, nil)

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/julienschmidt/httprouter"
 	"github.com/uol/gobol/rip"
 	"github.com/uol/gobol/snitch"
@@ -19,10 +18,12 @@ import (
 	"github.com/uol/mycenae/lib/plot"
 	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/udpError"
+
+	"go.uber.org/zap"
 )
 
 func New(
-	log *structs.TsLog,
+	log *zap.Logger,
 	gbs *snitch.Stats,
 	p *plot.Plot,
 	ue *udpError.UDPerror,
@@ -32,13 +33,12 @@ func New(
 	set structs.SettingsHTTP,
 	probeThreshold float64,
 ) *REST {
-
 	return &REST{
 		probeThreshold: probeThreshold,
 		probeStatus:    http.StatusOK,
 		closed:         make(chan struct{}),
 
-		gblog:    log.General,
+		gblog:    log,
 		sts:      gbs,
 		reader:   p,
 		udperr:   ue,
@@ -54,7 +54,7 @@ type REST struct {
 	probeStatus    int
 	closed         chan struct{}
 
-	gblog    *logrus.Logger
+	gblog    *zap.Logger
 	sts      *snitch.Stats
 	reader   *plot.Plot
 	udperr   *udpError.UDPerror
@@ -73,16 +73,13 @@ func (trest *REST) Start() {
 
 func (trest *REST) asyncStart() {
 
-	rip.SetLooger(trest.gblog)
+	rip.SetLogger(trest.gblog)
 
 	pathMatcher := regexp.MustCompile(`^(/[a-zA-Z0-9._-]+)?/$`)
 
 	if !pathMatcher.Match([]byte(trest.settings.Path)) {
 		err := errors.New("Invalid path to start rest service")
-
-		if err != nil {
-			trest.gblog.Fatalln("ERROR - Starting REST: ", err)
-		}
+		trest.gblog.Fatal("ERROR - Starting REST: ", zap.Error(err))
 	}
 
 	path := trest.settings.Path
@@ -145,7 +142,7 @@ func (trest *REST) asyncStart() {
 
 	err := trest.server.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
-		trest.gblog.Error(err)
+		trest.gblog.Error("Error ListenAndServe", zap.Error(err))
 	}
 
 	trest.closed <- struct{}{}
@@ -169,7 +166,7 @@ func (trest *REST) Stop() {
 	trest.probeStatus = http.StatusServiceUnavailable
 
 	if err := trest.server.Shutdown(context.Background()); err != nil {
-		trest.gblog.Error(err)
+		trest.gblog.Error("Shutdown", zap.Error(err))
 	}
 
 	<-trest.closed

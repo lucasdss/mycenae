@@ -1,0 +1,28 @@
+{
+  "services": [
+    {
+      "ID": "mycenae",
+      "Name": "mycenae",
+      "Tags": [
+        "http"
+      ],
+      "Port": 8080,
+      "Token": "your-token-here",
+      "Check": {
+        "ID": "mycenae-probe",
+        "Name": "mycenae-probe",
+        "HTTP": "http://localhost:8080/probe",
+        "Interval": "1s"
+      }
+    },
+    {
+      "ID": "mycenae-udp",
+      "Name": "mycenae",
+      "Tags": [
+        "udpv2"
+      ],
+      "Port": 4243,
+      "Token": "your-token-here"
+    }
+  ]
+}

@@ -9,9 +9,13 @@ arguments=(
 )
 
 consul_arguments=(
-    '--server'
-    '--bootstrap'
+    'agent'
+    '-ui'
+    '-server'
+    '-bootstrap'
     '-recursor' "192.168.206.8"
+    '-client' '0.0.0.0'
+    '-disable-host-node-id'
 )
 
-docker run -d "${arguments[@]}" "progrium/consul" "${consul_arguments[@]}"
+docker run -d "${arguments[@]}" consul:0.8.3 "${consul_arguments[@]}"

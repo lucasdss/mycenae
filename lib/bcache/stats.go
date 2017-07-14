@@ -5,15 +5,15 @@ import (
 )
 
 func statsError(oper string, buck []byte) {
-	go statsIncrement(
+	statsIncrement(
 		"bolt.query.error",
 		map[string]string{"bucket": string(buck), "operation": oper},
 	)
 }
 
 func statsSuccess(oper string, buck []byte, d time.Duration) {
-	go statsIncrement("bolt.query", map[string]string{"bucket": string(buck), "operation": oper})
-	go statsValueAdd(
+	statsIncrement("bolt.query", map[string]string{"bucket": string(buck), "operation": oper})
+	statsValueAdd(
 		"bolt.query.duration",
 		map[string]string{"bucket": string(buck), "operation": oper},
 		float64(d.Nanoseconds())/float64(time.Millisecond),
@@ -21,7 +21,7 @@ func statsSuccess(oper string, buck []byte, d time.Duration) {
 }
 
 func statsNotFound(buck []byte) {
-	go statsIncrement(
+	statsIncrement(
 		"bolt.query.not_found",
 		map[string]string{"bucket": string(buck)},
 	)

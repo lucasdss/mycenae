@@ -33,6 +33,28 @@ CREATE TABLE stats.ts_text_stamp (
     AND read_repair_chance = 0.0
     AND speculative_retry = '99PERCENTILE';
 
+CREATE TABLE IF NOT EXISTS stats.timeseries (
+    id text,
+    date timestamp,
+    value blob,
+    PRIMARY KEY (id, date)
+)
+WITH CLUSTERING ORDER BY (date ASC)
+    AND bloom_filter_fp_chance = 0.01
+    AND caching = {'keys':'ALL', 'rows_per_partition':'NONE'}
+    AND comment = ''
+    AND compaction={ 'min_threshold': '8', 'max_threshold': '64', 'compaction_window_unit': 'DAYS', 'compaction_window_size': '7', 'class': 'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy'}
+    AND compression = {'crc_check_chance': '0.5', 'sstable_compression': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+    AND dclocal_read_repair_chance = 0.0
+    AND default_time_to_live = 259200
+    AND gc_grace_seconds = 0
+    AND max_index_interval = 2048
+    AND memtable_flush_period_in_ms = 0
+    AND min_index_interval = 128
+    AND read_repair_chance = 0.0
+    AND speculative_retry = '99.0PERCENTILE';
+
+/*
 CREATE TABLE stats.ts_number_stamp (
     id text,
     date timestamp,
@@ -53,7 +75,7 @@ CREATE TABLE stats.ts_number_stamp (
     AND min_index_interval = 128
     AND read_repair_chance = 0.0
     AND speculative_retry = '99PERCENTILE';
-
+*/
 
 INSERT INTO mycenae.ts_keyspace (key, datacenter, name, replication_factor) VALUES ('mycenae', 'datacenter1', 'mycenae', 3);
 

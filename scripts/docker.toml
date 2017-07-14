@@ -1,0 +1,162 @@
+# ATTENTION
+
+# Transition config settings
+
+# ReadConsistency is the consistency of the plot package
+# WriteConsistency is the consistency of the collector package
+
+# The keyspace package still uses the cassandraAdmin consistency
+# and the udpError package still uses the cassandra consistency
+# The idea is to change the cassandra gobol package to accept
+# multiple consistencies and abstract that to the applications
+
+# BE CAREFUL!!! There are, for now, FOUR consistency settings
+
+ReadConsistency = [
+  "quorum",
+  "one"
+]
+
+WriteConsisteny = [
+  "quorum",
+  "one"
+]
+
+CompactionStrategy = "TimeWindowCompactionStrategy"
+
+# MaxConcurrentTimeseries CANNOT BE BIGGER THAN MaxConcurrentReads
+# Max number of concurrent timeseries being processed
+MaxConcurrentTimeseries = 50
+
+# Max number of concurrent read queries on cassandra
+MaxConcurrentReads = 100
+
+# Max number of timeseries allowed to be queried
+MaxTimeseries = 5000
+
+# Warning number of timeseries
+LogQueryTSthreshold = 1000
+
+BoltPath = "/tmp/mycenae/cache.db"
+WALPath  = "/tmp/mycenae/wal/"
+
+# Max number of concurrent points being processed
+MaxConcurrentPoints = 1000
+
+# Max number of concurrent bulk requests to elasticsearch
+MaxConcurrentBulks = 1
+
+# Number, in bytes of bulk playload
+MaxMetaBulkSize = 1000000
+
+# Number of points in buffer
+MetaBufferSize = 100000
+
+MetaSaveInterval = "1s"
+MaxRateLimit = 20
+Burst = 100
+
+[meta]
+  # Number, in bytes of bulk playload
+  MaxMetaBulkSize = 1000000
+  # Max number of concurrent bulk requests to elasticsearch
+  MaxConcurrentBulks = 1
+  # Max number of concurrent points being processed
+  MaxConcurrentPoints = 1000
+  # Number of points in buffer
+  MetaBufferSize = 100000
+  MetaSaveInterval = "1s"
+  MetaHeadInterval = "50ms"
+
+[cluster]
+  port = 6969
+  checkInterval = "1s"
+  applyWait = 10
+  [cluster.consul]
+    address = "localhost"
+    protocol = "http"
+    port = 8500
+    cert = "/ssl/agent.cert"
+    key  = "/ssl/agent.key"
+    ca   = "/ssl/ca.cert"
+    service = "mycenae"
+    tag = "http"
+    token = "866239fd-5129-92d2-4a09-3e7355f7bf38"
+
+
+[Depot]
+  MaxConcurrent = 10000
+  [Depot.Cassandra]
+    keyspace = "mycenae"
+    consistency = "quorum"
+    nodes = ["CASSANDRA_HOST"]
+    username = "cassandra"
+    password = "cassandra"
+    connections = 3
+    discoverHosts = true
+    discoverySleep = 10
+    retry = 5
+    pageSize = 5000
+    timeout = "60s"
+    protoVersion = 4
+
+
+
+[TTL]
+  max = 90
+
+[UDPserver]
+  port = "4242"
+  readBuffer = 1048576
+
+[UDPserverV2]
+  port = "4243"
+  readBuffer = 1048576
+
+[HTTPserver]
+  path = "/"
+  port = "8080"
+  bind = ""
+
+[logs]
+  logLevel = "DEBUG"
+  environment = "PROD"
+
+[logs.general.file]
+  writeTo = true
+  [logs.general.file.settings]
+    symlink = true
+    logLevel = "DEBUG"
+    rotationPeriod = "daily"
+    timeFormat = "2006-01-02_15:04:03"
+    path = "/tmp/mycenae/mycenae.log"
+
+[logs.stats.file]
+  writeTo = true
+  [logs.stats.file.settings]
+    symlink = true
+    logLevel = "DEBUG"
+    rotationPeriod = "daily"
+    timeFormat = "2006-01-02_15:04:03"
+    path = "/tmp/mycenae/mycenae-stats.log"
+
+[stats]
+  address = "0.0.0.0"
+  port = "4243"
+  protocol = "udp"
+  ksid = "stats"
+  ttl = "5"
+  interval = "@every 1m"
+  runtime = true
+  [stats.tags]
+    service = "mycenae"
+
+[probe]
+  threshold = 0.5
+
+[elasticSearch]
+  index = "ts"
+  [elasticSearch.cluster]
+    type = "weighted"
+    seed = "ELASTIC_HOST:9200"
+    timeout = 15

@@ -5,50 +5,50 @@ import (
 )
 
 func statsUDPv1() {
-	go statsIncrement(
+	statsIncrement(
 		"points.received",
 		map[string]string{"protocol": "udp", "api": "v1"},
 	)
 }
 
 func statsUDP(ks, vt string) {
-	go statsIncrement(
+	statsIncrement(
 		"points.received",
 		map[string]string{"protocol": "udp", "api": "v2", "keyspace": ks, "type": vt},
 	)
 }
 
-func statsProcTime(ks string, d time.Duration) {
-	go statsValueAdd(
+func statsProcTime(ks string, d time.Duration, pts int) {
+	statsValueAdd(
 		"points.processes_time",
 		map[string]string{"keyspace": ks},
-		float64(d.Nanoseconds())/float64(time.Millisecond),
+		(float64(d.Nanoseconds())/float64(time.Millisecond))/float64(pts),
 	)
 }
 
 func statsLostMeta() {
-	go statsIncrement(
+	statsIncrement(
 		"meta.lost",
 		map[string]string{},
 	)
 }
 
 func statsUDPerror(ks, vt string) {
-	go statsIncrement(
+	statsIncrement(
 		"points.received.error",
 		map[string]string{"protocol": "udp", "api": "v2", "keyspace": ks, "type": vt},
 	)
 }
 
 func statsInsertQerror(ks, cf string) {
-	go statsIncrement(
+	statsIncrement(
 		"cassandra.query.error",
 		map[string]string{"keyspace": ks, "column_family": cf, "operation": "insert"},
 	)
 }
 
 func statsInsertFBerror(ks, cf string) {
-	go statsIncrement(
+	statsIncrement(
 		"cassandra.fallback.error",
 		map[string]string{"keyspace": ks, "column_family": cf, "operation": "insert"},
 	)
@@ -62,7 +62,7 @@ func statsIndexError(i, t, m string) {
 	if t != "" {
 		tags["type"] = t
 	}
-	go statsIncrement("elastic.request.error", tags)
+	statsIncrement("elastic.request.error", tags)
 }
 
 func statsIndex(i, t, m string, d time.Duration) {
@@ -73,8 +73,8 @@ func statsIndex(i, t, m string, d time.Duration) {
 	if t != "" {
 		tags["type"] = t
 	}
-	go statsIncrement("elastic.request", tags)
-	go statsValueAdd(
+	statsIncrement("elastic.request", tags)
+	statsValueAdd(
 		"elastic.request.duration",
 		tags,
 		float64(d.Nanoseconds())/float64(time.Millisecond),
@@ -82,12 +82,12 @@ func statsIndex(i, t, m string, d time.Duration) {
 }
 
 func statsBulkPoints() {
-	go statsIncrement("elastic.bulk.points", map[string]string{})
+	statsIncrement("elastic.bulk.points", map[string]string{})
 }
 
 func statsInsert(ks, cf string, d time.Duration) {
-	go statsIncrement("cassandra.query", map[string]string{"keyspace": ks, "column_family": cf, "operation": "insert"})
-	go statsValueAdd(
+	statsIncrement("cassandra.query", map[string]string{"keyspace": ks, "column_family": cf, "operation": "insert"})
+	statsValueAdd(
 		"cassandra.query.duration",
 		map[string]string{"keyspace": ks, "column_family": cf, "operation": "insert"},
 		float64(d.Nanoseconds())/float64(time.Millisecond),
@@ -95,14 +95,14 @@ func statsInsert(ks, cf string, d time.Duration) {
 }
 
 func statsPoints(ks, vt string) {
-	go statsIncrement(
+	statsIncrement(
 		"points.received",
 		map[string]string{"protocol": "http", "api": "v2", "keyspace": ks, "type": vt},
 	)
 }
 
 func statsPointsError(ks, vt string) {
-	go statsIncrement(
+	statsIncrement(
 		"points.received.error",
 		map[string]string{"protocol": "http", "api": "v2", "keyspace": ks, "type": vt},
 	)

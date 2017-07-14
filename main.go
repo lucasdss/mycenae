@@ -13,15 +13,21 @@ import (
 	"syscall"
 
 	"github.com/gocql/gocql"
-	"github.com/uol/gobol/cassandra"
+	"go.uber.org/zap"
+
 	"github.com/uol/gobol/loader"
 	"github.com/uol/gobol/rubber"
 	"github.com/uol/gobol/saw"
 	"github.com/uol/gobol/snitch"
 
 	"github.com/uol/mycenae/lib/bcache"
+	"github.com/uol/mycenae/lib/cluster"
 	"github.com/uol/mycenae/lib/collector"
+	"github.com/uol/mycenae/lib/depot"
+	"github.com/uol/mycenae/lib/gorilla"
 	"github.com/uol/mycenae/lib/keyspace"
+	"github.com/uol/mycenae/lib/limiter"
+	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/plot"
 	"github.com/uol/mycenae/lib/rest"
 	"github.com/uol/mycenae/lib/structs"
@@ -32,7 +38,7 @@ import (
 
 func main() {
 
-	fmt.Println("Starting Mycenae")
+	log.Println("Starting Mycenae")
 
 	//Parse of command line arguments.
 	var confPath string
@@ -45,98 +51,115 @@ func main() {
 
 	err := loader.ConfToml(confPath, &settings)
 	if err != nil {
-		log.Fatalln("ERROR - Loading Config file: ", err)
+		log.Fatal("ERROR - Loading Config file: ", err)
 	} else {
-		fmt.Println("Config file loaded.")
+		log.Println("Config file loaded.")
 	}
 
-	tsLogger := new(structs.TsLog)
-	tsLogger.General, err = saw.New(settings.Logs.General)
+	tsLogger, err := saw.New(settings.Logs.LogLevel, settings.Logs.Environment)
 	if err != nil {
-		log.Fatalln("ERROR - Starting logger: ", err)
+		log.Fatal("ERROR - Starting logger: ", err)
 	}
+
+	tsLogger.Sugar().Debug("Dump Configuration", settings.Depot)
 
 	go func() {
 		log.Println(http.ListenAndServe("0.0.0.0:6666", nil))
 	}()
 
-	tsLogger.Stats, err = saw.New(settings.Logs.Stats)
+	sts, err := snitch.New(tsLogger, settings.Stats)
 	if err != nil {
-		log.Fatalln("ERROR - Starting logger: ", err)
+		tsLogger.Fatal("ERROR - Starting stats: ", zap.Error(err))
 	}
 
-	sts, err := snitch.New(tsLogger.Stats, settings.Stats)
+	tssts, err := tsstats.New(tsLogger, sts, settings.Stats.Interval)
 	if err != nil {
-		log.Fatalln("ERROR - Starting stats: ", err)
-	}
-
-	tssts, err := tsstats.New(tsLogger.General, sts, settings.Stats.Interval)
-	if err != nil {
-		tsLogger.General.Error(err)
-		os.Exit(1)
+		tsLogger.Fatal(err.Error())
 	}
 
 	rcs, err := parseConsistencies(settings.ReadConsistency)
 	if err != nil {
-		tsLogger.General.Error(err)
-		os.Exit(1)
+		tsLogger.Fatal(err.Error())
 	}
 
 	wcs, err := parseConsistencies(settings.WriteConsisteny)
 	if err != nil {
-		tsLogger.General.Error(err)
-		os.Exit(1)
+		tsLogger.Fatal(err.Error())
 	}
 
-	cass, err := cassandra.New(settings.Cassandra)
+	d, err := depot.NewCassandra(
+		&settings.Depot,
+		rcs,
+		wcs,
+		tsLogger,
+		tssts,
+	)
 	if err != nil {
-		tsLogger.General.Error("ERROR - Connecting to cassandra: ", err)
-		os.Exit(1)
+		tsLogger.Fatal("ERROR - Connecting to cassandra: ", zap.Error(err))
 	}
-	defer cass.Close()
+	defer d.Close()
 
-	es, err := rubber.New(tsLogger.General, settings.ElasticSearch.Cluster)
+	es, err := rubber.New(tsLogger, settings.ElasticSearch.Cluster)
 	if err != nil {
-		tsLogger.General.Error("ERROR - Connecting to elasticsearch: ", err)
-		os.Exit(1)
+		tsLogger.Fatal("ERROR - Connecting to elasticsearch: ", zap.Error(err))
 	}
 
 	ks := keyspace.New(
 		tssts,
-		cass,
+		d.Session,
 		es,
-		settings.Cassandra.Username,
-		settings.Cassandra.Keyspace,
+		settings.Depot.Cassandra.Username,
+		settings.Depot.Cassandra.Keyspace,
 		settings.CompactionStrategy,
 		settings.TTL.Max,
 	)
 
 	bc, err := bcache.New(tssts, ks, settings.BoltPath)
 	if err != nil {
-		tsLogger.General.Error(err)
-		os.Exit(1)
+		tsLogger.Fatal("", zap.Error(err))
 	}
 
-	coll, err := collector.New(tsLogger, tssts, cass, es, bc, settings, wcs)
+	wal, err := gorilla.NewWAL(settings.WALPath)
 	if err != nil {
-		log.Println(err)
-		return
+		tsLogger.Fatal(err.Error())
+	}
+	wal.Start()
+
+	strg := gorilla.New(tsLogger, tssts, d, wal)
+	strg.Load()
+
+	meta, err := meta.New(tsLogger, tssts, es, bc, settings.Meta)
+	if err != nil {
+		tsLogger.Fatal("", zap.Error(err))
 	}
 
-	uV2server := udp.New(tsLogger.General, settings.UDPserverV2, coll)
+	cluster, err := cluster.New(tsLogger, strg, meta, settings.Cluster)
+	if err != nil {
+		tsLogger.Fatal("", zap.Error(err))
+	}
 
+	limiter, err := limiter.New(settings.MaxRateLimit, settings.Burst, tsLogger)
+	if err != nil {
+		tsLogger.Fatal(err.Error())
+	}
+
+	coll, err := collector.New(tsLogger, tssts, cluster, meta, d, es, bc, settings, limiter)
+	if err != nil {
+		tsLogger.Fatal(err.Error())
+	}
+
+	uV2server := udp.New(tsLogger, settings.UDPserverV2, coll)
 	uV2server.Start()
 
 	collectorV1 := collector.UDPv1{}
 
-	uV1server := udp.New(tsLogger.General, settings.UDPserver, collectorV1)
-
+	uV1server := udp.New(tsLogger, settings.UDPserver, collectorV1)
 	uV1server.Start()
 
 	p, err := plot.New(
-		tsLogger.General,
+		tsLogger,
 		tssts,
-		cass,
+		cluster,
 		es,
 		bc,
 		settings.ElasticSearch.Index,
@@ -144,18 +167,15 @@ func main() {
 		settings.MaxConcurrentTimeseries,
 		settings.MaxConcurrentReads,
 		settings.LogQueryTSthreshold,
-		rcs,
 	)
-
 	if err != nil {
-		tsLogger.General.Error(err)
-		os.Exit(1)
+		tsLogger.Fatal("", zap.Error(err))
 	}
 
 	uError := udpError.New(
-		tsLogger.General,
+		tsLogger,
 		tssts,
-		cass,
+		d.Session,
 		bc,
 		es,
 		settings.ElasticSearch.Index,
@@ -173,20 +193,51 @@ func main() {
 		settings.HTTPserver,
 		settings.Probe.Threshold,
 	)
-
 	tsRest.Start()
 
 	signalChannel := make(chan os.Signal, 1)
 
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
-	fmt.Println("Mycenae started successfully")
+	tsLogger.Info("Mycenae started successfully")
+
+	go func() {
+		for pts := range wal.Load() {
+			if len(pts) > 0 {
+				tsLogger.Debug(
+					"loading points from commitlog",
+					zap.Int("count", len(pts)),
+					zap.String("func", "main"),
+					zap.String("package", "main"),
+				)
+			}
+
+			for _, p := range pts {
+				err := cluster.WAL(&p)
+				if err != nil {
+					tsLogger.Error(
+						"failure loading point from write-ahead-log",
+						zap.String("package", "main"),
+						zap.String("func", "main"),
+						zap.Error(err),
+					)
+				}
+			}
+		}
+
+		tsLogger.Debug(
+			"finished loading points from commitlog",
+			zap.String("func", "main"),
+			zap.String("package", "main"),
+		)
+
+	}()
 
 	for {
 		sig := <-signalChannel
 		switch sig {
 		case os.Interrupt, syscall.SIGTERM:
-			stop(tsLogger, tsRest, coll)
+			stop(tsLogger, tsRest, coll, strg)
 			return
 		case syscall.SIGHUP:
 			//THIS IS A HACK DO NOT EXTEND IT. THE FEATURE IS NICE BUT NEEDS TO BE DONE CORRECTLY!!!!!
@@ -199,34 +250,32 @@ func main() {
 				err = loader.ConfToml(confPath, &settings)
 			}
 			if err != nil {
-				tsLogger.General.Error("ERROR - Loading Config file: ", err)
+				tsLogger.Error("ERROR - Loading Config file: ", zap.Error(err))
 				continue
 			} else {
-				tsLogger.General.Info("Config file loaded.")
+				tsLogger.Info("Config file loaded.")
 			}
 
 			rcs, err := parseConsistencies(settings.ReadConsistency)
 			if err != nil {
-				tsLogger.General.Errorln(err)
+				tsLogger.Error(err.Error())
 				continue
 			}
 
 			wcs, err := parseConsistencies(settings.WriteConsisteny)
 			if err != nil {
-				tsLogger.General.Errorln(err)
+				tsLogger.Error(err.Error())
 				continue
 			}
 
-			coll.SetConsistencies(wcs)
+			d.SetWriteConsistencies(wcs)
 
-			p.SetConsistencies(rcs)
+			d.SetReadConsistencies(rcs)
 
-			tsLogger.General.Info("New consistency set")
+			tsLogger.Info("New consistency set")
 
 		}
 	}
-
-	os.Exit(0)
 }
 
 func parseConsistencies(names []string) ([]gocql.Consistency, error) {
@@ -256,16 +305,20 @@ func parseConsistencies(names []string) ([]gocql.Consistency, error) {
 	return tmp, nil
 }
 
-func stop(logger *structs.TsLog, rest *rest.REST, collector *collector.Collector) {
+func stop(
+	logger *zap.Logger,
+	rest *rest.REST,
+	collector *collector.Collector,
+	strg *gorilla.Storage,
+) {
 
-	fmt.Println("Stopping REST")
-	logger.General.Info("Stopping REST")
+	logger.Info("Stopping REST")
 	rest.Stop()
-	fmt.Println("REST stopped")
 
-	fmt.Println("Stopping UDPv2")
-	logger.General.Info("Stopping UDPv2")
+	logger.Info("Stopping UDPv2")
 	collector.Stop()
-	fmt.Println("UDPv2 stopped")
+
+	logger.Info("Stopping storage")
+	strg.Stop()
 
 }
