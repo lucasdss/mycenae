@@ -1,134 +1,130 @@
 package collector
 
 import (
-	"bytes"
 	"fmt"
 	"hash/crc32"
 	"net"
 	"regexp"
 	"sort"
-	"strings"
+	"strconv"
 	"sync"
-	"syscall"
+	"sync/atomic"
 	"time"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/gocql/gocql"
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rubber"
 
 	"github.com/uol/mycenae/lib/bcache"
+	"github.com/uol/mycenae/lib/cluster"
+	"github.com/uol/mycenae/lib/depot"
+	"github.com/uol/mycenae/lib/gorilla"
+	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/tsstats"
+	"github.com/uol/mycenae/lib/limiter"
+
+	pb "github.com/uol/mycenae/lib/proto"
+
+	"go.uber.org/zap"
 )
 
 var (
-	gblog *logrus.Logger
+	gblog *zap.Logger
 	stats *tsstats.StatsTS
 )
 
 func New(
-	log *structs.TsLog,
+	log *zap.Logger,
 	sts *tsstats.StatsTS,
-	cass *gocql.Session,
+	cluster *cluster.Cluster,
+	meta *meta.Meta,
+	cass *depot.Cassandra,
 	es *rubber.Elastic,
 	bc *bcache.Bcache,
 	set *structs.Settings,
-	consist []gocql.Consistency,
+	wLimiter *limiter.RateLimite,
 ) (*Collector, error) {
 
-	d, err := time.ParseDuration(set.MetaSaveInterval)
-	if err != nil {
-		return nil, err
-	}
-
-	gblog = log.General
+	gblog = log
 	stats = sts
 
 	collect := &Collector{
-		boltc:       bc,
-		persist:     persistence{cassandra: cass, esearch: es, consistencies: consist},
-		validKey:    regexp.MustCompile(`^[0-9A-Za-z-._%&#;/]+$`),
-		settings:    set,
-		concPoints:  make(chan struct{}, set.MaxConcurrentPoints),
-		concBulk:    make(chan struct{}, set.MaxConcurrentBulks),
-		metaChan:    make(chan Point, set.MetaBufferSize),
-		metaPayload: &bytes.Buffer{},
+		boltc:   bc,
+		cluster: cluster,
+		meta:    meta,
+		persist: persistence{
+			cluster: cluster,
+			esearch: es,
+			cass:    cass,
+		},
+		validKey:   regexp.MustCompile(`^[0-9A-Za-z-._%&#;/]+$`),
+		settings:   set,
+		concPoints: make(chan struct{}, set.MaxConcurrentPoints),
+		wLimiter:    wLimiter,
 	}
-
-	go collect.metaCoordinator(d)
 
 	return collect, nil
 }
 
 type Collector struct {
 	boltc    *bcache.Bcache
+	cluster  *cluster.Cluster
+	meta     *meta.Meta
 	persist  persistence
 	validKey *regexp.Regexp
 	settings *structs.Settings
 
-	concPoints  chan struct{}
-	concBulk    chan struct{}
-	metaChan    chan Point
-	metaPayload *bytes.Buffer
+	concPoints chan struct{}
 
-	receivedSinceLastProbe float64
-	errorsSinceLastProbe   float64
-	saving                 float64
+	receivedSinceLastProbe int64
+	errorsSinceLastProbe   int64
+	saving                 int64
 	shutdown               bool
-	saveMutex              sync.Mutex
-	recvMutex              sync.Mutex
-	errMutex               sync.Mutex
-}
-
-func (collect *Collector) SetConsistencies(consistencies []gocql.Consistency) {
-	collect.persist.SetConsistencies(consistencies)
+	wLimiter               *limiter.RateLimite
 }
 
 func (collect *Collector) CheckUDPbind() bool {
-	lf := logrus.Fields{
-		"struct": "CollectorV2",
-		"func":   "CheckUDPbind",
-	}
+
+	ctxt := gblog.With(
+		zap.String("struct", "CollectorV2"),
+		zap.String("func", "CheckUDPbind"),
+	)
 
 	port := ":" + collect.settings.UDPserverV2.Port
 
 	addr, err := net.ResolveUDPAddr("udp", port)
 	if err != nil {
-		gblog.WithFields(lf).Error("addr:", err)
+		ctxt.Error("addr:", zap.Error(err))
 	}
 
 	_, err = net.ListenUDP("udp", addr)
 	if err != nil {
-		gblog.WithFields(lf).Debug(err)
+		ctxt.Debug("", zap.Error(err))
 		return true
 	}
 
 	return false
 }
 
-func (collect *Collector) ReceivedErrorRatio() (ratio float64) {
-	lf := logrus.Fields{
-		"struct": "CollectorV2",
-		"func":   "ReceivedErrorRatio",
+func (collect *Collector) ReceivedErrorRatio() float64 {
+
+	ctxt := gblog.With(
+		zap.String("struct", "CollectorV2"),
+		zap.String("func", "ReceivedErrorRatio"),
+	)
+
+	y := atomic.LoadInt64(&collect.receivedSinceLastProbe)
+	var ratio float64
+	if y != 0 {
+		ratio = float64(atomic.LoadInt64(&collect.errorsSinceLastProbe) / y)
 	}
 
-	if collect.receivedSinceLastProbe == 0 {
-		ratio = 0
-	} else {
-		ratio = collect.errorsSinceLastProbe / collect.receivedSinceLastProbe
-	}
+	ctxt.Debug("", zap.Float64("ratio", ratio))
 
-	gblog.WithFields(lf).Debug(ratio)
+	atomic.StoreInt64(&collect.receivedSinceLastProbe, 0)
+	atomic.StoreInt64(&collect.errorsSinceLastProbe, 0)
 
-	collect.recvMutex.Lock()
-	collect.receivedSinceLastProbe = 0
-	collect.recvMutex.Unlock()
-	collect.errMutex.Lock()
-	collect.errorsSinceLastProbe = 0
-	collect.errMutex.Unlock()
-
-	return
+	return ratio
 }
 
 func (collect *Collector) Stop() {
@@ -140,58 +136,144 @@ func (collect *Collector) Stop() {
 	}
 }
 
-func (collect *Collector) HandlePacket(rcvMsg TSDBpoint, number bool) gobol.Error {
+func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 
 	start := time.Now()
 
+	returnPoints := RestErrors{}
+	var wg sync.WaitGroup
+
+	pts := make([]*pb.TSPoint, len(points))
+	var ptsMtx sync.Mutex
+
+	mm := make(map[string]*pb.Meta)
+	var mtx sync.RWMutex
+
+	wg.Add(len(points))
+	for i, rcvMsg := range points {
+
+		atomic.AddInt64(&collect.receivedSinceLastProbe, 1)
+		statsPoints(rcvMsg.Tags["ksid"], "number")
+
+		go func(rcvMsg gorilla.TSDBpoint, i int) {
+			defer wg.Done()
+
+			packet := &pb.TSPoint{}
+			m := &pb.Meta{}
+
+			gerr := collect.makePoint(packet, m, &rcvMsg)
+			if gerr != nil {
+				atomic.AddInt64(&collect.errorsSinceLastProbe, 1)
+
+				gblog.Error("makePacket", zap.Error(gerr))
+				reu := RestErrorUser{
+					Datapoint: rcvMsg,
+					Error:     gerr.Message(),
+				}
+				returnPoints.Errors = append(returnPoints.Errors, reu)
+
+				ks := "default"
+				if v, ok := rcvMsg.Tags["ksid"]; ok {
+					ks = v
+				}
+				statsPointsError(ks, "number")
+				return
+			}
+
+			ptsMtx.Lock()
+			pts[i] = packet
+			ptsMtx.Unlock()
+
+			id := meta.ComposeID(m.GetKsid(), m.GetTsid())
+
+			mtx.Lock()
+			if _, ok := mm[id]; !ok {
+				mm[id] = m
+			}
+			mtx.Unlock()
+
+		}(rcvMsg, i)
+	}
+
+	wg.Wait()
+
+	gerr := collect.persist.cluster.Write(pts)
+	if gerr != nil {
+		reu := RestErrorUser{
+			Error: gerr.Message(),
+		}
+		returnPoints.Errors = append(returnPoints.Errors, reu)
+	}
+
 	go func() {
-		collect.recvMutex.Lock()
-		collect.receivedSinceLastProbe++
-		collect.recvMutex.Unlock()
+		mtx.RLock()
+		defer mtx.RUnlock()
+		for ksts, m := range mm {
+
+			if found := collect.boltc.Get(&ksts); found {
+				statsProcTime(m.GetKsid(), time.Since(start), len(points))
+				continue
+			}
+
+			ok, gerr := collect.cluster.Meta(&ksts, m)
+			if gerr != nil {
+				gblog.Error(
+					fmt.Sprintf("%v", m),
+					zap.String("func", "collector/HandlePoint"),
+					zap.String("ksts", ksts),
+					zap.Error(gerr),
+				)
+				statsProcTime(m.GetKsid(), time.Since(start), len(points))
+				continue
+			}
+			if ok {
+				collect.boltc.Set(ksts)
+			}
+			statsProcTime(m.GetKsid(), time.Since(start), len(points))
+		}
 	}()
 
-	packet := Point{}
+	return returnPoints
 
-	gerr := collect.makePacket(&packet, rcvMsg, number)
+}
+
+func (collect *Collector) HandleTxtPacket(rcvMsg gorilla.TSDBpoint) gobol.Error {
+
+	start := time.Now()
+
+	atomic.AddInt64(&collect.receivedSinceLastProbe, 1)
+
+	packet := gorilla.Point{}
+
+	gerr := collect.makePacket(&packet, rcvMsg, false)
 	if gerr != nil {
+		gblog.Error("makePacket", zap.Error(gerr))
 		return gerr
 	}
 
-	if number {
-		if packet.Tuuid {
-			gerr = collect.saveTUUIDvalue(packet)
-		} else {
-			gerr = collect.saveValue(packet)
-		}
-	} else {
-		if packet.Tuuid {
-			gerr = collect.saveTUUIDtext(packet)
-		} else {
-			gerr = collect.saveText(packet)
-		}
-	}
-
+	gerr = collect.saveText(packet)
 	if gerr != nil {
-		collect.errMutex.Lock()
-		collect.errorsSinceLastProbe++
-		collect.errMutex.Unlock()
+		atomic.AddInt64(&collect.errorsSinceLastProbe, 1)
+		gblog.Error("save", zap.Error(gerr))
 		return gerr
 	}
 
-	if len(collect.metaChan) < collect.settings.MetaBufferSize {
-		go collect.saveMeta(packet)
-	} else {
-		gblog.WithFields(logrus.Fields{
-			"func": "collector/HandlePacket",
-		}).Warn("discarding point:", rcvMsg)
-		statsLostMeta()
+	pkt := &pb.Meta{
+		Ksid:   packet.KsID,
+		Tsid:   packet.ID,
+		Metric: packet.Message.Metric,
+	}
+	for k, v := range packet.Message.Tags {
+		pkt.Tags = append(pkt.Tags, &pb.Tag{Key: k, Value: v})
 	}
 
-	statsProcTime(packet.KsID, time.Since(start))
+	go collect.meta.SaveTxtMeta(pkt)
+
+	statsProcTime(packet.KsID, time.Since(start), 1)
 	return nil
 }
 
-func GenerateID(rcvMsg TSDBpoint) string {
+func GenerateID(rcvMsg *gorilla.TSDBpoint) string {
 
 	h := crc32.NewIEEE()
 
@@ -216,26 +298,5 @@ func GenerateID(rcvMsg TSDBpoint) string {
 
 	}
 
-	return fmt.Sprint(h.Sum32())
-}
-
-func (collect *Collector) CheckTSID(esType, id string) (bool, gobol.Error) {
-
-	info := strings.Split(id, "|")
-
-	respCode, gerr := collect.persist.HeadMetaFromES(info[0], esType, info[1])
-	if gerr != nil {
-		return false, gerr
-	}
-	if respCode != 200 {
-		return false, nil
-	}
-
-	return true, nil
-}
-
-func getTimeInMilliSeconds() int64 {
-	var tv syscall.Timeval
-	syscall.Gettimeofday(&tv)
-	return (int64(tv.Sec)*1e3 + int64(tv.Usec)/1e3)
+	return strconv.FormatUint(uint64(h.Sum32()), 10)
 }

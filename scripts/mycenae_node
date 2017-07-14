@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+PACKAGE='github.com/uol/mycenae'
+
+usage() {
+	echo "${0} [0-9] (instance number) true (optional for publishing port)"
+}
+
+[ -z "${1}" ] && usage && exit 1
+
+if ! make -C "${GOPATH}/src/${PACKAGE}" build ; then
+    exit 1
+fi
+
+cp "${GOPATH}/src/${PACKAGE}/mycenae" .
+
+CASSANDRA_HOST=$(docker inspect --format "{{ .NetworkSettings.IPAddress }}" consulCassandra1)
+ELASTIC_HOST=$(docker inspect --format "{{ .NetworkSettings.IPAddress }}" elastic)
+sed \
+    --expression "s|CASSANDRA_HOST|${CASSANDRA_HOST}|g" \
+    --expression "s|ELASTIC_HOST|${ELASTIC_HOST}|g" \
+    "docker.toml" > "docker.local.toml"
+
+docker build --tag "mycenae:develop" .
+
+#
+# Mycenae POD
+#
+
+name="consulMycenae${1}"
+
+publish="${2:-false}"
+
+docker rm -f "${name}"
+
+arguments=(
+    '--detach'
+    '--hostname' "${name}"
+    '--name' "${name}"
+    '--dns' "127.0.0.1"
+    '--volume' "$(pwd)/ssl:/ssl:ro"
+    '--volume' "$(pwd)/ssl.json:/config/ssl.json:ro"
+    '--volume' "$(pwd)/consul-mycenae.json:/consul/config/service.json"
+)
+
+if [ "${publish}" == "true" ]; then
+	arguments=( ${arguments[@]} '--publish' '8787:8080' )  
+	arguments=( ${arguments[@]} '--publish' '6666:6666' )  
+fi
+
+server=$(docker inspect --format "{{ .NetworkSettings.IPAddress }}" consulServer)
+
+consul_arguments=(
+    'agent'
+    '--join' "${server}"
+    '--retry-join' "${server}"
+    '-disable-host-node-id'
+)
+
+docker run "${arguments[@]}" consul:0.8.3 "${consul_arguments[@]}"
+
+sleep "10s"
+
+name2="mycenae${1}"
+
+docker rm -f ${name2}
+
+tmpdir=/tmp/${name2}
+sudo rm -rf ${tmpdir}
+mkdir -p ${tmpdir}
+
+pod_arguments=(
+    '--detach'
+    '--init'
+    '--name' "${name2}"
+    '--network' "container:${name}"
+    '--volume' "${tmpdir}:/tmp/mycenae"
+    '--volume' "$(pwd)/ssl:/ssl:ro"
+)
+did=$(docker run --init --rm "${pod_arguments[@]}" "mycenae:develop")
+
+logfile=$(docker inspect --format='{{.LogPath}}' $did)
+
+echo "dockerID=${did} logFile=${logfile}"
+echo "sudo tail -f $logfile | jq -C --tab"
+sudo tail -f $logfile | jq -C --tab
+

@@ -1,0 +1,6 @@
+{
+    "key_file": "/ssl/agent.key",
+    "cert_file": "/ssl/agent.cert",
+    "ca_file": "/ssl/ca.cert",
+    "ports": {"https": 8501}
+}

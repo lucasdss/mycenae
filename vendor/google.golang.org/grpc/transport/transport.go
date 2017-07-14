@@ -35,7 +35,7 @@
 Package transport defines and implements message oriented communication channel
 to complete various transactions (e.g., an RPC).
 */
-package transport // import "google.golang.org/grpc/transport"
+package transport
 
 import (
 	"bytes"
@@ -105,6 +105,7 @@ func (b *recvBuffer) load() {
 	if len(b.backlog) > 0 {
 		select {
 		case b.c <- b.backlog[0]:
+			b.backlog[0] = nil
 			b.backlog = b.backlog[1:]
 		default:
 		}
@@ -171,11 +172,6 @@ type Stream struct {
 	id uint32
 	// nil for client side Stream.
 	st ServerTransport
-	// clientStatsCtx keeps the user context for stats handling.
-	// It's only valid on client side. Server side stats context is same as s.ctx.
-	// All client side stats collection should use the clientStatsCtx (instead of the stream context)
-	// so that all the generated stats for a particular RPC can be associated in the processing phase.
-	clientStatsCtx context.Context
 	// ctx is the associated context of the stream.
 	ctx context.Context
 	// cancel is always nil for client side Stream.
@@ -220,6 +216,10 @@ type Stream struct {
 	rstStream bool
 	// rstError is the error that needs to be sent along with the RST_STREAM frame.
 	rstError http2.ErrCode
+	// bytesSent and bytesReceived indicates whether any bytes have been sent or
+	// received on this stream.
+	bytesSent     bool
+	bytesReceived bool
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound
@@ -341,6 +341,26 @@ func (s *Stream) finish(st *status.Status) {
 	close(s.done)
 }
 
+// BytesSent indicates whether any bytes have been sent on this stream.
+func (s *Stream) BytesSent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.bytesSent
+}
+
+// BytesReceived indicates whether any bytes have been received on this stream.
+func (s *Stream) BytesReceived() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.bytesReceived
+}
+
+// GoString is implemented by Stream so context.String() won't
+// race when printing %#v.
+func (s *Stream) GoString() string {
+	return fmt.Sprintf("<stream: %p, %v>", s, s.method)
+}
+
 // The key to save transport.Stream in the context.
 type streamKey struct{}
 
@@ -368,12 +388,14 @@ const (
 
 // ServerConfig consists of all the configurations to establish a server transport.
 type ServerConfig struct {
-	MaxStreams      uint32
-	AuthInfo        credentials.AuthInfo
-	InTapHandle     tap.ServerInHandle
-	StatsHandler    stats.Handler
-	KeepaliveParams keepalive.ServerParameters
-	KeepalivePolicy keepalive.EnforcementPolicy
+	MaxStreams            uint32
+	AuthInfo              credentials.AuthInfo
+	InTapHandle           tap.ServerInHandle
+	StatsHandler          stats.Handler
+	KeepaliveParams       keepalive.ServerParameters
+	KeepalivePolicy       keepalive.EnforcementPolicy
+	InitialWindowSize     int32
+	InitialConnWindowSize int32
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
@@ -401,6 +423,10 @@ type ConnectOptions struct {
 	KeepaliveParams keepalive.ClientParameters
 	// StatsHandler stores the handler for stats.
 	StatsHandler stats.Handler
+	// InitialWindowSize sets the intial window size for a stream.
+	InitialWindowSize int32
+	// InitialConnWindowSize sets the intial window size for a connection.
+	InitialConnWindowSize int32
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.
@@ -443,6 +469,9 @@ type CallHdr struct {
 	// SendCompress specifies the compression algorithm applied on
 	// outbound message.
 	SendCompress string
+
+	// Creds specifies credentials.PerRPCCredentials for a call.
+	Creds credentials.PerRPCCredentials
 
 	// Flush indicates whether a new stream command should be sent
 	// to the peer without waiting for the first data. This is
@@ -487,6 +516,9 @@ type ClientTransport interface {
 	// receives the draining signal from the server (e.g., GOAWAY frame in
 	// HTTP/2).
 	GoAway() <-chan struct{}
+
+	// GetGoAwayReason returns the reason why GoAway frame was received.
+	GetGoAwayReason() GoAwayReason
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -624,3 +656,16 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 		return i, nil
 	}
 }
+
+// GoAwayReason contains the reason for the GoAway frame received.
+type GoAwayReason uint8
+
+const (
+	// Invalid indicates that no GoAway frame is received.
+	Invalid GoAwayReason = 0
+	// NoReason is the default value when GoAway frame is received.
+	NoReason GoAwayReason = 1
+	// TooManyPings indicates that a GoAway frame with ErrCodeEnhanceYourCalm
+	// was recieved and that the debug data said "too_many_pings".
+	TooManyPings GoAwayReason = 2
+)

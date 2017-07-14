@@ -4,21 +4,16 @@ import (
 	crand "crypto/rand"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
-	"regexp"
 	"strconv"
 	"sync/atomic"
 	"time"
-
-	"sync"
-
-	"golang.org/x/net/context"
 )
 
 var (
-	randr    *rand.Rand
-	mutRandr sync.Mutex
+	randr *rand.Rand
 )
 
 func init() {
@@ -93,139 +88,57 @@ func (c *controlConn) heartBeat() {
 	}
 }
 
-var hostLookupPreferV4 = false
+func (c *controlConn) shuffleDial(endpoints []string) (conn *Conn, err error) {
+	perm := randr.Perm(len(endpoints))
+	shuffled := make([]string, len(endpoints))
 
-func hostInfo(addr string, defaultPort int) (*HostInfo, error) {
-	var port int
-	host, portStr, err := net.SplitHostPort(addr)
-	if err != nil {
-		host = addr
-		port = defaultPort
-	} else {
-		port, err = strconv.Atoi(portStr)
-		if err != nil {
-			return nil, err
-		}
+	for i, endpoint := range endpoints {
+		shuffled[perm[i]] = endpoint
 	}
 
-	ip := net.ParseIP(host)
-	if ip == nil {
-		ips, err := net.LookupIP(host)
-		if err != nil {
-			return nil, err
-		} else if len(ips) == 0 {
-			return nil, fmt.Errorf("No IP's returned from DNS lookup for %q", addr)
-		}
-
-		if hostLookupPreferV4 {
-			for _, v := range ips {
-				if v4 := v.To4(); v4 != nil {
-					ip = v4
-					break
-				}
-			}
-			if ip == nil {
-				ip = ips[0]
-			}
-		} else {
-			// TODO(zariel): should we check that we can connect to any of the ips?
-			ip = ips[0]
-		}
-
-	}
-
-	return &HostInfo{peer: ip, port: port}, nil
-}
-
-func shuffleHosts(hosts []*HostInfo) []*HostInfo {
-	mutRandr.Lock()
-	perm := randr.Perm(len(hosts))
-	mutRandr.Unlock()
-	shuffled := make([]*HostInfo, len(hosts))
-
-	for i, host := range hosts {
-		shuffled[perm[i]] = host
-	}
-
-	return shuffled
-}
-
-func (c *controlConn) shuffleDial(endpoints []*HostInfo) (*Conn, error) {
 	// shuffle endpoints so not all drivers will connect to the same initial
 	// node.
-	shuffled := shuffleHosts(endpoints)
+	for _, addr := range shuffled {
+		if addr == "" {
+			return nil, fmt.Errorf("control: invalid address: %q", addr)
+		}
 
-	var err error
-	for _, host := range shuffled {
-		var conn *Conn
-		conn, err = c.session.connect(host, c)
+		port := c.session.cfg.Port
+		addr = JoinHostPort(addr, port)
+		host, portStr, err := net.SplitHostPort(addr)
+		if err != nil {
+			host = addr
+			port = c.session.cfg.Port
+			err = nil
+		} else {
+			port, err = strconv.Atoi(portStr)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		hostInfo, _ := c.session.ring.addHostIfMissing(&HostInfo{peer: host, port: port})
+		conn, err = c.session.connect(addr, c, hostInfo)
 		if err == nil {
-			return conn, nil
+			return conn, err
 		}
 
-		Logger.Printf("gocql: unable to dial control conn %v: %v\n", host.Peer(), err)
+		log.Printf("gocql: unable to dial control conn %v: %v\n", addr, err)
 	}
 
-	return nil, err
+	return
 }
 
-// this is going to be version dependant and a nightmare to maintain :(
-var protocolSupportRe = regexp.MustCompile(`the lowest supported version is \d+ and the greatest is (\d+)$`)
-
-func parseProtocolFromError(err error) int {
-	// I really wish this had the actual info in the error frame...
-	matches := protocolSupportRe.FindAllStringSubmatch(err.Error(), -1)
-	if len(matches) != 1 || len(matches[0]) != 2 {
-		if verr, ok := err.(*protocolError); ok {
-			return int(verr.frame.Header().version.version())
-		}
-		return 0
-	}
-
-	max, err := strconv.Atoi(matches[0][1])
-	if err != nil {
-		return 0
-	}
-
-	return max
-}
-
-func (c *controlConn) discoverProtocol(hosts []*HostInfo) (int, error) {
-	hosts = shuffleHosts(hosts)
-
-	connCfg := *c.session.connCfg
-	connCfg.ProtoVersion = 4 // TODO: define maxProtocol
-
-	handler := connErrorHandlerFn(func(c *Conn, err error, closed bool) {
-		// we should never get here, but if we do it means we connected to a
-		// host successfully which means our attempted protocol version worked
-	})
-
-	var err error
-	for _, host := range hosts {
-		var conn *Conn
-		conn, err = Connect(host, &connCfg, handler, c.session)
-		if err == nil {
-			conn.Close()
-			return connCfg.ProtoVersion, nil
-		}
-
-		if proto := parseProtocolFromError(err); proto > 0 {
-			return proto, nil
-		}
-	}
-
-	return 0, err
-}
-
-func (c *controlConn) connect(hosts []*HostInfo) error {
-	if len(hosts) == 0 {
+func (c *controlConn) connect(endpoints []string) error {
+	if len(endpoints) == 0 {
 		return errors.New("control: no endpoints specified")
 	}
 
-	conn, err := c.shuffleDial(hosts)
+	conn, err := c.shuffleDial(endpoints)
 	if err != nil {
-		return fmt.Errorf("control: unable to connect to initial hosts: %v", err)
+		return fmt.Errorf("control: unable to connect: %v", err)
+	} else if conn == nil {
+		return errors.New("control: unable to connect to initial endpoints")
 	}
 
 	if err := c.setupConn(conn); err != nil {
@@ -280,10 +193,9 @@ func (c *controlConn) registerEvents(conn *Conn) error {
 		return nil
 	}
 
-	framer, err := conn.exec(context.Background(),
-		&writeRegisterFrame{
-			events: events,
-		}, nil)
+	framer, err := conn.exec(&writeRegisterFrame{
+		events: events,
+	}, nil)
 	if err != nil {
 		return err
 	}
@@ -302,37 +214,38 @@ func (c *controlConn) reconnect(refreshring bool) {
 	// TODO: simplify this function, use session.ring to get hosts instead of the
 	// connection pool
 
-	var host *HostInfo
+	addr := c.addr()
 	oldConn := c.conn.Load().(*Conn)
 	if oldConn != nil {
-		host = oldConn.host
 		oldConn.Close()
 	}
 
 	var newConn *Conn
-	if host != nil {
+	if addr != "" {
 		// try to connect to the old host
-		conn, err := c.session.connect(host, c)
+		conn, err := c.session.connect(addr, c, oldConn.host)
 		if err != nil {
 			// host is dead
 			// TODO: this is replicated in a few places
-			c.session.handleNodeDown(host.Peer(), host.Port())
+			ip, portStr, _ := net.SplitHostPort(addr)
+			port, _ := strconv.Atoi(portStr)
+			c.session.handleNodeDown(net.ParseIP(ip), port)
 		} else {
 			newConn = conn
 		}
 	}
 
-	// TODO: should have our own round-robin for hosts so that we can try each
-	// in succession and guarantee that we get a different host each time.
+	// TODO: should have our own roundrobbin for hosts so that we can try each
+	// in succession and guantee that we get a different host each time.
 	if newConn == nil {
-		host := c.session.ring.rrHost()
-		if host == nil {
+		_, conn := c.session.pool.Pick(nil)
+		if conn == nil {
 			c.connect(c.session.ring.endpoints)
 			return
 		}
 
 		var err error
-		newConn, err = c.session.connect(host, c)
+		newConn, err = c.session.connect(conn.addr, c, conn.host)
 		if err != nil {
 			// TODO: add log handler for things like this
 			return
@@ -341,7 +254,7 @@ func (c *controlConn) reconnect(refreshring bool) {
 
 	if err := c.setupConn(newConn); err != nil {
 		newConn.Close()
-		Logger.Printf("gocql: control unable to register events: %v\n", err)
+		log.Printf("gocql: control unable to register events: %v\n", err)
 		return
 	}
 
@@ -369,7 +282,7 @@ func (c *controlConn) writeFrame(w frameWriter) (frame, error) {
 		return nil, errNoControl
 	}
 
-	framer, err := conn.exec(context.Background(), w, nil)
+	framer, err := conn.exec(w, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +315,7 @@ func (c *controlConn) withConn(fn func(*Conn) *Iter) *Iter {
 
 // query will return nil if the connection is closed or nil
 func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter) {
-	q := c.session.Query(statement, values...).Consistency(One).RoutingKey([]byte{}).Trace(nil)
+	q := c.session.Query(statement, values...).Consistency(One).RoutingKey([]byte{})
 
 	for {
 		iter = c.withConn(func(conn *Conn) *Iter {
@@ -410,7 +323,7 @@ func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter
 		})
 
 		if gocqlDebug && iter.err != nil {
-			Logger.Printf("control: error executing %q: %v\n", statement, iter.err)
+			log.Printf("control: error executing %q: %v\n", statement, iter.err)
 		}
 
 		q.attempts++
@@ -422,28 +335,29 @@ func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter
 	return
 }
 
-func (c *controlConn) fetchHostInfo(ip net.IP, port int) (*HostInfo, error) {
+func (c *controlConn) fetchHostInfo(addr net.IP, port int) (*HostInfo, error) {
 	// TODO(zariel): we should probably move this into host_source or atleast
 	// share code with it.
-	localHost := c.host()
-	if localHost == nil {
-		return nil, errors.New("unable to fetch host info, invalid conn host")
+	hostname, _, err := net.SplitHostPort(c.addr())
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch host info, invalid conn addr: %q: %v", c.addr(), err)
 	}
 
-	isLocal := localHost.Peer().Equal(ip)
+	isLocal := hostname == addr.String()
 
 	var fn func(*HostInfo) error
 
-	// TODO(zariel): fetch preferred_ip address (is it >3.x only?)
 	if isLocal {
 		fn = func(host *HostInfo) error {
+			// TODO(zariel): should we fetch rpc_address from here?
 			iter := c.query("SELECT data_center, rack, host_id, tokens, release_version FROM system.local WHERE key='local'")
 			iter.Scan(&host.dataCenter, &host.rack, &host.hostId, &host.tokens, &host.version)
 			return iter.Close()
 		}
 	} else {
 		fn = func(host *HostInfo) error {
-			iter := c.query("SELECT data_center, rack, host_id, tokens, release_version FROM system.peers WHERE peer=?", ip)
+			// TODO(zariel): should we fetch rpc_address from here?
+			iter := c.query("SELECT data_center, rack, host_id, tokens, release_version FROM system.peers WHERE peer=?", addr)
 			iter.Scan(&host.dataCenter, &host.rack, &host.hostId, &host.tokens, &host.version)
 			return iter.Close()
 		}
@@ -451,12 +365,12 @@ func (c *controlConn) fetchHostInfo(ip net.IP, port int) (*HostInfo, error) {
 
 	host := &HostInfo{
 		port: port,
-		peer: ip,
 	}
 
 	if err := fn(host); err != nil {
 		return nil, err
 	}
+	host.peer = addr.String()
 
 	return host, nil
 }
@@ -467,12 +381,12 @@ func (c *controlConn) awaitSchemaAgreement() error {
 	}).err
 }
 
-func (c *controlConn) host() *HostInfo {
+func (c *controlConn) addr() string {
 	conn := c.conn.Load().(*Conn)
 	if conn == nil {
-		return nil
+		return ""
 	}
-	return conn.host
+	return conn.addr
 }
 
 func (c *controlConn) close() {

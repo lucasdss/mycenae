@@ -3,19 +3,14 @@ package plot
 import (
 	"time"
 
-	"github.com/gocql/gocql"
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rubber"
+	"github.com/uol/mycenae/lib/cluster"
 )
 
 type persistence struct {
-	cassandra     *gocql.Session
-	esTs          *rubber.Elastic
-	consistencies []gocql.Consistency
-}
-
-func (persist *persistence) SetConsistencies(consistencies []gocql.Consistency) {
-	persist.consistencies = consistencies
+	cluster *cluster.Cluster
+	esTs    *rubber.Elastic
 }
 
 func (persist *persistence) ListESTags(

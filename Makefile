@@ -10,7 +10,7 @@ COVER := /tmp/mycenae.cover
 default: build
 build install:
 	@echo " === Running: $@ === "
-	@go "$@" -a -v -o mycenae
+	@go "$@" -v -o mycenae
 	@echo
 test $(COVER): $(wildcard *.go)
 	@go test -v -cover -coverprofile="$(COVER)"

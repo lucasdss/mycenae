@@ -3,13 +3,9 @@ package plot
 import (
 	"regexp"
 	"sort"
-	//"fmt"
-	//"strings"
-	//"strconv"
 
 	"github.com/uol/gobol"
-	//"github.com/uol/mycenae/lib/config"
-	//"github.com/uol/mycenae/lib/structs"
+	"github.com/uol/mycenae/lib/gorilla"
 )
 
 var (
@@ -31,6 +27,18 @@ type TsQuery struct {
 }
 
 func (query *TsQuery) Validate() gobol.Error {
+
+	i, err := gorilla.MilliToSeconds(query.Start)
+	if err != nil {
+		return errValidationS("ListPoints", err.Error())
+	}
+	query.Start = i
+
+	j, err := gorilla.MilliToSeconds(query.End)
+	if err != nil {
+		return errValidationS("ListPoints", err.Error())
+	}
+	query.End = j
 
 	if query.End < query.Start {
 		return errValidationS("ListPoints", "end date should be equal or bigger than start date")
@@ -196,7 +204,7 @@ type TS struct {
 	index int
 	Count int
 	Total int
-	Data  Pnts
+	Data  gorilla.Pnts
 	gerr  gobol.Error
 }
 
@@ -204,47 +212,8 @@ type TST struct {
 	index int
 	Count int
 	Total int
-	Data  TextPnts
+	Data  gorilla.TextPnts
 	gerr  gobol.Error
-}
-
-type Pnt struct {
-	Date  int64
-	Value float64
-	Empty bool
-}
-
-type TextPnt struct {
-	Date  int64  `json:"x"`
-	Value string `json:"title"`
-}
-
-type Pnts []Pnt
-
-func (s Pnts) Len() int {
-	return len(s)
-}
-
-func (s Pnts) Less(i, j int) bool {
-	return s[i].Date < s[j].Date
-}
-
-func (s Pnts) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-type TextPnts []TextPnt
-
-func (s TextPnts) Len() int {
-	return len(s)
-}
-
-func (s TextPnts) Less(i, j int) bool {
-	return s[i].Date < s[j].Date
-}
-
-func (s TextPnts) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
 }
 
 type EsResponseTag struct {
@@ -894,12 +863,10 @@ func (r TSDBresponses) Less(i, j int) bool {
 					continue
 				}
 				return vi < vj
-			} else {
-				return true
 			}
-		} else {
-			return false
+			return true
 		}
+		return false
 	}
 
 	sort.Strings(r[i].AggregatedTags)
@@ -922,11 +889,11 @@ func (r TSDBresponses) Swap(i, j int) {
 }
 
 type TSDBresponse struct {
-	Metric         string                 `json:"metric"`
-	Tags           map[string]string      `json:"tags"`
-	AggregatedTags []string               `json:"aggregateTags"`
-	Tsuids         []string               `json:"tsuids,omitempty"`
-	Dps            map[string]interface{} `json:"dps"`
+	Metric         string            `json:"metric"`
+	Tags           map[string]string `json:"tags"`
+	AggregatedTags []string          `json:"aggregateTags"`
+	Tsuids         []string          `json:"tsuids,omitempty"`
+	Dps            *TSMarshaler      `json:"dps"`
 }
 
 type ExpParse struct {

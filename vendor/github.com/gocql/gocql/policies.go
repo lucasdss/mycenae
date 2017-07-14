@@ -6,14 +6,14 @@ package gocql
 
 import (
 	"fmt"
-	"net"
+	"log"
 	"sync"
 	"sync/atomic"
 
 	"github.com/hailocab/go-hostpool"
 )
 
-// cowHostList implements a copy on write host list, its equivalent type is []*HostInfo
+// cowHostList implements a copy on write host list, its equivilent type is []*HostInfo
 type cowHostList struct {
 	list atomic.Value
 	mu   sync.Mutex
@@ -90,7 +90,7 @@ func (c *cowHostList) update(host *HostInfo) {
 	c.mu.Unlock()
 }
 
-func (c *cowHostList) remove(ip net.IP) bool {
+func (c *cowHostList) remove(addr string) bool {
 	c.mu.Lock()
 	l := c.get()
 	size := len(l)
@@ -102,7 +102,7 @@ func (c *cowHostList) remove(ip net.IP) bool {
 	found := false
 	newL := make([]*HostInfo, 0, size)
 	for i := 0; i < len(l); i++ {
-		if !l[i].Peer().Equal(ip) {
+		if l[i].Peer() != addr {
 			newL = append(newL, l[i])
 		} else {
 			found = true
@@ -161,18 +161,18 @@ func (s *SimpleRetryPolicy) Attempt(q RetryableQuery) bool {
 
 type HostStateNotifier interface {
 	AddHost(host *HostInfo)
-	RemoveHost(host *HostInfo)
-	HostUp(host *HostInfo)
-	HostDown(host *HostInfo)
+	RemoveHost(addr string)
+	// TODO(zariel): add host up/down
 }
 
 // HostSelectionPolicy is an interface for selecting
 // the most appropriate host to execute a given query.
 type HostSelectionPolicy interface {
 	HostStateNotifier
+	SetHosts
 	SetPartitioner
 	//Pick returns an iteration function over selected hosts
-	Pick(ExecutableQuery) NextHost
+	Pick(*Query) NextHost
 }
 
 // SelectedHost is an interface returned when picking a host from a host
@@ -181,14 +181,6 @@ type SelectedHost interface {
 	Info() *HostInfo
 	Mark(error)
 }
-
-type selectedHost HostInfo
-
-func (host *selectedHost) Info() *HostInfo {
-	return (*HostInfo)(host)
-}
-
-func (host *selectedHost) Mark(err error) {}
 
 // NextHost is an iteration function over picked hosts
 type NextHost func() SelectedHost
@@ -205,11 +197,15 @@ type roundRobinHostPolicy struct {
 	mu    sync.RWMutex
 }
 
+func (r *roundRobinHostPolicy) SetHosts(hosts []*HostInfo) {
+	r.hosts.set(hosts)
+}
+
 func (r *roundRobinHostPolicy) SetPartitioner(partitioner string) {
 	// noop
 }
 
-func (r *roundRobinHostPolicy) Pick(qry ExecutableQuery) NextHost {
+func (r *roundRobinHostPolicy) Pick(qry *Query) NextHost {
 	// i is used to limit the number of attempts to find a host
 	// to the number of hosts known to this policy
 	var i int
@@ -227,7 +223,7 @@ func (r *roundRobinHostPolicy) Pick(qry ExecutableQuery) NextHost {
 		}
 		host := hosts[(pos)%uint32(len(hosts))]
 		i++
-		return (*selectedHost)(host)
+		return selectedRoundRobinHost{host}
 	}
 }
 
@@ -235,16 +231,22 @@ func (r *roundRobinHostPolicy) AddHost(host *HostInfo) {
 	r.hosts.add(host)
 }
 
-func (r *roundRobinHostPolicy) RemoveHost(host *HostInfo) {
-	r.hosts.remove(host.Peer())
+func (r *roundRobinHostPolicy) RemoveHost(addr string) {
+	r.hosts.remove(addr)
 }
 
-func (r *roundRobinHostPolicy) HostUp(host *HostInfo) {
-	r.AddHost(host)
+// selectedRoundRobinHost is a host returned by the roundRobinHostPolicy and
+// implements the SelectedHost interface
+type selectedRoundRobinHost struct {
+	info *HostInfo
 }
 
-func (r *roundRobinHostPolicy) HostDown(host *HostInfo) {
-	r.RemoveHost(host)
+func (host selectedRoundRobinHost) Info() *HostInfo {
+	return host.info
+}
+
+func (host selectedRoundRobinHost) Mark(err error) {
+	// noop
 }
 
 // TokenAwareHostPolicy is a token aware host selection policy, where hosts are
@@ -262,7 +264,22 @@ type tokenAwareHostPolicy struct {
 	fallback    HostSelectionPolicy
 }
 
+func (t *tokenAwareHostPolicy) SetHosts(hosts []*HostInfo) {
+	t.hosts.set(hosts)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// always update the fallback
+	t.fallback.SetHosts(hosts)
+
+	t.resetTokenRing()
+}
+
 func (t *tokenAwareHostPolicy) SetPartitioner(partitioner string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.partitioner != partitioner {
 		t.fallback.SetPartitioner(partitioner)
 		t.partitioner = partitioner
@@ -275,28 +292,20 @@ func (t *tokenAwareHostPolicy) AddHost(host *HostInfo) {
 	t.hosts.add(host)
 	t.fallback.AddHost(host)
 
+	t.mu.Lock()
 	t.resetTokenRing()
+	t.mu.Unlock()
 }
 
-func (t *tokenAwareHostPolicy) RemoveHost(host *HostInfo) {
-	t.hosts.remove(host.Peer())
-	t.fallback.RemoveHost(host)
+func (t *tokenAwareHostPolicy) RemoveHost(addr string) {
+	t.hosts.remove(addr)
 
+	t.mu.Lock()
 	t.resetTokenRing()
-}
-
-func (t *tokenAwareHostPolicy) HostUp(host *HostInfo) {
-	t.AddHost(host)
-}
-
-func (t *tokenAwareHostPolicy) HostDown(host *HostInfo) {
-	t.RemoveHost(host)
+	t.mu.Unlock()
 }
 
 func (t *tokenAwareHostPolicy) resetTokenRing() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.partitioner == "" {
 		// partitioner not yet set
 		return
@@ -306,7 +315,7 @@ func (t *tokenAwareHostPolicy) resetTokenRing() {
 	hosts := t.hosts.get()
 	tokenRing, err := newTokenRing(t.partitioner, hosts)
 	if err != nil {
-		Logger.Printf("Unable to update the token ring due to error: %s", err)
+		log.Printf("Unable to update the token ring due to error: %s", err)
 		return
 	}
 
@@ -314,8 +323,13 @@ func (t *tokenAwareHostPolicy) resetTokenRing() {
 	t.tokenRing = tokenRing
 }
 
-func (t *tokenAwareHostPolicy) Pick(qry ExecutableQuery) NextHost {
+func (t *tokenAwareHostPolicy) Pick(qry *Query) NextHost {
 	if qry == nil {
+		return t.fallback.Pick(qry)
+	} else if qry.binding != nil && len(qry.values) == 0 {
+		// If this query was created using session.Bind we wont have the query
+		// values yet, so we have to pass down to the next policy.
+		// TODO: Remove this and handle this case
 		return t.fallback.Pick(qry)
 	}
 
@@ -345,7 +359,7 @@ func (t *tokenAwareHostPolicy) Pick(qry ExecutableQuery) NextHost {
 	return func() SelectedHost {
 		if !hostReturned {
 			hostReturned = true
-			return (*selectedHost)(host)
+			return selectedTokenAwareHost{host}
 		}
 
 		// fallback
@@ -364,6 +378,20 @@ func (t *tokenAwareHostPolicy) Pick(qry ExecutableQuery) NextHost {
 	}
 }
 
+// selectedTokenAwareHost is a host returned by the tokenAwareHostPolicy and
+// implements the SelectedHost interface
+type selectedTokenAwareHost struct {
+	info *HostInfo
+}
+
+func (host selectedTokenAwareHost) Info() *HostInfo {
+	return host.info
+}
+
+func (host selectedTokenAwareHost) Mark(err error) {
+	// noop
+}
+
 // HostPoolHostPolicy is a host policy which uses the bitly/go-hostpool library
 // to distribute queries between hosts and prevent sending queries to
 // unresponsive hosts. When creating the host pool that is passed to the policy
@@ -373,7 +401,7 @@ func (t *tokenAwareHostPolicy) Pick(qry ExecutableQuery) NextHost {
 //     // Create host selection policy using a simple host pool
 //     cluster.PoolConfig.HostSelectionPolicy = HostPoolHostPolicy(hostpool.New(nil))
 //
-//     // Create host selection policy using an epsilon greedy pool
+//     // Create host selection policy using an epsilon greddy pool
 //     cluster.PoolConfig.HostSelectionPolicy = HostPoolHostPolicy(
 //         hostpool.NewEpsilonGreedy(nil, 0, &hostpool.LinearEpsilonValueCalculator{}),
 //     )
@@ -393,9 +421,8 @@ func (r *hostPoolHostPolicy) SetHosts(hosts []*HostInfo) {
 	hostMap := make(map[string]*HostInfo, len(hosts))
 
 	for i, host := range hosts {
-		ip := host.Peer().String()
-		peers[i] = ip
-		hostMap[ip] = host
+		peers[i] = host.Peer()
+		hostMap[host.Peer()] = host
 	}
 
 	r.mu.Lock()
@@ -405,18 +432,32 @@ func (r *hostPoolHostPolicy) SetHosts(hosts []*HostInfo) {
 }
 
 func (r *hostPoolHostPolicy) AddHost(host *HostInfo) {
-	ip := host.Peer().String()
-
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// If the host addr is present and isn't nil return
-	if h, ok := r.hostMap[ip]; ok && h != nil {
+	if _, ok := r.hostMap[host.Peer()]; ok {
 		return
 	}
-	// otherwise, add the host to the map
-	r.hostMap[ip] = host
-	// and construct a new peer list to give to the HostPool
+
+	hosts := make([]string, 0, len(r.hostMap)+1)
+	for addr := range r.hostMap {
+		hosts = append(hosts, addr)
+	}
+	hosts = append(hosts, host.Peer())
+
+	r.hp.SetHosts(hosts)
+	r.hostMap[host.Peer()] = host
+}
+
+func (r *hostPoolHostPolicy) RemoveHost(addr string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, ok := r.hostMap[addr]; !ok {
+		return
+	}
+
+	delete(r.hostMap, addr)
 	hosts := make([]string, 0, len(r.hostMap))
 	for addr := range r.hostMap {
 		hosts = append(hosts, addr)
@@ -425,38 +466,11 @@ func (r *hostPoolHostPolicy) AddHost(host *HostInfo) {
 	r.hp.SetHosts(hosts)
 }
 
-func (r *hostPoolHostPolicy) RemoveHost(host *HostInfo) {
-	ip := host.Peer().String()
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, ok := r.hostMap[ip]; !ok {
-		return
-	}
-
-	delete(r.hostMap, ip)
-	hosts := make([]string, 0, len(r.hostMap))
-	for _, host := range r.hostMap {
-		hosts = append(hosts, host.Peer().String())
-	}
-
-	r.hp.SetHosts(hosts)
-}
-
-func (r *hostPoolHostPolicy) HostUp(host *HostInfo) {
-	r.AddHost(host)
-}
-
-func (r *hostPoolHostPolicy) HostDown(host *HostInfo) {
-	r.RemoveHost(host)
-}
-
 func (r *hostPoolHostPolicy) SetPartitioner(partitioner string) {
 	// noop
 }
 
-func (r *hostPoolHostPolicy) Pick(qry ExecutableQuery) NextHost {
+func (r *hostPoolHostPolicy) Pick(qry *Query) NextHost {
 	return func() SelectedHost {
 		r.mu.RLock()
 		defer r.mu.RUnlock()
@@ -471,20 +485,15 @@ func (r *hostPoolHostPolicy) Pick(qry ExecutableQuery) NextHost {
 			return nil
 		}
 
-		return selectedHostPoolHost{
-			policy: r,
-			info:   host,
-			hostR:  hostR,
-		}
+		return selectedHostPoolHost{host, hostR}
 	}
 }
 
 // selectedHostPoolHost is a host returned by the hostPoolHostPolicy and
 // implements the SelectedHost interface
 type selectedHostPoolHost struct {
-	policy *hostPoolHostPolicy
-	info   *HostInfo
-	hostR  hostpool.HostPoolResponse
+	info  *HostInfo
+	hostR hostpool.HostPoolResponse
 }
 
 func (host selectedHostPoolHost) Info() *HostInfo {
@@ -492,15 +501,49 @@ func (host selectedHostPoolHost) Info() *HostInfo {
 }
 
 func (host selectedHostPoolHost) Mark(err error) {
-	ip := host.info.Peer().String()
+	host.hostR.Mark(err)
+}
 
-	host.policy.mu.RLock()
-	defer host.policy.mu.RUnlock()
+//ConnSelectionPolicy is an interface for selecting an
+//appropriate connection for executing a query
+type ConnSelectionPolicy interface {
+	SetConns(conns []*Conn)
+	Pick(*Query) *Conn
+}
 
-	if _, ok := host.policy.hostMap[ip]; !ok {
-		// host was removed between pick and mark
-		return
+type roundRobinConnPolicy struct {
+	conns []*Conn
+	pos   uint32
+	mu    sync.RWMutex
+}
+
+func RoundRobinConnPolicy() func() ConnSelectionPolicy {
+	return func() ConnSelectionPolicy {
+		return &roundRobinConnPolicy{}
+	}
+}
+
+func (r *roundRobinConnPolicy) SetConns(conns []*Conn) {
+	r.mu.Lock()
+	r.conns = conns
+	r.mu.Unlock()
+}
+
+func (r *roundRobinConnPolicy) Pick(qry *Query) *Conn {
+	pos := int(atomic.AddUint32(&r.pos, 1) - 1)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if len(r.conns) == 0 {
+		return nil
 	}
 
-	host.hostR.Mark(err)
+	for i := 0; i < len(r.conns); i++ {
+		conn := r.conns[(pos+i)%len(r.conns)]
+		if conn.AvailableStreams() > 0 {
+			return conn
+		}
+	}
+
+	return nil
 }

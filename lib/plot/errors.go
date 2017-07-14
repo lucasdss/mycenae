@@ -10,7 +10,6 @@ import (
 )
 
 func errInit(s string) gobol.Error {
-
 	return tserr.New(
 		errors.New(s),
 		s,
@@ -20,8 +19,6 @@ func errInit(s string) gobol.Error {
 			"func":    "New",
 		},
 	)
-
-	return nil
 }
 
 func errBasic(f, s string, code int, e error) gobol.Error {

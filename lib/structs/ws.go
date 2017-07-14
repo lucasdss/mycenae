@@ -4,6 +4,7 @@ import (
 	"regexp"
 
 	"github.com/uol/gobol"
+	"github.com/uol/mycenae/lib/gorilla"
 )
 
 type Downsample struct {
@@ -36,7 +37,7 @@ type RateOperation struct {
 type FilterValueOperation struct {
 	Enabled  bool
 	BoolOper string
-	Value    float64
+	Value    float32
 }
 
 type TsQuery struct {
@@ -56,6 +57,18 @@ func (query *TsQuery) GetRe() *regexp.Regexp {
 }
 
 func (query *TsQuery) Validate() gobol.Error {
+
+	i, err := gorilla.MilliToSeconds(query.Start)
+	if err != nil {
+		return errValidationS("ListPoints", err.Error())
+	}
+	query.Start = i
+
+	j, err := gorilla.MilliToSeconds(query.End)
+	if err != nil {
+		return errValidationS("ListPoints", err.Error())
+	}
+	query.End = j
 
 	if query.End < query.Start {
 		return errValidationS("ListPoints", "end date should be equal or bigger than start date")

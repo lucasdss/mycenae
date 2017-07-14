@@ -3,13 +3,13 @@ package udp
 import (
 	"net"
 
-	"github.com/Sirupsen/logrus"
-
 	"github.com/uol/mycenae/lib/structs"
+
+	"go.uber.org/zap"
 )
 
 var (
-	gblog *logrus.Logger
+	gblog *zap.Logger
 )
 
 type udpHandler interface {
@@ -17,7 +17,7 @@ type udpHandler interface {
 	Stop()
 }
 
-func New(gbl *logrus.Logger, setUDP structs.SettingsUDP, handler udpHandler) *UDPserver {
+func New(gbl *zap.Logger, setUDP structs.SettingsUDP, handler udpHandler) *UDPserver {
 
 	gblog = gbl
 
@@ -45,17 +45,17 @@ func (us UDPserver) asyncStart() {
 	addr, err := net.ResolveUDPAddr("udp", port)
 
 	if err != nil {
-		gblog.Fatalf("addr: ", err)
+		gblog.Fatal("addr: ", zap.Error(err))
 	} else {
-		gblog.Info("addr: ", "resolved")
+		gblog.Info("addr: resolved")
 	}
 
 	sock, err := net.ListenUDP("udp", addr)
 
 	if err != nil {
-		gblog.Fatal("listen: ", err)
+		gblog.Fatal("listen: ", zap.Error(err))
 	} else {
-		gblog.Info("listen: ", "binded to port: ", us.settings.Port)
+		gblog.Info("listen: ", zap.String("binded to port", us.settings.Port))
 	}
 
 	defer sock.Close()
@@ -63,9 +63,9 @@ func (us UDPserver) asyncStart() {
 	err = sock.SetReadBuffer(us.settings.ReadBuffer)
 
 	if err != nil {
-		gblog.Fatal("set buffer: ", err)
+		gblog.Fatal("set buffer: ", zap.Error(err))
 	} else {
-		gblog.Info("set buffer: ", "setted")
+		gblog.Info("set buffer: setted")
 	}
 
 	for {
@@ -79,7 +79,7 @@ func (us UDPserver) asyncStart() {
 			saddr = addr.IP.String()
 		}
 		if err != nil {
-			gblog.Errorf("read buffer from %s : %s", saddr, err)
+			gblog.Sugar().Errorf("read buffer from %s : %s", saddr, zap.Error(err))
 		} else {
 			go us.handler.HandleUDPpacket(buf[0:rlen], saddr)
 		}

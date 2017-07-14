@@ -1,17 +1,20 @@
 package collector
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
-	"github.com/uol/gobol"
 	"github.com/uol/gobol/rip"
+	"github.com/uol/mycenae/lib/gorilla"
 )
 
 func (collect *Collector) Scollector(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	if err := collect.wLimiter.Reserve(); err != nil {
+		rip.Fail(w, err)
+		return
+	}
 
-	points := TSDBpoints{}
+	points := gorilla.TSDBpoints{}
 
 	gerr := rip.FromJSON(r, &points)
 	if gerr != nil {
@@ -19,40 +22,7 @@ func (collect *Collector) Scollector(w http.ResponseWriter, r *http.Request, ps 
 		return
 	}
 
-	returnPoints := RestErrors{}
-
-	restChan := make(chan RestError, len(points))
-
-	for _, point := range points {
-		collect.concPoints <- struct{}{}
-		go collect.handleRESTpacket(point, true, restChan)
-
-	}
-
-	for range points {
-		re := <-restChan
-		if re.Gerr != nil {
-
-			gblog.WithFields(re.Gerr.LogFields()).Error(re.Gerr.Error())
-
-			ks := "default"
-			if v, ok := re.Datapoint.Tags["ksid"]; ok {
-				ks = v
-			}
-
-			statsPointsError(ks, "number")
-
-			reu := RestErrorUser{
-				Datapoint: re.Datapoint,
-				Error:     re.Gerr.Message(),
-			}
-
-			returnPoints.Errors = append(returnPoints.Errors, reu)
-
-		} else {
-			statsPoints(re.Datapoint.Tags["ksid"], "number")
-		}
-	}
+	returnPoints := collect.HandlePoint(points)
 
 	if len(returnPoints.Errors) > 0 {
 
@@ -68,8 +38,12 @@ func (collect *Collector) Scollector(w http.ResponseWriter, r *http.Request, ps 
 }
 
 func (collect *Collector) Text(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	if err := collect.wLimiter.Reserve(); err != nil {
+		rip.Fail(w, err)
+		return
+	}
 
-	points := TSDBpoints{}
+	points := gorilla.TSDBpoints{}
 
 	gerr := rip.FromJSON(r, &points)
 	if gerr != nil {
@@ -83,7 +57,7 @@ func (collect *Collector) Text(w http.ResponseWriter, r *http.Request, ps httpro
 
 	for _, point := range points {
 		collect.concPoints <- struct{}{}
-		go collect.handleRESTpacket(point, false, restChan)
+		go collect.handleRESTpacket(point, restChan)
 	}
 
 	var reqKS string
@@ -133,45 +107,14 @@ func (collect *Collector) Text(w http.ResponseWriter, r *http.Request, ps httpro
 	return
 }
 
-func (collect *Collector) handleRESTpacket(rcvMsg TSDBpoint, number bool, restChan chan RestError) {
+func (collect *Collector) handleRESTpacket(rcvMsg gorilla.TSDBpoint, restChan chan RestError) {
 	recvPoint := rcvMsg
-	var gerr gobol.Error
-	i := 0
 
-	if rcvMsg.Timestamp != 0 {
-
-		msTime := rcvMsg.Timestamp
-
-		for {
-			msTime = msTime / 10
-			if msTime == 0 {
-				break
-			}
-			i++
-		}
-
-		if i < 10 {
-			rcvMsg.Timestamp = rcvMsg.Timestamp * int64(1000)
-		}
-
-	}
-
-	if i > 13 {
-		err := errors.New("the maximum resolution suported for timestamp is milliseconds")
-		gerr = errBR("HandleRESTpacket", err.Error(), err)
-	} else {
-		if number {
-			rcvMsg.Text = ""
-		} else {
-			rcvMsg.Value = nil
-		}
-
-		gerr = collect.HandlePacket(rcvMsg, number)
-	}
+	rcvMsg.Value = nil
 
 	restChan <- RestError{
 		Datapoint: recvPoint,
-		Gerr:      gerr,
+		Gerr:      collect.HandleTxtPacket(rcvMsg),
 	}
 
 	<-collect.concPoints

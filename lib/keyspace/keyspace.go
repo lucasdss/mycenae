@@ -21,7 +21,7 @@ var (
 
 // DefaultCompaction defines the default compaction strategy that cassandra
 // will use for timeseries data
-const DefaultCompaction = "com.jeffjirsa.cassandra.db.compaction.TimeWindowCompactionStrategy"
+const DefaultCompaction = "org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy"
 
 func New(
 	sts *tsstats.StatsTS,

@@ -4,11 +4,110 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gocql/gocql"
 	"github.com/uol/gobol"
+	"github.com/uol/mycenae/lib/gorilla"
+
+	pb "github.com/uol/mycenae/lib/proto"
 )
 
-func (collector *Collector) makePacket(packet *Point, rcvMsg TSDBpoint, number bool) gobol.Error {
+func (collector *Collector) makePoint(point *pb.TSPoint, meta *pb.Meta, rcvMsg *gorilla.TSDBpoint) gobol.Error {
+
+	if rcvMsg.Value == nil {
+		return errValidation(`Wrong Format: Field "value" is required. NO information will be saved`)
+	}
+	point.Value = *rcvMsg.Value
+
+	if !collector.validKey.MatchString(rcvMsg.Metric) {
+		return errValidation(
+			fmt.Sprintf(
+				`Wrong Format: Field "metric" (%s) is not well formed. NO information will be saved`,
+				rcvMsg.Metric,
+			),
+		)
+	}
+	meta.Metric = rcvMsg.Metric
+
+	//	if lt == 1 {
+	//		return errValidation(`Wrong Format: At least one tag other than "ksid" is required. NO information will be saved`)
+	//	}
+
+	lt := len(rcvMsg.Tags)
+	if lt <= 2 {
+		if lt == 0 {
+			return errValidation(`Wrong Format: At least one tag is required. NO information will be saved`)
+		}
+		_, ttlOK := rcvMsg.Tags["ttl"]
+		_, ksidOK := rcvMsg.Tags["ksid"]
+		if ttlOK && ksidOK {
+			return errValidation(`Wrong Format: At least one tag other than "ksid" and "ttl" is required. NO information will be saved`)
+		}
+	}
+
+	ksid, ok := rcvMsg.Tags["ksid"]
+	if !ok {
+		return errValidation(`Wrong Format: Tag "ksid" is required. NO information will be saved`)
+	}
+
+	if ksid == collector.settings.Depot.Cassandra.Keyspace {
+		return errValidation(
+			fmt.Sprintf(
+				`Wrong Format: Keyspace "%s" can not be used. NO information will be saved`,
+				collector.settings.Depot.Cassandra.Keyspace,
+			),
+		)
+	}
+
+	point.Ksid = ksid
+	meta.Ksid = ksid
+
+	var tags []*pb.Tag
+	for k, v := range rcvMsg.Tags {
+		if !collector.validKey.MatchString(k) {
+			return errValidation(
+				fmt.Sprintf(
+					`Wrong Format: Tag key (%s) is not well formed. NO information will be saved`,
+					k,
+				),
+			)
+		}
+		if !collector.validKey.MatchString(v) {
+			return errValidation(
+				fmt.Sprintf(
+					`Wrong Format: Tag value (%s) is not well formed. NO information will be saved`,
+					v,
+				),
+			)
+		}
+		tags = append(tags, &pb.Tag{Key: k, Value: v})
+	}
+	meta.Tags = tags
+
+	_, found, gerr := collector.boltc.GetKeyspace(ksid)
+	if !found {
+		return errValidation(`Keyspace not found`)
+	}
+	if gerr != nil {
+		return gerr
+	}
+
+	if rcvMsg.Timestamp == 0 {
+		point.Date = time.Now().Unix()
+	} else {
+		t, err := gorilla.MilliToSeconds(rcvMsg.Timestamp)
+		if gerr != nil {
+			return errValidation(err.Error())
+		}
+		point.Date = t
+	}
+
+	tsid := GenerateID(rcvMsg)
+	point.Tsid = tsid
+	meta.Tsid = tsid
+
+	return nil
+}
+
+func (collector *Collector) makePacket(packet *gorilla.Point, rcvMsg gorilla.TSDBpoint, number bool) gobol.Error {
 
 	if number {
 		if rcvMsg.Value == nil {
@@ -41,11 +140,11 @@ func (collector *Collector) makePacket(packet *Point, rcvMsg TSDBpoint, number b
 
 	if ksid, ok := rcvMsg.Tags["ksid"]; !ok {
 		return errValidation(`Wrong Format: Tag "ksid" is required. NO information will be saved`)
-	} else if ksid == collector.settings.Cassandra.Keyspace {
+	} else if ksid == collector.settings.Depot.Cassandra.Keyspace {
 		return errValidation(
 			fmt.Sprintf(
 				`Wrong Format: Keyspace "%s" can not be used. NO information will be saved`,
-				collector.settings.Cassandra.Keyspace,
+				collector.settings.Depot.Cassandra.Keyspace,
 			),
 		)
 	} else {
@@ -81,7 +180,7 @@ func (collector *Collector) makePacket(packet *Point, rcvMsg TSDBpoint, number b
 		}
 	}
 
-	strTUUID, found, gerr := collector.boltc.GetKeyspace(packet.KsID)
+	_, found, gerr := collector.boltc.GetKeyspace(packet.KsID)
 	if !found {
 		return errValidation(`Keyspace not found`)
 	}
@@ -90,25 +189,22 @@ func (collector *Collector) makePacket(packet *Point, rcvMsg TSDBpoint, number b
 	}
 
 	if rcvMsg.Timestamp == 0 {
-		packet.Timestamp = getTimeInMilliSeconds()
+		packet.Timestamp = time.Now().Unix()
 	} else {
-		packet.Timestamp = rcvMsg.Timestamp
-	}
-
-	if strTUUID == "true" {
-		packet.TimeUUID = gocql.UUIDFromTime(time.Unix(0, packet.Timestamp*1e+6))
-		packet.Tuuid = true
+		t, err := gorilla.MilliToSeconds(rcvMsg.Timestamp)
+		if gerr != nil {
+			return errValidation(err.Error())
+		}
+		packet.Timestamp = t
 	}
 
 	packet.Number = number
 
 	packet.Message = rcvMsg
-	packet.ID = GenerateID(rcvMsg)
+	packet.ID = GenerateID(&rcvMsg)
 	if !number {
 		packet.ID = fmt.Sprintf("T%v", packet.ID)
 	}
-	year, week := time.Unix(0, packet.Timestamp*1e+6).ISOWeek()
-	packet.Bucket = fmt.Sprintf("%v%v", year, week)
 
 	return nil
 }

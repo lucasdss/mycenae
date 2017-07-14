@@ -132,6 +132,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if cc.dopts.cp != nil {
 		callHdr.SendCompress = cc.dopts.cp.Type()
 	}
+	if c.creds != nil {
+		callHdr.Creds = c.creds
+	}
 	var trInfo traceInfo
 	if EnableTracing {
 		trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
@@ -151,26 +154,27 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
+	ctx = newContextWithRPCInfo(ctx)
 	sh := cc.dopts.copts.StatsHandler
 	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
 			FailFast:  c.failFast,
 		}
 		sh.HandleRPC(ctx, begin)
-	}
-	defer func() {
-		if err != nil && sh != nil {
-			// Only handle end stats if err != nil.
-			end := &stats.End{
-				Client: true,
-				Error:  err,
+		defer func() {
+			if err != nil {
+				// Only handle end stats if err != nil.
+				end := &stats.End{
+					Client: true,
+					Error:  err,
+				}
+				sh.HandleRPC(ctx, end)
 			}
-			sh.HandleRPC(ctx, end)
-		}
-	}()
+		}()
+	}
 	gopts := BalancerGetOptions{
 		BlockingWait: !c.failFast,
 	}
@@ -193,14 +197,17 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 		s, err = t.NewStream(ctx, callHdr)
 		if err != nil {
+			if _, ok := err.(transport.ConnectionError); ok && put != nil {
+				// If error is connection error, transport was sending data on wire,
+				// and we are not sure if anything has been sent on wire.
+				// If error is not connection error, we are sure nothing has been sent.
+				updateRPCInfoInContext(ctx, rpcInfo{bytesSent: true, bytesReceived: false})
+			}
 			if put != nil {
 				put()
 				put = nil
 			}
-			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				if c.failFast {
-					return nil, toRPCErr(err)
-				}
+			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
 				continue
 			}
 			return nil, toRPCErr(err)
@@ -237,6 +244,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		select {
 		case <-t.Error():
 			// Incur transport error, simply exit.
+		case <-cc.ctx.Done():
+			cs.finish(ErrClientConnClosing)
+			cs.closeTransportStream(ErrClientConnClosing)
 		case <-s.Done():
 			// TODO: The trace of the RPC is terminated here when there is no pending
 			// I/O, which is probably not the optimal solution.
@@ -271,9 +281,10 @@ type clientStream struct {
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
-	mu     sync.Mutex
-	put    func()
-	closed bool
+	mu       sync.Mutex
+	put      func()
+	closed   bool
+	finished bool
 	// trInfo.tr is set when the clientStream is created (if EnableTracing is true),
 	// and is set to nil when the clientStream's finish method is called.
 	trInfo traceInfo
@@ -359,21 +370,6 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
-	defer func() {
-		if err != nil && cs.statsHandler != nil {
-			// Only generate End if err != nil.
-			// If err == nil, it's not the last RecvMsg.
-			// The last RecvMsg gets either an RPC error or io.EOF.
-			end := &stats.End{
-				Client:  true,
-				EndTime: time.Now(),
-			}
-			if err != io.EOF {
-				end.Error = toRPCErr(err)
-			}
-			cs.statsHandler.HandleRPC(cs.statsCtx, end)
-		}
-	}()
 	var inPayload *stats.InPayload
 	if cs.statsHandler != nil {
 		inPayload = &stats.InPayload{
@@ -459,19 +455,38 @@ func (cs *clientStream) closeTransportStream(err error) {
 }
 
 func (cs *clientStream) finish(err error) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if cs.finished {
+		return
+	}
+	cs.finished = true
 	defer func() {
 		if cs.cancel != nil {
 			cs.cancel()
 		}
 	}()
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
 	for _, o := range cs.opts {
 		o.after(&cs.c)
 	}
 	if cs.put != nil {
+		updateRPCInfoInContext(cs.s.Context(), rpcInfo{
+			bytesSent:     cs.s.BytesSent(),
+			bytesReceived: cs.s.BytesReceived(),
+		})
 		cs.put()
 		cs.put = nil
+	}
+	if cs.statsHandler != nil {
+		end := &stats.End{
+			Client:  true,
+			EndTime: time.Now(),
+		}
+		if err != io.EOF {
+			// end.Error is nil if the RPC finished successfully.
+			end.Error = toRPCErr(err)
+		}
+		cs.statsHandler.HandleRPC(cs.statsCtx, end)
 	}
 	if !cs.tracing {
 		return

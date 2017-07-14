@@ -2,6 +2,7 @@ package gocql
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -99,7 +100,7 @@ type HostInfo struct {
 	// TODO(zariel): reduce locking maybe, not all values will change, but to ensure
 	// that we are thread safe use a mutex to access all fields.
 	mu         sync.RWMutex
-	peer       net.IP
+	peer       string
 	port       int
 	dataCenter string
 	rack       string
@@ -115,16 +116,16 @@ func (h *HostInfo) Equal(host *HostInfo) bool {
 	host.mu.RLock()
 	defer host.mu.RUnlock()
 
-	return h.peer.Equal(host.peer)
+	return h.peer == host.peer && h.hostId == host.hostId
 }
 
-func (h *HostInfo) Peer() net.IP {
+func (h *HostInfo) Peer() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.peer
 }
 
-func (h *HostInfo) setPeer(peer net.IP) *HostInfo {
+func (h *HostInfo) setPeer(peer string) *HostInfo {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.peer = peer
@@ -233,7 +234,7 @@ func (h *HostInfo) update(from *HostInfo) {
 }
 
 func (h *HostInfo) IsUp() bool {
-	return h != nil && h.State() == NodeUp
+	return h.State() == NodeUp
 }
 
 func (h *HostInfo) String() string {
@@ -271,22 +272,6 @@ func checkSystemLocal(control *controlConn) (bool, error) {
 	return true, nil
 }
 
-// Returns true if we are using system_schema.keyspaces instead of system.schema_keyspaces
-func checkSystemSchema(control *controlConn) (bool, error) {
-	iter := control.query("SELECT * FROM system_schema.keyspaces")
-	if err := iter.err; err != nil {
-		if errf, ok := err.(*errorFrame); ok {
-			if errf.code == errReadFailure {
-				return false, nil
-			}
-		}
-
-		return false, err
-	}
-
-	return true, nil
-}
-
 func (r *ringDescriber) GetHosts() (hosts []*HostInfo, partitioner string, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -313,11 +298,7 @@ func (r *ringDescriber) GetHosts() (hosts []*HostInfo, partitioner string, err e
 			return nil, "", err
 		}
 	} else {
-		iter := r.session.control.withConn(func(c *Conn) *Iter {
-			localHost = c.host
-			return c.query(legacyLocalQuery)
-		})
-
+		iter := r.session.control.query(legacyLocalQuery)
 		if iter == nil {
 			return r.prevHosts, r.prevPartitioner, nil
 		}
@@ -327,31 +308,45 @@ func (r *ringDescriber) GetHosts() (hosts []*HostInfo, partitioner string, err e
 		if err = iter.Close(); err != nil {
 			return nil, "", err
 		}
+
+		addr, _, err := net.SplitHostPort(r.session.control.addr())
+		if err != nil {
+			// this should not happen, ever, as this is the address that was dialed by conn, here
+			// a panic makes sense, please report a bug if it occurs.
+			panic(err)
+		}
+
+		localHost.peer = addr
 	}
 
 	localHost.port = r.session.cfg.Port
 
 	hosts = []*HostInfo{localHost}
 
-	rows := r.session.control.query("SELECT rpc_address, data_center, rack, host_id, tokens, release_version FROM system.peers").Scanner()
-	if rows == nil {
+	iter := r.session.control.query("SELECT rpc_address, data_center, rack, host_id, tokens, release_version FROM system.peers")
+	if iter == nil {
 		return r.prevHosts, r.prevPartitioner, nil
 	}
 
-	for rows.Next() {
-		host := &HostInfo{port: r.session.cfg.Port}
-		err := rows.Scan(&host.peer, &host.dataCenter, &host.rack, &host.hostId, &host.tokens, &host.version)
-		if err != nil {
-			Logger.Println(err)
+	var (
+		host         = &HostInfo{port: r.session.cfg.Port}
+		versionBytes []byte
+	)
+	for iter.Scan(&host.peer, &host.dataCenter, &host.rack, &host.hostId, &host.tokens, &versionBytes) {
+		if err = host.version.unmarshal(versionBytes); err != nil {
+			log.Printf("invalid peer entry: peer=%s host_id=%s tokens=%v version=%s\n", host.peer, host.hostId, host.tokens, versionBytes)
 			continue
 		}
 
 		if r.matchFilter(host) {
 			hosts = append(hosts, host)
 		}
+		host = &HostInfo{
+			port: r.session.cfg.Port,
+		}
 	}
 
-	if err = rows.Err(); err != nil {
+	if err = iter.Close(); err != nil {
 		return nil, "", err
 	}
 
@@ -389,14 +384,12 @@ func (r *ringDescriber) refreshRing() error {
 		if r.session.cfg.HostFilter == nil || r.session.cfg.HostFilter.Accept(h) {
 			if host, ok := r.session.ring.addHostIfMissing(h); !ok {
 				r.session.pool.addHost(h)
-				r.session.policy.AddHost(h)
 			} else {
 				host.update(h)
 			}
 		}
 	}
 
-	r.session.metadata.setPartitioner(partitioner)
-	r.session.policy.SetPartitioner(partitioner)
+	r.session.pool.SetPartitioner(partitioner)
 	return nil
 }

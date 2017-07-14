@@ -1,65 +1,24 @@
 package collector
 
 import (
-	"errors"
-	"net/http"
-
-	"github.com/gocql/gocql"
 	"github.com/uol/gobol"
-
-	"github.com/uol/mycenae/lib/tserr"
+	"github.com/uol/mycenae/lib/gorilla"
 )
 
-type TSDBpoints []TSDBpoint
-
-type TSDBpoint struct {
-	Metric    string            `json:"metric,omitempty"`
-	Timestamp int64             `json:"timestamp,omitempty"`
-	Value     *float64          `json:"value,omitempty"`
-	Text      string            `json:"text,omitempty"`
-	Tags      map[string]string `json:"tags,omitempty"`
-}
-
-func (p TSDBpoints) Validate() gobol.Error {
-	if len(p) == 0 {
-		return tserr.New(
-			errors.New("no points"),
-			"no points",
-			http.StatusBadRequest,
-			map[string]interface{}{
-				"package": "Collector",
-				"struct":  "TSDBpoints",
-			},
-		)
-	}
-	return nil
-}
-
 type RestError struct {
-	Datapoint TSDBpoint   `json:"datapoint"`
-	Gerr      gobol.Error `json:"error"`
+	Datapoint gorilla.TSDBpoint `json:"datapoint"`
+	Gerr      gobol.Error       `json:"error"`
 }
 
 type RestErrorUser struct {
-	Datapoint TSDBpoint   `json:"datapoint"`
-	Error     interface{} `json:"error"`
+	Datapoint gorilla.TSDBpoint `json:"datapoint"`
+	Error     string            `json:"error"`
 }
 
 type RestErrors struct {
 	Errors  []RestErrorUser `json:"errors"`
 	Failed  int             `json:"failed"`
 	Success int             `json:"success"`
-}
-
-type Point struct {
-	Message   TSDBpoint
-	ID        string
-	Bucket    string
-	KsID      string
-	Timestamp int64
-	Tuuid     bool
-	TimeUUID  gocql.UUID
-	Number    bool
 }
 
 type StructV2Error struct {

@@ -36,36 +36,61 @@ MaxTimeseries = 5000
 LogQueryTSthreshold = 1000
 
 BoltPath = "/tmp/mycenae/cache.db"
+WALPath = "/tmp/mycenae/wal"
 
 # Max number of concurrent points being processed
 MaxConcurrentPoints = 1000
 
-# Max number of concurrent bulk requests to elasticsearch
-MaxConcurrentBulks = 1
-
-# Number, in bytes of bulk playload
-MaxMetaBulkSize = 1000000
-
-# Number of points in buffer
-MetaBufferSize = 100000
-
-MetaSaveInterval = "1s"
-
 CompactionStrategy = "TimeWindowCompactionStrategy"
 
-[cassandra]
-  keyspace = "mycenae"
-  consistency = "one"
-  nodes = ["172.17.0.3","172.17.0.4","172.17.0.5"]
-  username = "cassandra"
-  password = "cassandra"
-  connections = 3
-  discoverHosts = true
-  discoverySleep = 10
-  retry = 5
-  pageSize = 5000
-  timeout = "60s"
-  protoVersion = 4
+
+[meta]
+# Number, in bytes of bulk playload
+MaxMetaBulkSize = 1000000
+# Max number of concurrent bulk requests to elasticsearch
+MaxConcurrentBulks = 1
+# Max number of concurrent points being processed
+MaxConcurrentPoints = 1000
+# Number of points in buffer
+MetaBufferSize = 100000
+MetaSaveInterval = "1s"
+MetaHeadInterval = "50ms"
+MaxRateLimit = 20
+Burst = 100
+
+[logs]
+  logLevel = "DEBUG"
+  environment = "QA"
+
+[cluster]
+  port = 6969
+  checkInterval = "1s"
+  applyWait = 50
+  [cluster.consul]
+    address = "localhost.consul.macs.intranet"
+    port = 8500
+    cert = "/tmp/mycenae/agent.cert"
+    key  = "/tmp/mycenae/agent.key"
+    ca   = "/tmp/mycenae/ca.cert"
+    service = "mycenae"
+    tag = "http"
+    token = "866239fd-5129-92d2-4a09-3e7355f7bf38"
+
+[depot]
+  MaxConcurrent = 500
+  [cassandra]
+    keyspace = "mycenae"
+    consistency = "one"
+    nodes = ["172.17.0.3","172.17.0.4","172.17.0.5"]
+    username = "cassandra"
+    password = "cassandra"
+    connections = 3
+    discoverHosts = true
+    discoverySleep = 10
+    retry = 5
+    pageSize = 5000
+    timeout = "60s"
+    protoVersion = 4
 
 [TTL]
   max = 90
@@ -83,24 +108,6 @@ CompactionStrategy = "TimeWindowCompactionStrategy"
   port = "8787"
   bind = "localhost"
 
-[logs.general.file]
-  writeTo = true
-  [logs.general.file.settings]
-    symlink = true
-    logLevel = "DEBUG"
-    rotationPeriod = "daily"
-    timeFormat = "2006-01-02_15:04:03"
-    path = "/tmp/mycenae/mycenae.log"
-
-[logs.stats.file]
-  writeTo = true
-  [logs.stats.file.settings]
-    symlink = true
-    logLevel = "DEBUG"
-    rotationPeriod = "daily"
-    timeFormat = "2006-01-02_15:04:03"
-    path = "/tmp/mycenae/mycenae-stats.log"
-
 [stats]
   address = "0.0.0.0"
   port = "4243"
@@ -108,6 +115,7 @@ CompactionStrategy = "TimeWindowCompactionStrategy"
   ksid = "stats"
   ttl = "5"
   interval = "@every 1m"
+  runtime = true
   [stats.tags]
     service = "mycenae"
 

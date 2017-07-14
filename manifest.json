@@ -1,0 +1,49 @@
+{
+    "dependencies": {
+        "github.com/Sirupsen/logrus": {
+            "branch": "master"
+        },
+        "github.com/asaskevich/govalidator": {
+            "branch": "master"
+        },
+        "github.com/billhathaway/consistentHash": {
+            "branch": "master"
+        },
+        "github.com/boltdb/bolt": {
+            "branch": "master"
+        },
+        "github.com/braintree/manners": {
+            "branch": "master"
+        },
+        "github.com/gocql/gocql": {
+            "branch": "master"
+        },
+        "github.com/golang/protobuf": {
+            "branch": "master"
+        },
+        "github.com/golang/snappy": {
+            "branch": "master"
+        },
+        "github.com/julienschmidt/httprouter": {
+            "branch": "master"
+        },
+        "github.com/pborman/uuid": {
+            "branch": "master"
+        },
+        "github.com/uol/go-tsz": {
+            "branch": "master"
+        },
+        "github.com/uol/gobol": {
+            "branch": "master"
+        },
+        "golang.org/x/net": {
+            "branch": "master"
+        },
+        "google.golang.org/grpc": {
+            "branch": "master"
+        },
+        "gopkg.in/robfig/cron.v2": {
+            "branch": "v2"
+        }
+    }
+}

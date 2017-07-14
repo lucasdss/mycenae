@@ -3,8 +3,6 @@ package plot
 import (
 	"fmt"
 	"regexp"
-	"sort"
-	"time"
 
 	"github.com/uol/gobol"
 
@@ -23,61 +21,63 @@ func (plot *Plot) GetTextSeries(
 	downsample structs.Downsample,
 ) (serie TST, gerr gobol.Error) {
 
-	w := start
+	/*
+		w := start
 
-	index := 0
+		index := 0
 
-	buckets := []string{}
+		buckets := []string{}
 
-	for {
-		t := time.Unix(0, w*1e+6)
+		for {
+			t := time.Unix(0, w*1e+6)
 
-		year, week := t.ISOWeek()
+			year, week := t.ISOWeek()
 
-		buckets = append(buckets, fmt.Sprintf("%v%v", year, week))
+			buckets = append(buckets, fmt.Sprintf("%v%v", year, week))
 
-		if w > end {
-			break
+			if w > end {
+				break
+			}
+
+			w += milliWeek
+
+			index++
 		}
 
-		w += milliWeek
+		tsChan := make(chan TST, len(keys))
 
-		index++
-	}
-
-	tsChan := make(chan TST, len(keys))
-
-	for _, key := range keys {
-		plot.concTimeseries <- struct{}{}
-		go plot.getTextSerie(keyspace, key, buckets, start, end, tuuid, keepEmpties, search, downsample, tsChan)
-	}
-
-	j := 0
-
-	for range keys {
-
-		t := <-tsChan
-		if t.gerr != nil {
-			gerr = t.gerr
+		for _, key := range keys {
+			plot.concTimeseries <- struct{}{}
+			go plot.getTextSerie(keyspace, key, buckets, start, end, tuuid, keepEmpties, search, downsample, tsChan)
 		}
-		if t.Count > 0 {
-			j++
+
+		j := 0
+
+		for range keys {
+
+			t := <-tsChan
+			if t.gerr != nil {
+				gerr = t.gerr
+			}
+			if t.Count > 0 {
+				j++
+			}
+			serie.Data = append(serie.Data, t.Data...)
+
+			serie.Total = t.Total
 		}
-		serie.Data = append(serie.Data, t.Data...)
 
-		serie.Total = t.Total
-	}
+		if gerr != nil {
+			return TST{}, gerr
+		}
 
-	if gerr != nil {
-		return TST{}, gerr
-	}
+		if j > 1 {
+			sort.Sort(serie.Data)
+			serie.Total = len(serie.Data)
+		}
 
-	if j > 1 {
-		sort.Sort(serie.Data)
-		serie.Total = len(serie.Data)
-	}
-
-	serie.Count = len(serie.Data)
+		serie.Count = len(serie.Data)
+	*/
 
 	return serie, nil
 }
@@ -143,7 +143,7 @@ func (plot *Plot) getTextSerieBucket(
 	tsChan chan TST,
 ) {
 
-	resultSet, count, gerr := plot.persist.GetTST(keyspace, key, start, end, tuuid, search)
+	resultSet, count, gerr := plot.persist.GetTST(keyspace, key, start, end, search)
 
 	tsChan <- TST{
 		index: index,

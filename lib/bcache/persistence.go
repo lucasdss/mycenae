@@ -117,3 +117,31 @@ func (persist *persistence) Delete(buckName, key []byte) gobol.Error {
 	statsSuccess("delete", buckName, time.Since(start))
 	return nil
 }
+
+type KV struct {
+	K []byte
+	V []byte
+}
+
+func (persist *persistence) Load(keyspace []byte) []KV {
+
+	var kv []KV
+
+	persist.db.View(func(tx *bolt.Tx) error {
+		// Assume bucket exists and has keys
+		b := tx.Bucket([]byte(keyspace))
+		if b != nil {
+			b.ForEach(func(k, v []byte) error {
+				nKV := KV{
+					K: k,
+					V: v,
+				}
+				kv = append(kv, nKV)
+				return nil
+			})
+		}
+		return nil
+	})
+
+	return kv
+}

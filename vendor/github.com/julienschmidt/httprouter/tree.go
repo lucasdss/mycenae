@@ -60,7 +60,9 @@ func (n *node) incrementChildPrio(pos int) int {
 	newPos := pos
 	for newPos > 0 && n.children[newPos-1].priority < prio {
 		// swap node positions
-		n.children[newPos-1], n.children[newPos] = n.children[newPos], n.children[newPos-1]
+		tmpN := n.children[newPos-1]
+		n.children[newPos-1] = n.children[newPos]
+		n.children[newPos] = tmpN
 
 		newPos--
 	}
@@ -142,25 +144,16 @@ func (n *node) addRoute(path string, handle Handle) {
 					numParams--
 
 					// Check if the wildcard matches
-					if len(path) >= len(n.path) && n.path == path[:len(n.path)] &&
-						// Check for longer wildcard, e.g. :name and :names
-						(len(n.path) >= len(path) || path[len(n.path)] == '/') {
-						continue walk
-					} else {
-						// Wildcard conflict
-						var pathSeg string
-						if n.nType == catchAll {
-							pathSeg = path
-						} else {
-							pathSeg = strings.SplitN(path, "/", 2)[0]
+					if len(path) >= len(n.path) && n.path == path[:len(n.path)] {
+						// check for longer wildcard, e.g. :name and :names
+						if len(n.path) >= len(path) || path[len(n.path)] == '/' {
+							continue walk
 						}
-						prefix := fullPath[:strings.Index(fullPath, pathSeg)] + n.path
-						panic("'" + pathSeg +
-							"' in new path '" + fullPath +
-							"' conflicts with existing wildcard '" + n.path +
-							"' in existing prefix '" + prefix +
-							"'")
 					}
+
+					panic("path segment '" + path +
+						"' conflicts with existing wildcard '" + n.path +
+						"' in path '" + fullPath + "'")
 				}
 
 				c := path[0]

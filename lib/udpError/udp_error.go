@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/gocql/gocql"
+	"go.uber.org/zap"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rubber"
 
@@ -14,12 +14,12 @@ import (
 )
 
 var (
-	gblog *logrus.Logger
+	gblog *zap.Logger
 	stats *tsstats.StatsTS
 )
 
 func New(
-	gbl *logrus.Logger,
+	gbl *zap.Logger,
 	sts *tsstats.StatsTS,
 	cass *gocql.Session,
 	bc *bcache.Bcache,

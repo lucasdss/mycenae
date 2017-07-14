@@ -4,34 +4,36 @@ import (
 	"math"
 	"time"
 
+	"github.com/uol/mycenae/lib/gorilla"
+	pb "github.com/uol/mycenae/lib/proto"
 	"github.com/uol/mycenae/lib/structs"
 )
 
 const (
-	msSec  = 1000
-	msMin  = 60000
-	msHour = 3.6e+6
-	msDay  = 8.64e+7
-	msWeek = 6.048e+8
+	second = 1
+	minute = 60 * second
+	hour   = 60 * minute
+	day    = 24 * hour
+	week   = 7 * day
 )
 
-func basic(totalPoints int, serie []Pnt) (groupSerie []Pnt) {
+func basic(totalPoints int, serie gorilla.Pnts) (groupSerie gorilla.Pnts) {
 
 	total := len(serie)
 
-	group := float64(total) / float64(totalPoints)
+	group := float32(total) / float32(totalPoints)
 
 	group = round(group, .5, 0)
 
-	var counter float64
+	var counter float32
 
-	var avgCounter float64
+	var avgCounter float32
 
-	var nilCounter float64
+	var nilCounter float32
 
 	var groupDate int64
 
-	var groupValue float64
+	var groupValue float32
 
 	for i, point := range serie {
 
@@ -57,7 +59,7 @@ func basic(totalPoints int, serie []Pnt) (groupSerie []Pnt) {
 
 			groupValue = groupValue / avgCounter
 
-			var groupPoint Pnt
+			groupPoint := &pb.Point{}
 
 			groupPoint.Date = groupDate
 
@@ -87,18 +89,18 @@ func basic(totalPoints int, serie []Pnt) (groupSerie []Pnt) {
 
 }
 
-func rate(options structs.TSDBrateOptions, serie Pnts) Pnts {
+func rate(options structs.TSDBrateOptions, serie gorilla.Pnts) gorilla.Pnts {
 
 	if len(serie) == 1 {
 		return serie
 	}
 
-	rateSerie := Pnts{}
+	rateSerie := gorilla.Pnts{}
 
 	for i := 1; i < len(serie); i++ {
 
 		if serie[i].Empty || serie[i-1].Empty {
-			p := Pnt{
+			p := &pb.Point{
 				Date:  serie[i].Date,
 				Empty: true,
 			}
@@ -106,18 +108,18 @@ func rate(options structs.TSDBrateOptions, serie Pnts) Pnts {
 			continue
 		}
 
-		var value float64
+		var value float32
 
 		if options.Counter && serie[i].Value < serie[i-1].Value {
-			value = (float64(*options.CounterMax) + serie[i].Value - serie[i-1].Value) / float64((serie[i].Date/int64(1000))-(serie[i-1].Date/int64(1000)))
-			if options.ResetValue != 0 && float64(options.ResetValue) <= value {
+			value = (float32(*options.CounterMax) + serie[i].Value - serie[i-1].Value) / float32((serie[i].Date)-(serie[i-1].Date))
+			if options.ResetValue != 0 && float32(options.ResetValue) <= value {
 				value = 0
 			}
 		} else {
-			value = (serie[i].Value - serie[i-1].Value) / float64((serie[i].Date/int64(1000))-(serie[i-1].Date/int64(1000)))
+			value = (serie[i].Value - serie[i-1].Value) / float32((serie[i].Date)-(serie[i-1].Date))
 		}
 
-		p := Pnt{
+		p := &pb.Point{
 			Value: value,
 			Date:  serie[i].Date,
 			Empty: false,
@@ -129,77 +131,44 @@ func rate(options structs.TSDBrateOptions, serie Pnts) Pnts {
 	return rateSerie
 }
 
-func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, serie Pnts) Pnts {
-
-	startDate := time.Unix(0, start*1e+6)
+func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, serie gorilla.Pnts) gorilla.Pnts {
 
 	switch options.Unit {
 	case "sec":
-		base := time.Date(
-			startDate.Year(),
-			startDate.Month(),
-			startDate.Day(),
-			startDate.Hour(),
-			startDate.Minute(),
-			startDate.Second(),
-			0,
-			time.Local,
-		)
-		start = base.Unix() * 1e+3
+		// start is already in seconds
 	case "min":
-		base := time.Date(
-			startDate.Year(),
-			startDate.Month(),
-			startDate.Day(),
-			startDate.Hour(),
-			startDate.Minute(),
-			0,
-			0,
-			time.Local,
-		)
-		start = base.Unix() * 1e+3
+		start = time.Unix(start, 0).Truncate(time.Minute).Unix()
 	case "hour":
-		base := time.Date(
-			startDate.Year(),
-			startDate.Month(),
-			startDate.Day(),
-			startDate.Hour(),
-			0,
-			0,
-			0,
-			time.Local,
-		)
-		start = base.Unix() * 1e+3
+		start = time.Unix(start, 0).Truncate(time.Hour).Unix()
 	case "day":
-		base := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, time.Local)
-		start = base.Unix() * 1e+3
+		//start = time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, time.Local).Unix()
+		start = time.Unix(start, 0).Truncate(24 * time.Hour).Unix()
 	case "week":
-		base := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, time.Local)
+		base := time.Unix(start, 0).Truncate(24 * time.Hour)
 		for base.Weekday() != time.Monday {
 			base = base.AddDate(0, 0, -1)
 		}
-		start = base.Unix() * 1e+3
+		start = base.Unix()
 	case "month":
-		base := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, time.Local)
-		for base.Month() == startDate.Month() {
+		t := time.Unix(start, 0)
+		base := t.Truncate(24 * time.Hour)
+		for base.Month() == t.Month() {
 			base = base.AddDate(0, 0, -1)
 		}
-		base = base.AddDate(0, 0, 1)
-		start = base.Unix() * 1e+3
+		start = base.AddDate(0, 0, 1).Unix()
 	case "year":
-		base := time.Date(startDate.Year(), time.January, 1, 0, 0, 0, 0, time.Local)
-		start = base.Unix() * 1e+3
+		start = time.Date(time.Unix(start, 0).Year(), time.January, 1, 0, 0, 0, 0, time.Local).Unix()
 	}
 
 	groupDate := start
 
 	endInterval := getEndInterval(start, options.Unit, options.Value)
 
-	var groupedCount float64
+	var groupedCount float32
 
-	groupedPoint := Pnt{}
+	groupedPoint := &pb.Point{}
 
-	groupedSerie := Pnts{}
+	groupedSerie := gorilla.Pnts{}
 
 	for i := 0; i < len(serie); i++ {
 
@@ -218,7 +187,7 @@ func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, s
 
 				groupedSerie = append(groupedSerie, groupedPoint)
 
-				groupedPoint = Pnt{}
+				groupedPoint = &pb.Point{}
 			}
 
 			groupDate = endInterval
@@ -265,7 +234,7 @@ func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, s
 
 			groupedCount = 0
 
-			groupedPoint = Pnt{}
+			groupedPoint = &pb.Point{}
 
 			if i+1 != len(serie) {
 				endInterval = getEndInterval(endInterval, options.Unit, options.Value)
@@ -277,7 +246,7 @@ func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, s
 	if keepEmpties {
 		for i := endInterval; i < end; i = endInterval {
 
-			groupedPoint := Pnt{
+			groupedPoint := &pb.Point{
 				Date: endInterval,
 			}
 
@@ -301,85 +270,38 @@ func getEndInterval(start int64, unit string, value int) int64 {
 	var end int64
 
 	switch unit {
-	case "ms":
-		end = start + int64(value)
 	case "sec":
-		end = start + msSec*int64(value)
+		end = start + int64(value)
 	case "min":
-		end = start + msMin*int64(value)
+		end = start + int64(minute*value)
 	case "hour":
-		end = start + msHour*int64(value)
+		end = start + int64(hour*value)
 	case "day":
-		end = start + msDay*int64(value)
+		end = start + int64(day*value)
 	case "week":
-		end = start + msWeek*int64(value)
+		end = start + int64(week*value)
 	case "month":
-		startDate := time.Unix(0, start*1e+6)
-
+		startDate := time.Unix(start, 0)
 		base := time.Date(startDate.Year(), startDate.Month(), 1, 0, 0, 0, 0, time.Local)
-
-		base = base.AddDate(0, value, 0)
-
-		end = base.Unix() * 1e+3
+		end = base.AddDate(0, value, 0).Unix()
 	case "year":
-		startDate := time.Unix(0, start*1e+6)
-
+		startDate := time.Unix(start, 0)
 		base := time.Date(startDate.Year(), time.January, 1, 0, 0, 0, 0, time.Local)
-
-		base = base.AddDate(value, 0, 0)
-
-		end = base.Unix() * 1e+3
-	default:
-		return end
+		end = base.AddDate(value, 0, 0).Unix()
 	}
 
 	return end
 }
 
-func fuseNumber(first, second Pnts) Pnts {
+func merge(mergeType string, keepEmpties bool, serie gorilla.Pnts) gorilla.Pnts {
 
-	sizeFirst := len(first)
-	sizeScond := len(second)
-
-	fused := make(Pnts, sizeFirst+sizeScond)
-	var i, j, k int
-
-	for i < sizeFirst && j < sizeScond {
-
-		if first[i].Date <= second[j].Date {
-			fused[k] = first[i]
-			i++
-		} else {
-			fused[k] = second[j]
-			j++
-		}
-
-		k++
-	}
-	if i < sizeFirst {
-		for p := i; p < sizeFirst; p++ {
-			fused[k] = first[p]
-			k++
-		}
-	} else {
-		for p := j; p < sizeScond; p++ {
-			fused[k] = second[p]
-			k++
-		}
-	}
-
-	return fused
-}
-
-func merge(mergeType string, keepEmpties bool, serie Pnts) Pnts {
-
-	mergedSerie := Pnts{}
+	mergedSerie := gorilla.Pnts{}
 
 	for i := 0; i < len(serie); i++ {
 
 		point := serie[i]
 
-		var mergedPoint Pnt
+		var mergedPoint *pb.Point
 
 		if i < len(serie)-1 {
 
@@ -387,7 +309,7 @@ func merge(mergeType string, keepEmpties bool, serie Pnts) Pnts {
 
 			nextPoint := serie[j]
 
-			var mergedCount, nullCount float64
+			var mergedCount, nullCount float32
 
 			mergedPoint = point
 
@@ -457,9 +379,9 @@ func merge(mergeType string, keepEmpties bool, serie Pnts) Pnts {
 	return mergedSerie
 }
 
-func filterValues(oper structs.FilterValueOperation, serie Pnts) Pnts {
+func filterValues(oper structs.FilterValueOperation, serie gorilla.Pnts) gorilla.Pnts {
 
-	filteredSerie := Pnts{}
+	filteredSerie := gorilla.Pnts{}
 
 	switch oper.BoolOper {
 	case "<":
@@ -497,32 +419,22 @@ func filterValues(oper structs.FilterValueOperation, serie Pnts) Pnts {
 	return filteredSerie
 }
 
-func round(val float64, roundOn float64, places int) (newVal float64) {
+func round(val float32, roundOn float32, places int) float32 {
 
 	var round float64
 
 	pow := math.Pow(10, float64(places))
 
-	digit := pow * val
+	digit := pow * float64(val)
 
 	_, div := math.Modf(digit)
 
-	if div >= roundOn {
+	if float32(div) >= roundOn {
 		round = math.Ceil(digit)
 	} else {
 		round = math.Floor(digit)
 	}
 
-	newVal = round / pow
+	return float32(round / pow)
 
-	return
-
-}
-
-func msToTime(ms int64) time.Time {
-	return time.Unix(0, ms*int64(time.Millisecond))
-}
-
-func timeToMs(date time.Time) (ms int64) {
-	return date.UnixNano() / int64(time.Millisecond)
 }
