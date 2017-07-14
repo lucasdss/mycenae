@@ -144,11 +144,9 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 	var wg sync.WaitGroup
 
 	pts := make([]*pb.TSPoint, len(points))
-	var ptsMtx sync.Mutex
-	var errMtx sync.Mutex
 
 	mm := make(map[string]*pb.Meta)
-	var mtx sync.RWMutex
+	var mtx sync.Mutex
 
 	wg.Add(len(points))
 	for i, rcvMsg := range points {
@@ -171,9 +169,9 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 					Datapoint: rcvMsg,
 					Error:     gerr.Message(),
 				}
-				errMtx.Lock()
+				mtx.Lock()
 				returnPoints.Errors = append(returnPoints.Errors, reu)
-				errMtx.Unlock()
+				mtx.Unlock()
 
 				ks := "default"
 				if v, ok := rcvMsg.Tags["ksid"]; ok {
@@ -183,13 +181,10 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 				return
 			}
 
-			ptsMtx.Lock()
-			pts[i] = packet
-			ptsMtx.Unlock()
-
 			id := meta.ComposeID(m.GetKsid(), m.GetTsid())
 
 			mtx.Lock()
+			pts[i] = packet
 			if _, ok := mm[id]; !ok {
 				mm[id] = m
 			}
@@ -209,8 +204,8 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 	}
 
 	go func() {
-		mtx.RLock()
-		defer mtx.RUnlock()
+		mtx.Lock()
+		defer mtx.Unlock()
 		for ksts, m := range mm {
 
 			if found := collect.boltc.Get(&ksts); found {
