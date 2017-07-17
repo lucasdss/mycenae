@@ -112,6 +112,7 @@ func (b *block) close() []byte {
 		zap.String("func", "close"),
 		zap.Int64("blkid", b.id),
 	)
+
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
@@ -187,7 +188,6 @@ func (b *block) decode(points []byte) ([bucketSize]*pb.Point, int, error) {
 	var pts [bucketSize]*pb.Point
 	var d int64
 	var v float32
-
 	var count int
 
 	log := gblog.With(
@@ -220,7 +220,6 @@ func (b *block) decode(points []byte) ([bucketSize]*pb.Point, int, error) {
 	)
 
 	return pts, count, nil
-
 }
 
 func (b *block) SetPoints(pts []byte) {

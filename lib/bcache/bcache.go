@@ -15,7 +15,7 @@ var (
 	stats *tsstats.StatsTS
 )
 
-//New creates a a struct that "caches" timeseries keys. It uses boltdb as persistence
+//New creates a struct that "caches" timeseries keys. It uses boltdb as persistence
 func New(sts *tsstats.StatsTS, ks *keyspace.Keyspace, path string) (*Bcache, gobol.Error) {
 
 	stats = sts
@@ -59,8 +59,8 @@ func (bc *Bcache) load() {
 
 }
 
-//GetKeyspace returns a keyspace key, a boolean that tells if the key was found or not and an error.
-//If the key isn't in boltdb GetKeyspace tries to fetch the key from cassandra, and if found, puts it in boltdb.
+//GetKeyspace returns a keyspace key, a boolean that tells whether the key was found or not and an error.
+//If the key isn't in boltdb, GetKeyspace tries to fetch the key from cassandra, and if found, puts it in boltdb.
 func (bc *Bcache) GetKeyspace(key string) (string, bool, gobol.Error) {
 
 	bc.ksmtx.Lock()

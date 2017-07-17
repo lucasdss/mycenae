@@ -202,13 +202,17 @@ func main() {
 	tsLogger.Info("Mycenae started successfully")
 
 	go func() {
+
+		tsLogger := tsLogger.With(
+			zap.String("func", "main"),
+			zap.String("package", "main"),
+		)
+
 		for pts := range wal.Load() {
 			if len(pts) > 0 {
 				tsLogger.Debug(
 					"loading points from commitlog",
 					zap.Int("count", len(pts)),
-					zap.String("func", "main"),
-					zap.String("package", "main"),
 				)
 			}
 
@@ -217,19 +221,13 @@ func main() {
 				if err != nil {
 					tsLogger.Error(
 						"failure loading point from write-ahead-log",
-						zap.String("package", "main"),
-						zap.String("func", "main"),
 						zap.Error(err),
 					)
 				}
 			}
 		}
 
-		tsLogger.Debug(
-			"finished loading points from commitlog",
-			zap.String("func", "main"),
-			zap.String("package", "main"),
-		)
+		tsLogger.Debug("finished loading points from commitlog")
 
 	}()
 
@@ -279,6 +277,7 @@ func main() {
 }
 
 func parseConsistencies(names []string) ([]gocql.Consistency, error) {
+
 	if len(names) == 0 {
 		return nil, errors.New("consistency array cannot be empty")
 	}

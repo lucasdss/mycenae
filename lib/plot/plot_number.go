@@ -4,8 +4,8 @@ import (
 	"sort"
 
 	"github.com/uol/gobol"
-
 	"github.com/uol/mycenae/lib/structs"
+
 	"go.uber.org/zap"
 )
 

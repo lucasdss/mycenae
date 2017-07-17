@@ -318,6 +318,11 @@ func (c *Cluster) Meta(id *string, m *pb.Meta) (bool, gobol.Error) {
 }
 
 func (c *Cluster) getNodes() {
+	logger := logger.With(
+		zap.String("package", "cluster"),
+		zap.String("func", "getNodes"),
+	)
+
 	srvs, err := c.c.getNodes()
 	if err != nil {
 		logger.Error("", zap.Error(err))
@@ -347,8 +352,6 @@ func (c *Cluster) getNodes() {
 
 						logger.Debug(
 							"adding node",
-							zap.String("package", "cluster"),
-							zap.String("func", "getNodes"),
 							zap.String("nodeIP", srv.Node.Address),
 							zap.String("nodeID", srv.Node.ID),
 							zap.String("startus", check.Status),
@@ -365,8 +368,6 @@ func (c *Cluster) getNodes() {
 
 						logger.Debug(
 							"node has been added",
-							zap.String("package", "cluster"),
-							zap.String("func", "getNodes"),
 							zap.String("nodeIP", srv.Node.Address),
 							zap.String("nodeID", srv.Node.ID),
 							zap.String("startus", check.Status),
@@ -397,30 +398,19 @@ func (c *Cluster) getNodes() {
 
 	for _, id := range del {
 
-		if s, ok := c.toAdd[id]; ok {
-			if !s.add {
-				if now-s.time >= c.apply {
+		if s, ok := c.toAdd[id]; ok && !s.add {
+			if now-s.time >= c.apply {
 
-					c.ch.Remove(id)
+				c.ch.Remove(id)
 
-					c.nMutex.Lock()
-					delete(c.nodes, id)
-					c.nMutex.Unlock()
+				c.nMutex.Lock()
+				delete(c.nodes, id)
+				c.nMutex.Unlock()
 
-					delete(c.toAdd, id)
-					reShard = true
+				delete(c.toAdd, id)
+				reShard = true
 
-					logger.Debug(
-						"removed node",
-						zap.String("package", "cluster"),
-						zap.String("func", "getNodes"),
-					)
-				}
-			} else {
-				c.toAdd[id] = state{
-					add:  false,
-					time: now,
-				}
+				logger.Debug("removed node")
 			}
 		} else {
 			c.toAdd[id] = state{

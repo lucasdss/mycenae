@@ -314,15 +314,15 @@ func (plot *Plot) getTimeseries(
 			q.Filters = append(q.Filters, filter)
 		}
 
-		tagMap := map[string][]string{}
-
-		for _, filter := range q.Filters {
-			if _, ok := tagMap[filter.Tagk]; ok {
-				tagMap[filter.Tagk] = append(tagMap[filter.Tagk], filter.Filter)
-			} else {
-				tagMap[filter.Tagk] = []string{filter.Filter}
-			}
-		}
+		//tagMap := map[string][]string{}
+		//
+		//for _, filter := range q.Filters {
+		//	if _, ok := tagMap[filter.Tagk]; ok {
+		//		tagMap[filter.Tagk] = append(tagMap[filter.Tagk], filter.Filter)
+		//	} else {
+		//		tagMap[filter.Tagk] = []string{filter.Filter}
+		//	}
+		//}
 
 		tsobs, total, gerr := plot.MetaFilterOpenTSDB(keyspace, "", q.Metric, q.Filters, int64(plot.MaxTimeseries))
 		if gerr != nil {

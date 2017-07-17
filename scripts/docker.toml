@@ -53,8 +53,8 @@ MaxMetaBulkSize = 1000000
 MetaBufferSize = 100000
 
 MetaSaveInterval = "1s"
-MaxRateLimit = 20
-Burst = 100
+MaxRateLimit = 2000
+Burst = 10000
 
 [meta]
   # Number, in bytes of bulk playload
