@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/uol/gobol"
+	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/gorilla"
 )
 
@@ -212,7 +213,7 @@ type TST struct {
 	index int
 	Count int
 	Total int
-	Data  gorilla.TextPnts
+	Data  depot.TextPnts
 	gerr  gobol.Error
 }
 

@@ -18,10 +18,10 @@ import (
 	"github.com/uol/mycenae/lib/cluster"
 	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/gorilla"
+	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/tsstats"
-	"github.com/uol/mycenae/lib/limiter"
 
 	pb "github.com/uol/mycenae/lib/proto"
 
@@ -60,7 +60,7 @@ func New(
 		validKey:   regexp.MustCompile(`^[0-9A-Za-z-._%&#;/]+$`),
 		settings:   set,
 		concPoints: make(chan struct{}, set.MaxConcurrentPoints),
-		wLimiter:    wLimiter,
+		wLimiter:   wLimiter,
 	}
 
 	return collect, nil

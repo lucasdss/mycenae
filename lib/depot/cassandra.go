@@ -2,6 +2,7 @@ package depot
 
 import (
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/gocql/gocql"
@@ -11,6 +12,25 @@ import (
 
 	"go.uber.org/zap"
 )
+
+type TextPnt struct {
+	Date  int64  `json:"x"`
+	Value string `json:"title"`
+}
+
+type TextPnts []TextPnt
+
+func (s TextPnts) Len() int {
+	return len(s)
+}
+
+func (s TextPnts) Less(i, j int) bool {
+	return s[i].Date < s[j].Date
+}
+
+func (s TextPnts) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
 
 var (
 	gblog *zap.Logger
@@ -125,8 +145,8 @@ func (cass *Cassandra) Read(ksid, tsid string, blkid int64) ([]byte, gobol.Error
 		statsSelect(ksid, "timeseries", time.Since(track))
 		return value, nil
 	}
-	statsSelectFerror(ksid, "timeseries")
 
+	statsSelectFerror(ksid, "timeseries")
 	return value, errPersist("Read", err)
 
 }
@@ -135,6 +155,7 @@ func (cass *Cassandra) processing() {
 	cass.maxConcQueriesChan <- struct{}{}
 	gblog.Sugar().Debug("cassandra processing")
 }
+
 func (cass *Cassandra) done() {
 	<-cass.maxConcQueriesChan
 	gblog.Sugar().Debug("cassandra done")
@@ -190,7 +211,6 @@ func (cass *Cassandra) InsertText(ksid, tsid string, timestamp int64, text strin
 			gblog.Error("",
 				zap.String("package", "depot"),
 				zap.String("func", "InsertText"),
-
 				zap.Error(err),
 			)
 			continue
@@ -200,6 +220,68 @@ func (cass *Cassandra) InsertText(ksid, tsid string, timestamp int64, text strin
 	}
 	statsInsertFBerror(ksid, "ts_text_stamp")
 	return errPersist("InsertText", err)
+}
+
+func (cass *Cassandra) GetText(ksid, tsid string, start, end int64, search *regexp.Regexp) ([]TextPnt, int, gobol.Error) {
+
+	track := time.Now()
+	start--
+	end++
+
+	var date int64
+	var value string
+	var err error
+
+	for _, cons := range cass.readConsistencies {
+		iter := cass.Session.Query(
+			fmt.Sprintf(`SELECT date, value FROM %v.ts_text_stamp WHERE id=? AND date > ? AND date < ? ALLOW FILTERING`, ksid),
+			tsid,
+			start*1000,
+			end*1000,
+		).Consistency(cons).RoutingKey([]byte(tsid)).Iter()
+
+		points := []TextPnt{}
+		var count int
+
+		for iter.Scan(&date, &value) {
+			add := true
+
+			if search != nil && !search.MatchString(value) {
+				add = false
+			}
+
+			if add {
+				count++
+				point := TextPnt{
+					Date:  date,
+					Value: value,
+				}
+				points = append(points, point)
+			}
+		}
+
+		if err = iter.Close(); err != nil {
+
+			gblog.Error("",
+				zap.String("package", "plot/persistence"),
+				zap.String("func", "getTSTstamp"),
+				zap.Error(err),
+			)
+
+			if err == gocql.ErrNotFound {
+				return []TextPnt{}, 0, errNoContent("getTSTstamp")
+			}
+
+			statsSelectQerror(ksid, "ts_text_stamp")
+			continue
+		}
+
+		statsSelect(ksid, "ts_text_stamp", time.Since(track))
+		return points, count, nil
+	}
+
+	statsSelectFerror(ksid, "ts_text_stamp")
+	return []TextPnt{}, 0, errPersist("getTSTstamp", err)
 }
 
 func (cass *Cassandra) InsertError(id, msg, errMsg string, date time.Time) gobol.Error {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/uol/mycenae/lib/bcache"
 	"github.com/uol/mycenae/lib/cluster"
+	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/tsstats"
 
 	"go.uber.org/zap"
@@ -21,6 +22,7 @@ func New(
 	sts *tsstats.StatsTS,
 	cluster *cluster.Cluster,
 	es *rubber.Elastic,
+	cass *depot.Cassandra,
 	bc *bcache.Bcache,
 	esIndex string,
 	maxTimeseries int,
@@ -53,7 +55,7 @@ func New(
 		MaxTimeseries:     maxTimeseries,
 		LogQueryThreshold: logQueryTSthreshold,
 		boltc:             bc,
-		persist:           persistence{cluster: cluster, esTs: es},
+		persist:           persistence{cluster: cluster, esTs: es, cass: cass},
 		concTimeseries:    make(chan struct{}, maxConcurrentTimeseries),
 		concReads:         make(chan struct{}, maxConcurrentReads),
 	}, nil
