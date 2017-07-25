@@ -65,7 +65,7 @@ name2="mycenae${1}"
 docker rm -f ${name2}
 
 tmpdir=/tmp/${name2}
-sudo rm -rf ${tmpdir}
+#sudo rm -rf ${tmpdir}
 mkdir -p ${tmpdir}
 
 pod_arguments=(

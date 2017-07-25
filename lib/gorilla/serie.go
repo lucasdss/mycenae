@@ -16,6 +16,7 @@ import (
 
 type serie struct {
 	mtx        sync.RWMutex
+	mtxDepot   sync.Mutex
 	ksid       string
 	tsid       string
 	blocks     [utils.MaxBlocks]*block
@@ -107,36 +108,37 @@ func (t *serie) addPoint(p *pb.TSPoint) gobol.Error {
 		t.cleanup = true
 
 		t.index = utils.GetIndex(p.GetDate())
-
 		blkid := utils.BlockID(p.GetDate())
 		if t.blocks[t.index] == nil {
 			log.Debug(
 				"new block",
+				zap.Int("index", t.index),
 				zap.Int64("blkid", blkid),
 			)
 			t.blocks[t.index] = &block{id: blkid}
-			t.blocks[t.index].add(p)
+			t.blocks[t.index].Add(p)
 			return nil
 		}
 
 		if t.blocks[t.index].id != blkid {
 			log.Debug(
 				"resetting block",
+				zap.Int("index", t.index),
 				zap.Int64("blkid", blkid),
 			)
 			t.store(t.index)
-			t.blocks[t.index].reset(blkid)
-			t.blocks[t.index].add(p)
+			t.blocks[t.index].Reset(blkid)
+			t.blocks[t.index].Add(p)
 			return nil
 		}
 
 		log.Debug(
 			"updating block",
+			zap.Int("index", t.index),
 			zap.Int64("blkid", blkid),
 		)
 
-		gerr := t.update(p)
-		return gerr
+		return t.update(p)
 
 	}
 
@@ -146,14 +148,16 @@ func (t *serie) addPoint(p *pb.TSPoint) gobol.Error {
 	}
 
 	t.lastWrite = now
-	t.blocks[t.index].add(p)
+	t.blocks[t.index].Add(p)
 
 	//log.Debug("point written successfully")
 	return nil
 }
 
 func (t *serie) toDepot() bool {
-	t.mtx.RLock()
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
 	ksid := t.ksid
 	tsid := t.tsid
 	idx := t.index
@@ -161,7 +165,6 @@ func (t *serie) toDepot() bool {
 	la := t.lastAccess
 	saveIdx := t.saveIdx
 	cleanup := t.cleanup
-	t.mtx.RUnlock()
 
 	now := time.Now().Unix()
 	delta := now - lw
@@ -180,30 +183,27 @@ func (t *serie) toDepot() bool {
 
 	if saveIdx >= 0 {
 		go t.store(saveIdx)
-		t.mtx.Lock()
-		t.saveIdx = -1
-		t.mtx.Unlock()
+		if t.saveIdx == saveIdx {
+			t.saveIdx = -1
+		}
 		return false
-	}
-
-	if delta >= utils.Hour {
-		log.Info("sending serie to depot")
-		go t.store(idx)
 	}
 
 	if cleanup {
 		if now-la >= utils.Hour {
 			log.Info("cleanup serie")
-			t.mtx.Lock()
 			for i := 0; i < utils.MaxBlocks; i++ {
-				if t.index == i {
-					continue
+				if idx != i {
+					t.blocks[i] = nil
 				}
-				t.blocks[i] = nil
 			}
 			t.cleanup = false
-			t.mtx.Unlock()
 		}
+	}
+
+	if delta >= utils.Hour {
+		log.Info("sending serie to depot")
+		go t.store(idx)
 	}
 
 	if now-la >= utils.Hour && now-lw >= utils.Hour {
@@ -226,6 +226,8 @@ func (t *serie) stop() (int64, gobol.Error) {
 }
 
 func (t *serie) update(p *pb.TSPoint) gobol.Error {
+	t.mtxDepot.Lock()
+	defer t.mtxDepot.Unlock()
 
 	blkID := utils.BlockID(p.GetDate())
 
@@ -244,8 +246,10 @@ func (t *serie) update(p *pb.TSPoint) gobol.Error {
 	var pByte []byte
 	var blk *block
 	if t.blocks[index] != nil && t.blocks[index].id == blkID {
+
 		pByte = t.blocks[index].GetPoints()
 		blk = t.blocks[index]
+
 	} else {
 
 		x, gerr := t.persist.Read(t.ksid, t.tsid, blkID)
@@ -256,19 +260,19 @@ func (t *serie) update(p *pb.TSPoint) gobol.Error {
 			)
 			return gerr
 		}
+
 		pByte = x
 		blk = &block{id: blkID}
+
 	}
 
-	err := blk.newEncoder(pByte, p.GetDate(), p.GetValue())
+	err := blk.NewEncoder(pByte, p.GetDate(), p.GetValue())
 	if err != nil {
-		log.Error(err.Error(), zap.Error(err))
 		return errTsz("serie/update", t.ksid, t.tsid, 0, err)
 	}
 
 	gerr := t.persist.Write(t.ksid, t.tsid, blkID, blk.GetPoints())
 	if gerr != nil {
-		log.Error(gerr.Error(), zap.Error(gerr))
 		return gerr
 	}
 
@@ -279,9 +283,9 @@ func (t *serie) update(p *pb.TSPoint) gobol.Error {
 }
 
 func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
-
 	t.mtx.RLock()
 	defer t.mtx.RUnlock()
+
 	now := time.Now().Unix()
 	t.lastAccess = now
 	t.cleanup = true
@@ -496,16 +500,8 @@ func (t *serie) encode(points []*pb.Point, id int64) ([]byte, gobol.Error) {
 		}
 	}
 
-	pts, err := enc.Close()
-	if err != nil && err != io.EOF {
-		log.Error(
-			err.Error(),
-			zap.Error(err),
-			zap.Int("blockSize", len(pts)),
-			zap.Int("count", count),
-		)
-		return nil, errTsz("serie/encode", t.ksid, t.tsid, 0, err)
-	}
+	// tsz.Encoder.Close() always returns nil
+	pts, _ := enc.Close()
 
 	log.Debug(
 		"finished tsz encoding",
@@ -561,6 +557,8 @@ func (t *serie) decode(points []byte, id int64) ([bucketSize]*pb.Point, int, gob
 }
 
 func (t *serie) store(index int) gobol.Error {
+	t.mtxDepot.Lock()
+	defer t.mtxDepot.Unlock()
 
 	if t.blocks[index] == nil {
 		return nil
@@ -569,16 +567,15 @@ func (t *serie) store(index int) gobol.Error {
 	bktid := t.blocks[index].id
 	pts := t.blocks[index].GetPoints()
 
-	log := gblog.With(
-		zap.String("package", "gorilla"),
-		zap.String("func", "serie/store"),
-		zap.String("ksid", t.ksid),
-		zap.String("tsid", t.tsid),
-		zap.Int64("blkid", bktid),
-		zap.Int("index", index),
-	)
-
 	if len(pts) >= headerSize {
+		log := gblog.With(
+			zap.String("package", "gorilla"),
+			zap.String("func", "serie/store"),
+			zap.String("ksid", t.ksid),
+			zap.String("tsid", t.tsid),
+			zap.Int64("blkid", bktid),
+			zap.Int("index", index),
+		)
 
 		log.Debug("writting block to depot")
 
