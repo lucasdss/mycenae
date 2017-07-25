@@ -1,4 +1,4 @@
-package gorilla
+package utils
 
 import (
 	"errors"
@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	hour       = 3600
-	day        = 24 * hour
-	maxBlocks  = 12
-	headerSize = 19
+	Hour       = 3600
+	Day        = 24 * Hour
+	MaxBlocks  = 12
+	HeaderSize = 19
 )
 
 // BlockID returns an UTC timestamp at
@@ -25,10 +25,10 @@ func BlockID(timestamp int64) int64 {
 		return now.Unix()
 	}
 
-	return now.Unix() - hour
+	return now.Unix() - Hour
 }
 
-func getIndex(timestamp int64) int {
+func GetIndex(timestamp int64) int {
 
 	return time.Unix(timestamp, 0).UTC().Hour() / 2
 
@@ -57,4 +57,14 @@ func MilliToSeconds(t int64) (int64, error) {
 	}
 
 	return t, nil
+}
+
+func KSTS(ksid, tsid string) (ksts []byte) {
+	lid := len(tsid)
+	lksid := len(ksid)
+	ksts = make([]byte, lid+lksid+1)
+	copy(ksts, ksid)
+	copy(ksts[lksid:], "|")
+	copy(ksts[lksid+1:], tsid)
+	return ksts
 }

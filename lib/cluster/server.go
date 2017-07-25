@@ -105,10 +105,7 @@ func (s *server) Read(ctx context.Context, q *pb.Query) (*pb.Response, error) {
 
 func (s *server) GetMeta(ctx context.Context, m *pb.Meta) (*pb.MetaFound, error) {
 
-	id := meta.ComposeID(m.GetKsid(), m.GetTsid())
-	status := s.meta.Handle(&id, m)
-
-	return &pb.MetaFound{Ok: status}, nil
+	return &pb.MetaFound{Ok: s.meta.Handle(m)}, nil
 }
 
 func newServerTLSFromFile(cafile, certfile, keyfile string) (credentials.TransportCredentials, error) {

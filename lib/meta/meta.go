@@ -15,6 +15,7 @@ import (
 	"github.com/uol/gobol/rubber"
 	"github.com/uol/mycenae/lib/bcache"
 	"github.com/uol/mycenae/lib/tsstats"
+	"github.com/uol/mycenae/lib/utils"
 
 	pb "github.com/uol/mycenae/lib/proto"
 
@@ -51,17 +52,17 @@ type savingObj struct {
 	mtx sync.RWMutex
 }
 
-func (so *savingObj) get(key *string) (*pb.Meta, bool) {
+func (so *savingObj) get(ksts []byte) (*pb.Meta, bool) {
 	so.mtx.RLock()
 	defer so.mtx.RUnlock()
-	v, ok := so.mm[*key]
+	v, ok := so.mm[string(ksts)]
 	return v, ok
 }
 
-func (so *savingObj) add(key *string, m *pb.Meta) {
+func (so *savingObj) add(ksts []byte, m *pb.Meta) {
 	so.mtx.Lock()
 	defer so.mtx.Unlock()
-	so.mm[*key] = nil
+	so.mm[string(ksts)] = nil
 }
 
 func (so *savingObj) del(key *string) {
@@ -161,7 +162,7 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 						continue
 					}
 					if !found {
-						if pkt, ok := meta.sm.get(&ksts); ok {
+						if pkt, ok := meta.sm.get([]byte(ksts)); ok {
 							meta.metaPntChan <- pkt
 							time.Sleep(headInterval)
 							continue
@@ -286,8 +287,9 @@ func (meta *Meta) readMeta(bulk *bytes.Buffer) error {
 	return nil
 }
 
-func (meta *Meta) Handle(ksts *string, pkt *pb.Meta) bool {
+func (meta *Meta) Handle(pkt *pb.Meta) bool {
 
+	ksts := utils.KSTS(pkt.GetKsid(), pkt.GetTsid())
 	if meta.boltc.Get(ksts) {
 		/*
 			gblog.Debug(
@@ -305,7 +307,7 @@ func (meta *Meta) Handle(ksts *string, pkt *pb.Meta) bool {
 			"adding point in save map",
 			zap.String("package", "meta"),
 			zap.String("func", "Handle"),
-			zap.String("ksts", *ksts),
+			zap.String("ksts", string(ksts)),
 		)
 		meta.sm.add(ksts, pkt)
 		meta.metaPntChan <- pkt
@@ -316,7 +318,7 @@ func (meta *Meta) Handle(ksts *string, pkt *pb.Meta) bool {
 
 func (meta *Meta) SaveTxtMeta(packet *pb.Meta) {
 
-	ksts := ComposeID(packet.GetKsid(), packet.GetTsid())
+	ksts := utils.KSTS(packet.GetKsid(), packet.GetTsid())
 
 	if len(meta.metaTxtChan) >= meta.settings.MetaBufferSize {
 		gblog.Warn(
@@ -327,7 +329,7 @@ func (meta *Meta) SaveTxtMeta(packet *pb.Meta) {
 		statsLostMeta()
 		return
 	}
-	found, gerr := meta.boltc.GetTsText(ksts, meta.CheckTSID)
+	found, gerr := meta.boltc.GetTsText(string(ksts), meta.CheckTSID)
 	if gerr != nil {
 		gblog.Error(
 			gerr.Error(),

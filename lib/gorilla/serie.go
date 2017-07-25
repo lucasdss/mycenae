@@ -1,6 +1,7 @@
 package gorilla
 
 import (
+	"io"
 	"sync"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/uol/gobol"
 	"github.com/uol/mycenae/lib/depot"
+	"github.com/uol/mycenae/lib/utils"
 	"go.uber.org/zap"
 )
 
@@ -16,7 +18,7 @@ type serie struct {
 	mtx        sync.RWMutex
 	ksid       string
 	tsid       string
-	blocks     [maxBlocks]*block
+	blocks     [utils.MaxBlocks]*block
 	index      int
 	saveIdx    int
 	lastWrite  int64
@@ -62,11 +64,11 @@ func (t *serie) init() {
 
 	now := time.Now().Unix()
 
-	t.index = getIndex(now)
+	t.index = utils.GetIndex(now)
 	t.saveIdx = -1
 
-	blkid := BlockID(now)
-	i := getIndex(blkid)
+	blkid := utils.BlockID(now)
+	i := utils.GetIndex(blkid)
 
 	t.blocks[i] = &block{id: blkid}
 
@@ -104,9 +106,9 @@ func (t *serie) addPoint(p *pb.TSPoint) gobol.Error {
 		t.saveIdx = t.index
 		t.cleanup = true
 
-		t.index = getIndex(p.GetDate())
+		t.index = utils.GetIndex(p.GetDate())
 
-		blkid := BlockID(p.GetDate())
+		blkid := utils.BlockID(p.GetDate())
 		if t.blocks[t.index] == nil {
 			log.Debug(
 				"new block",
@@ -184,16 +186,16 @@ func (t *serie) toDepot() bool {
 		return false
 	}
 
-	if delta >= hour {
+	if delta >= utils.Hour {
 		log.Info("sending serie to depot")
 		go t.store(idx)
 	}
 
 	if cleanup {
-		if now-la >= hour {
+		if now-la >= utils.Hour {
 			log.Info("cleanup serie")
 			t.mtx.Lock()
-			for i := 0; i < maxBlocks; i++ {
+			for i := 0; i < utils.MaxBlocks; i++ {
 				if t.index == i {
 					continue
 				}
@@ -204,7 +206,7 @@ func (t *serie) toDepot() bool {
 		}
 	}
 
-	if now-la >= hour && now-lw >= hour {
+	if now-la >= utils.Hour && now-lw >= utils.Hour {
 		log.Info("serie must leave memory")
 		return true
 	}
@@ -212,19 +214,20 @@ func (t *serie) toDepot() bool {
 	return false
 }
 
-func (t *serie) stop() gobol.Error {
+func (t *serie) stop() (int64, gobol.Error) {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
 
 	if t.saveIdx >= 0 {
 		go t.store(t.saveIdx)
 	}
-	return t.store(t.index)
+
+	return t.blocks[t.index].id, t.store(t.index)
 }
 
 func (t *serie) update(p *pb.TSPoint) gobol.Error {
 
-	blkID := BlockID(p.GetDate())
+	blkID := utils.BlockID(p.GetDate())
 
 	log := gblog.With(
 		zap.String("ksid", t.ksid),
@@ -236,12 +239,15 @@ func (t *serie) update(p *pb.TSPoint) gobol.Error {
 		zap.String("func", "serie/update"),
 	)
 
-	index := getIndex(blkID)
+	index := utils.GetIndex(blkID)
 
 	var pByte []byte
+	var blk *block
 	if t.blocks[index] != nil && t.blocks[index].id == blkID {
 		pByte = t.blocks[index].GetPoints()
+		blk = t.blocks[index]
 	} else {
+
 		x, gerr := t.persist.Read(t.ksid, t.tsid, blkID)
 		if gerr != nil {
 			log.Error(
@@ -251,56 +257,19 @@ func (t *serie) update(p *pb.TSPoint) gobol.Error {
 			return gerr
 		}
 		pByte = x
+		blk = &block{id: blkID}
 	}
 
-	var pts [bucketSize]*pb.Point
-	var count int
-	if len(pByte) >= headerSize {
-		points, c, gerr := t.decode(pByte, blkID)
-		if gerr != nil {
-			log.Error(
-				gerr.Error(),
-				zap.Error(gerr),
-			)
-			return gerr
-		}
-		pts = points
-		count = c
+	err := blk.newEncoder(pByte, p.GetDate(), p.GetValue())
+	if err != nil {
+		log.Error(err.Error(), zap.Error(err))
+		return errTsz("serie/update", t.ksid, t.tsid, 0, err)
 	}
 
-	delta := p.GetDate() - blkID
-
-	log.Debug(
-		"point delta",
-		zap.Int64("delta", delta),
-	)
-
-	if pts[delta] == nil {
-		count++
-	}
-	pts[delta] = &pb.Point{Date: p.GetDate(), Value: p.GetValue()}
-
-	ptsByte, gerr := t.encode(pts[:], blkID)
-	log = log.With(
-		zap.Int64("delta", delta),
-		zap.Int("count", count),
-		zap.Int("blockSize", len(ptsByte)),
-	)
+	gerr := t.persist.Write(t.ksid, t.tsid, blkID, blk.GetPoints())
 	if gerr != nil {
 		log.Error(gerr.Error(), zap.Error(gerr))
 		return gerr
-	}
-
-	gerr = t.persist.Write(t.ksid, t.tsid, blkID, ptsByte)
-	if gerr != nil {
-		log.Error(gerr.Error(), zap.Error(gerr))
-		return gerr
-	}
-
-	if t.blocks[index] != nil && t.blocks[index].id == blkID {
-		log.Debug("updating block in memory")
-
-		t.blocks[index].SetPoints(ptsByte)
 	}
 
 	log.Debug("block updated")
@@ -319,7 +288,7 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 
 	// Oldest Index
 	oi := t.index + 1
-	if oi >= maxBlocks {
+	if oi >= utils.MaxBlocks {
 		oi = 0
 	}
 
@@ -327,7 +296,7 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 	if t.blocks[oi] != nil {
 		ot = t.blocks[oi].id
 	} else {
-		ot = t.blocks[t.index].id - (22 * hour)
+		ot = t.blocks[t.index].id - (22 * utils.Hour)
 		// calc old time
 	}
 
@@ -369,13 +338,13 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 	blksID := []int64{}
 
 	x := memStart
-	blkidEnd := BlockID(end)
+	blkidEnd := utils.BlockID(end)
 
 	for {
-		blkidStart := BlockID(x)
+		blkidStart := utils.BlockID(x)
 		blksID = append(blksID, blkidStart)
 
-		x += 2 * hour
+		x += 2 * utils.Hour
 		if blkidStart >= blkidEnd {
 			break
 		}
@@ -387,10 +356,8 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 		defer close(ptsCh)
 
 		for x, b := range blksID {
-			i := getIndex(b)
-			if t.blocks[i] != nil {
-				go t.blocks[i].rangePoints(x, start, end, ptsCh)
-			} else {
+			i := utils.GetIndex(b)
+			if t.blocks[i] == nil {
 				pByte, gerr := t.persist.Read(t.ksid, t.tsid, b)
 				if gerr != nil {
 					log.Error(
@@ -400,9 +367,8 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 					return nil, gerr
 				}
 				t.blocks[i] = &block{id: b, points: pByte}
-				go t.blocks[i].rangePoints(x, start, end, ptsCh)
 			}
-
+			go t.blocks[i].rangePoints(x, start, end, ptsCh)
 		}
 
 		result := make([][]*pb.Point, len(blksID))
@@ -444,12 +410,14 @@ func (t *serie) readPersistence(start, end int64) ([]*pb.Point, gobol.Error) {
 	oldBlocksID := []int64{}
 
 	x := start
-	blkidEnd := BlockID(end)
+
+	blkidEnd := utils.BlockID(end)
+
 	for {
-		blkidStart := BlockID(x)
+		blkidStart := utils.BlockID(x)
 		oldBlocksID = append(oldBlocksID, blkidStart)
 
-		x += 2 * hour
+		x += 2 * utils.Hour
 		if blkidStart >= blkidEnd {
 			break
 		}
@@ -529,7 +497,7 @@ func (t *serie) encode(points []*pb.Point, id int64) ([]byte, gobol.Error) {
 	}
 
 	pts, err := enc.Close()
-	if err != nil {
+	if err != nil && err != io.EOF {
 		log.Error(
 			err.Error(),
 			zap.Error(err),
@@ -573,7 +541,8 @@ func (t *serie) decode(points []byte, id int64) ([bucketSize]*pb.Point, int, gob
 		}
 	}
 
-	if err := dec.Close(); err != nil {
+	err := dec.Close()
+	if err != nil && err != io.EOF {
 		log.Error(
 			err.Error(),
 			zap.Error(err),

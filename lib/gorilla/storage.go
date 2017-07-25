@@ -8,13 +8,16 @@ import (
 	"github.com/uol/mycenae/lib/depot"
 	pb "github.com/uol/mycenae/lib/proto"
 	"github.com/uol/mycenae/lib/tsstats"
+	"github.com/uol/mycenae/lib/wal"
 
+	"github.com/uol/mycenae/lib/utils"
 	"go.uber.org/zap"
 )
 
 var (
-	gblog *zap.Logger
-	stats *tsstats.StatsTS
+	gblog      *zap.Logger
+	stats      *tsstats.StatsTS
+	headerSize = utils.HeaderSize
 )
 
 // Storage keeps all timeseries in memory
@@ -26,7 +29,7 @@ type Storage struct {
 	tsmap   map[string]*serie
 	localTS localTSmap
 	dump    chan struct{}
-	wal     *WAL
+	wal     *wal.WAL
 	mtx     sync.RWMutex
 }
 
@@ -38,7 +41,7 @@ type localTSmap struct {
 type Meta struct {
 	KSID      string
 	TSID      string
-	lastCheck int64
+	LastCheck int64
 }
 
 // New returns Storage
@@ -46,7 +49,7 @@ func New(
 	lgr *zap.Logger,
 	sts *tsstats.StatsTS,
 	persist depot.Persistence,
-	w *WAL,
+	w *wal.WAL,
 ) *Storage {
 
 	stats = sts
@@ -87,10 +90,10 @@ func (s *Storage) Stop() {
 
 }
 
-// Load dispatch a goroutine to save buckets
+// Start dispatch a goroutine to save buckets
 // in cassandra. All buckets with more than an hour
 // must be compressed and saved in cassandra.
-func (s *Storage) Load() {
+func (s *Storage) Start() {
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 
@@ -100,7 +103,7 @@ func (s *Storage) Load() {
 				now := time.Now().Unix()
 
 				for _, serie := range s.ListSeries() {
-					delta := now - serie.lastCheck
+					delta := now - serie.LastCheck
 					if delta > 1800 {
 						// we need a way to persist ts older than 2h
 						// after 26h the serie must be out of memory
@@ -112,7 +115,9 @@ func (s *Storage) Load() {
 				}
 			case stpC := <-s.stop:
 
-				u := make(map[string]Meta)
+				s.mtx.Lock()
+
+				u := make(map[string]int64)
 				var wg sync.WaitGroup
 				for id, ls := range s.tsmap {
 
@@ -120,7 +125,7 @@ func (s *Storage) Load() {
 					go func(id string, ls *serie, wg *sync.WaitGroup) {
 						defer wg.Done()
 
-						err := ls.stop()
+						blkid, err := ls.stop()
 						if err != nil {
 							gblog.Error(
 								"unable to save serie",
@@ -129,7 +134,7 @@ func (s *Storage) Load() {
 								zap.Error(err),
 							)
 
-							u[id] = Meta{KSID: ls.ksid, TSID: ls.tsid}
+							u[id] = blkid
 
 						} else {
 							gblog.Debug("saved", zap.String("ksid", ls.ksid), zap.String("tsid", ls.tsid))
@@ -141,7 +146,7 @@ func (s *Storage) Load() {
 				wg.Wait()
 
 				// write file
-				s.wal.flush(u)
+				s.wal.Flush(u)
 
 				stpC <- struct{}{}
 				return
@@ -168,7 +173,7 @@ func (s *Storage) updateLastCheck(serie *Meta) {
 	s.localTS.mtx.Lock()
 	defer s.localTS.mtx.Unlock()
 
-	serie.lastCheck = time.Now().Unix()
+	serie.LastCheck = time.Now().Unix()
 	s.localTS.tsmap[id] = *serie
 }
 
@@ -178,7 +183,7 @@ func (s *Storage) Delete(m Meta) <-chan []*pb.Point {
 
 	now := time.Now().Unix()
 
-	start := BlockID(now)
+	start := utils.BlockID(now)
 
 	go func() {
 		defer close(ptsC)
@@ -238,7 +243,7 @@ func (s *Storage) getSerie(ksid, tsid string) *serie {
 		s.localTS.tsmap[id] = Meta{
 			KSID:      ksid,
 			TSID:      tsid,
-			lastCheck: time.Now().Unix(),
+			LastCheck: time.Now().Unix(),
 		}
 		s.localTS.mtx.Unlock()
 
@@ -248,7 +253,7 @@ func (s *Storage) getSerie(ksid, tsid string) *serie {
 
 func (s *Storage) deleteSerie(ksid, tsid string) {
 
-	id := s.id(ksid, tsid)
+	ksts := string(utils.KSTS(ksid, tsid))
 	gblog.Info(
 		"removing serie from memory",
 		zap.String("ksid", ksid),
@@ -258,18 +263,18 @@ func (s *Storage) deleteSerie(ksid, tsid string) {
 	)
 
 	s.mtx.Lock()
-	delete(s.tsmap, id)
+	delete(s.tsmap, ksts)
 	s.mtx.Unlock()
 
 	s.localTS.mtx.Lock()
-	delete(s.localTS.tsmap, id)
+	delete(s.localTS.tsmap, ksts)
 	s.localTS.mtx.Unlock()
+
+	s.wal.DeleteTT(ksts)
 
 }
 
 func (s *Storage) id(ksid, tsid string) string {
-	id := make([]byte, len(ksid+tsid))
-	copy(id, ksid)
-	copy(id[len(ksid):], tsid)
-	return string(id)
+
+	return string(utils.KSTS(ksid, tsid))
 }

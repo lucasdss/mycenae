@@ -116,10 +116,10 @@ func (bc *Bcache) GetTsText(key string, CheckTSID func(esType, id string) (bool,
 	return bc.getTSID("metatext", "text", key, CheckTSID)
 }
 
-func (bc *Bcache) Get(key *string) bool {
+func (bc *Bcache) Get(ksts []byte) bool {
 
 	bc.tsmtx.Lock()
-	_, ok := bc.tsmap.Get(*key)
+	_, ok := bc.tsmap.Get(string(ksts))
 	bc.tsmtx.Unlock()
 
 	return ok

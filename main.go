@@ -34,11 +34,10 @@ import (
 	"github.com/uol/mycenae/lib/tsstats"
 	"github.com/uol/mycenae/lib/udp"
 	"github.com/uol/mycenae/lib/udpError"
+	"github.com/uol/mycenae/lib/wal"
 )
 
 func main() {
-
-	log.Println("Starting Mycenae")
 
 	//Parse of command line arguments.
 	var confPath string
@@ -52,16 +51,12 @@ func main() {
 	err := loader.ConfToml(confPath, &settings)
 	if err != nil {
 		log.Fatal("ERROR - Loading Config file: ", err)
-	} else {
-		log.Println("Config file loaded.")
 	}
 
 	tsLogger, err := saw.New(settings.Logs.LogLevel, settings.Logs.Environment)
 	if err != nil {
 		log.Fatal("ERROR - Starting logger: ", err)
 	}
-
-	tsLogger.Sugar().Debug("Dump Configuration", settings.Depot)
 
 	go func() {
 		log.Println(http.ListenAndServe("0.0.0.0:6666", nil))
@@ -87,10 +82,17 @@ func main() {
 		tsLogger.Fatal(err.Error())
 	}
 
+	wal, err := wal.New(settings.WAL, tsLogger)
+	if err != nil {
+		tsLogger.Fatal(err.Error())
+	}
+	wal.Start()
+
 	d, err := depot.NewCassandra(
 		&settings.Depot,
 		rcs,
 		wcs,
+		wal,
 		tsLogger,
 		tssts,
 	)
@@ -119,14 +121,8 @@ func main() {
 		tsLogger.Fatal("", zap.Error(err))
 	}
 
-	wal, err := gorilla.NewWAL(settings.WALPath)
-	if err != nil {
-		tsLogger.Fatal(err.Error())
-	}
-	wal.Start()
-
 	strg := gorilla.New(tsLogger, tssts, d, wal)
-	strg.Load()
+	strg.Start()
 
 	meta, err := meta.New(tsLogger, tssts, es, bc, settings.Meta)
 	if err != nil {

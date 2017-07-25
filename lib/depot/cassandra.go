@@ -9,7 +9,9 @@ import (
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/cassandra"
 	"github.com/uol/mycenae/lib/tsstats"
+	"github.com/uol/mycenae/lib/wal"
 
+	"github.com/uol/mycenae/lib/utils"
 	"go.uber.org/zap"
 )
 
@@ -41,6 +43,7 @@ func NewCassandra(
 	s *Settings,
 	readConsistency []gocql.Consistency,
 	writeConsistency []gocql.Consistency,
+	wal *wal.WAL,
 	log *zap.Logger,
 	sts *tsstats.StatsTS,
 ) (*Cassandra, error) {
@@ -65,6 +68,7 @@ func NewCassandra(
 		readConsistencies:  readConsistency,
 		writeConsistencies: writeConsistency,
 		maxConcQueriesChan: make(chan interface{}, s.MaxConcurrent),
+		wal:                wal,
 	}, nil
 
 }
@@ -74,6 +78,8 @@ type Cassandra struct {
 	writeConsistencies []gocql.Consistency
 	readConsistencies  []gocql.Consistency
 	maxConcQueriesChan chan interface{}
+
+	wal *wal.WAL
 }
 
 /*
@@ -187,6 +193,7 @@ func (cass *Cassandra) Write(ksid, tsid string, blkid int64, points []byte) gobo
 			continue
 		}
 		statsInsert(ksid, "timeseries", time.Since(start))
+		cass.wal.SetTT(string(utils.KSTS(ksid, tsid)), blkid)
 		return nil
 	}
 	statsInsertQerror(ksid, "timeseries")

@@ -146,7 +146,7 @@ func (b *block) newEncoder(pByte []byte, date int64, value float32) error {
 		zap.Int64("blkid", b.id),
 	)
 
-	points, count, err := b.decode(pByte)
+	points, err := b.decode(pByte)
 	if err != nil {
 		log.Error(
 			err.Error(),
@@ -161,10 +161,6 @@ func (b *block) newEncoder(pByte []byte, date int64, value float32) error {
 		"point delta",
 		zap.Int("delta", delta),
 	)
-
-	if points[delta] == nil {
-		count++
-	}
 
 	points[delta] = &pb.Point{Date: date, Value: value}
 
@@ -181,7 +177,7 @@ func (b *block) newEncoder(pByte []byte, date int64, value float32) error {
 	return nil
 }
 
-func (b *block) decode(points []byte) ([bucketSize]*pb.Point, int, error) {
+func (b *block) decode(points []byte) ([bucketSize]*pb.Point, error) {
 	id := b.id
 	dec := tsz.NewDecoder(points)
 
@@ -205,13 +201,14 @@ func (b *block) decode(points []byte) ([bucketSize]*pb.Point, int, error) {
 		}
 	}
 
-	if err := dec.Close(); err != nil {
+	err := dec.Close()
+	if err != nil && err != io.EOF {
 		log.Error(
 			err.Error(),
 			zap.Error(err),
 			zap.Int("count", count),
 		)
-		return [bucketSize]*pb.Point{}, 0, err
+		return [bucketSize]*pb.Point{}, err
 	}
 
 	log.Debug(
@@ -219,7 +216,7 @@ func (b *block) decode(points []byte) ([bucketSize]*pb.Point, int, error) {
 		zap.Int("count", count),
 	)
 
-	return pts, count, nil
+	return pts, nil
 }
 
 func (b *block) SetPoints(pts []byte) {

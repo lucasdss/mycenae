@@ -286,21 +286,21 @@ func (c *Cluster) shard() {
 
 }
 
-func (c *Cluster) Meta(id *string, m *pb.Meta) (bool, gobol.Error) {
+func (c *Cluster) Meta(m *pb.Meta) (bool, gobol.Error) {
 
 	log := logger.With(
 		zap.String("package", "cluster"),
 		zap.String("func", "Meta"),
 	)
 
-	nodeID, err := c.ch.Get([]byte(*id))
+	nodeID, err := c.ch.Get([]byte(m.GetKsid()))
 	if err != nil {
 		return false, errRequest("Meta", http.StatusInternalServerError, err)
 	}
 
 	if nodeID == c.self {
 		//log.Debug("saving meta in local node")
-		c.m.Handle(id, m)
+		c.m.Handle(m)
 		return false, nil
 	}
 

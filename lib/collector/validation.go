@@ -6,6 +6,7 @@ import (
 
 	"github.com/uol/gobol"
 	"github.com/uol/mycenae/lib/gorilla"
+	"github.com/uol/mycenae/lib/utils"
 
 	pb "github.com/uol/mycenae/lib/proto"
 )
@@ -93,7 +94,7 @@ func (collector *Collector) makePoint(point *pb.TSPoint, meta *pb.Meta, rcvMsg *
 	if rcvMsg.Timestamp == 0 {
 		point.Date = time.Now().Unix()
 	} else {
-		t, err := gorilla.MilliToSeconds(rcvMsg.Timestamp)
+		t, err := utils.MilliToSeconds(rcvMsg.Timestamp)
 		if gerr != nil {
 			return errValidation(err.Error())
 		}
@@ -191,7 +192,7 @@ func (collector *Collector) makePacket(packet *gorilla.Point, rcvMsg gorilla.TSD
 	if rcvMsg.Timestamp == 0 {
 		packet.Timestamp = time.Now().Unix()
 	} else {
-		t, err := gorilla.MilliToSeconds(rcvMsg.Timestamp)
+		t, err := utils.MilliToSeconds(rcvMsg.Timestamp)
 		if gerr != nil {
 			return errValidation(err.Error())
 		}

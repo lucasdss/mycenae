@@ -6,6 +6,7 @@ import (
 	"github.com/uol/mycenae/lib/cluster"
 	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/meta"
+	"github.com/uol/mycenae/lib/wal"
 )
 
 type SettingsHTTP struct {
@@ -23,7 +24,7 @@ type Settings struct {
 	ReadConsistency         []string
 	WriteConsisteny         []string
 	BoltPath                string
-	WALPath                 string
+	WAL                     *wal.Settings
 	MaxTimeseries           int
 	MaxConcurrentTimeseries int
 	MaxConcurrentReads      int
