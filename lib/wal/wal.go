@@ -540,7 +540,7 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 
 		names, err := wal.listFiles()
 		if err != nil {
-			logger.Panic(
+			log.Panic(
 				"error getting list of files: %v",
 				zap.Error(err),
 			)
@@ -658,6 +658,10 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 func (wal *WAL) loadCheckpoint() (int64, map[string]int64, error) {
 
 	fileName := filepath.Join(wal.settings.CheckPointPath, checkPointName)
+
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		return time.Now().Unix(), map[string]int64{}, nil
+	}
 
 	checkPointData, err := ioutil.ReadFile(fileName)
 	if err != nil {
