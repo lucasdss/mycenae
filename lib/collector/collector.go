@@ -188,7 +188,6 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 			pts[i] = packet
 			if _, ok := mm[string(ksts)]; !ok {
 				mm[string(ksts)] = m
-
 			}
 			mtx.Unlock()
 
