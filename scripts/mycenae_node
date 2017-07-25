@@ -11,16 +11,16 @@ if ! make -C "${GOPATH}/src/${PACKAGE}" build ; then
     exit 1
 fi
 
-cp "${GOPATH}/src/${PACKAGE}/mycenae" .
+cp "${GOPATH}/src/${PACKAGE}/mycenae" "${GOPATH}/src/${PACKAGE}/scripts"
 
 CASSANDRA_HOST=$(docker inspect --format "{{ .NetworkSettings.IPAddress }}" consulCassandra1)
 ELASTIC_HOST=$(docker inspect --format "{{ .NetworkSettings.IPAddress }}" elastic)
 sed \
     --expression "s|CASSANDRA_HOST|${CASSANDRA_HOST}|g" \
     --expression "s|ELASTIC_HOST|${ELASTIC_HOST}|g" \
-    "docker.toml" > "docker.local.toml"
+    "${GOPATH}/src/${PACKAGE}/scripts/docker.toml" > "${GOPATH}/src/${PACKAGE}/scripts/docker.local.toml"
 
-docker build --tag "mycenae:develop" .
+docker build --tag "mycenae:develop" "${GOPATH}/src/${PACKAGE}/scripts"
 
 #
 # Mycenae POD
@@ -37,9 +37,9 @@ arguments=(
     '--hostname' "${name}"
     '--name' "${name}"
     '--dns' "127.0.0.1"
-    '--volume' "$(pwd)/ssl:/ssl:ro"
-    '--volume' "$(pwd)/ssl.json:/config/ssl.json:ro"
-    '--volume' "$(pwd)/consul-mycenae.json:/consul/config/service.json"
+    '--volume' "${GOPATH}/src/${PACKAGE}/scripts/ssl:/ssl:ro"
+    '--volume' "${GOPATH}/src/${PACKAGE}/scripts/ssl.json:/config/ssl.json:ro"
+    '--volume' "${GOPATH}/src/${PACKAGE}/scripts/consul-mycenae.json:/consul/config/service.json"
 )
 
 if [ "${publish}" == "true" ]; then
@@ -74,7 +74,7 @@ pod_arguments=(
     '--name' "${name2}"
     '--network' "container:${name}"
     '--volume' "${tmpdir}:/tmp/mycenae"
-    '--volume' "$(pwd)/ssl:/ssl:ro"
+    '--volume' "${GOPATH}/src/${PACKAGE}/scripts/ssl:/ssl:ro"
 )
 did=$(docker run --init --rm "${pod_arguments[@]}" "mycenae:develop")
 
