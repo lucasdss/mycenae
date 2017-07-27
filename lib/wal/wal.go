@@ -545,6 +545,11 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 			)
 		}
 
+		log.Sugar().Debug("transaction table loaded: ", tt)
+		wal.tt.mtx.Lock()
+		wal.tt.table = tt
+		wal.tt.mtx.Unlock()
+
 		names, err := wal.listFiles()
 		if err != nil {
 			log.Panic(
@@ -632,7 +637,14 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 					if p.GetDate() > 0 {
 						ksts := string(utils.KSTS(p.GetKsid(), p.GetTsid()))
 
-						if utils.BlockID(p.GetDate()) > tt[ksts] {
+						v, ok := tt[ksts]
+						if !ok {
+							rp[index] = p
+							index++
+							continue
+						}
+
+						if utils.BlockID(p.GetDate()) > v {
 							rp[index] = p
 							index++
 						}

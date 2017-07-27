@@ -92,14 +92,17 @@ func (t *serie) addPoint(p *pb.TSPoint) gobol.Error {
 	defer t.mtx.Unlock()
 	now := time.Now().Unix()
 
+	delta := int(p.GetDate() - t.blocks[t.index].id)
+
 	log := gblog.With(
 		zap.String("ksid", t.ksid),
 		zap.String("tsid", t.tsid),
+		zap.Int("index", t.index),
+		zap.Int64("blkid", t.blocks[t.index].id),
+		zap.Int("delta", delta),
 		zap.String("package", "gorilla"),
 		zap.String("func", "serie/addPoint"),
 	)
-
-	delta := int(p.GetDate() - t.blocks[t.index].id)
 
 	if delta >= bucketSize {
 		t.lastWrite = now
@@ -112,8 +115,8 @@ func (t *serie) addPoint(p *pb.TSPoint) gobol.Error {
 		if t.blocks[t.index] == nil {
 			log.Debug(
 				"new block",
-				zap.Int("index", t.index),
-				zap.Int64("blkid", blkid),
+				zap.Int("new_index", t.index),
+				zap.Int64("new_blkid", blkid),
 			)
 			t.blocks[t.index] = &block{id: blkid}
 			t.blocks[t.index].Add(p)
@@ -123,8 +126,9 @@ func (t *serie) addPoint(p *pb.TSPoint) gobol.Error {
 		if t.blocks[t.index].id != blkid {
 			log.Debug(
 				"resetting block",
-				zap.Int("index", t.index),
-				zap.Int64("blkid", blkid),
+				zap.Int("new_index", t.index),
+				zap.Int64("old_blkid", t.blocks[t.index].id),
+				zap.Int64("new_blkid", blkid),
 			)
 			t.store(t.index)
 			t.blocks[t.index].Reset(blkid)
@@ -133,12 +137,14 @@ func (t *serie) addPoint(p *pb.TSPoint) gobol.Error {
 		}
 
 		log.Debug(
-			"updating block",
-			zap.Int("index", t.index),
-			zap.Int64("blkid", blkid),
+			"adding point to a new block",
+			zap.Int("new_index", t.index),
+			zap.Int64("new_blkid", blkid),
 		)
 
-		return t.update(p)
+		t.blocks[t.index].Add(p)
+
+		return nil
 
 	}
 
@@ -405,6 +411,8 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 	pts := make([]*pb.Point, totalCount)
 	copy(pts, oldPts)
 	copy(pts[len(oldPts):], memPts)
+
+	log.Debug("read from serie")
 
 	return pts, nil
 }

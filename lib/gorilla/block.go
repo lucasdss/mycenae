@@ -138,11 +138,11 @@ func (b *block) newEncoder(pByte []byte, date int64, value float32) error {
 		return err
 	}
 
-	delta := int(date - b.id)
+	delta := date - b.id
 
 	log.Debug(
 		"point delta",
-		zap.Int("delta", delta),
+		zap.Int64("delta", delta),
 	)
 
 	points[delta] = &pb.Point{Date: date, Value: value}
@@ -177,17 +177,11 @@ func (b *block) decode(points []byte) ([bucketSize]*pb.Point, error) {
 
 	for dec.Scan(&d, &v) {
 		delta := d - id
-		if delta >= 0 && delta < bucketSize {
-			pts[delta] = &pb.Point{Date: d, Value: v}
-		}
+		pts[delta] = &pb.Point{Date: d, Value: v}
 	}
 
 	err := dec.Close()
 	if err != nil && err != io.EOF {
-		log.Error(
-			err.Error(),
-			zap.Error(err),
-		)
 		return [bucketSize]*pb.Point{}, err
 	}
 
