@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -56,7 +57,8 @@ func newNode(address string, port int, conf Config) (*node, gobol.Error) {
 
 func (n *node) write(p *pb.TSPoint) gobol.Error {
 
-	_, err := n.client.Write(context.Background(), p)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	_, err := n.client.Write(ctx, p)
 	if err != nil {
 		return errRequest("node/write", http.StatusInternalServerError, err)
 	}

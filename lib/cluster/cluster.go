@@ -137,15 +137,16 @@ func (c *Cluster) WAL(p *pb.TSPoint) gobol.Error {
 	if nodeID == c.self {
 		gerr := c.s.WAL(p)
 		if err != nil {
+			logger.Error(
+				"unable to write in local node",
+				zap.String("package", "cluster"),
+				zap.String("func", "WAL"),
+				zap.String("nodeID", nodeID),
+				zap.Error(gerr),
+			)
 			return gerr
 		}
 
-		logger.Debug(
-			"point written in local node",
-			zap.String("package", "cluster"),
-			zap.String("func", "WAL"),
-			zap.String("id", c.self),
-		)
 		return nil
 	}
 
@@ -161,11 +162,7 @@ func (c *Cluster) WAL(p *pb.TSPoint) gobol.Error {
 		zap.Int("port", node.port),
 	)
 
-	if p != nil {
-		return node.write(p)
-	}
-
-	return nil
+	return node.write(p)
 
 }
 
@@ -354,7 +351,7 @@ func (c *Cluster) getNodes() {
 							"adding node",
 							zap.String("nodeIP", srv.Node.Address),
 							zap.String("nodeID", srv.Node.ID),
-							zap.String("startus", check.Status),
+							zap.String("status", check.Status),
 							zap.Int("port", c.port),
 						)
 
@@ -370,7 +367,7 @@ func (c *Cluster) getNodes() {
 							"node has been added",
 							zap.String("nodeIP", srv.Node.Address),
 							zap.String("nodeID", srv.Node.ID),
-							zap.String("startus", check.Status),
+							zap.String("status", check.Status),
 							zap.Int("port", c.port),
 						)
 

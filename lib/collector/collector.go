@@ -59,6 +59,7 @@ func New(
 			cass:    cass,
 		},
 		validKey:   regexp.MustCompile(`^[0-9A-Za-z-._%&#;/]+$`),
+		validKSID:  regexp.MustCompile(`^[0-9a-z_]+$`),
 		settings:   set,
 		concPoints: make(chan struct{}, set.MaxConcurrentPoints),
 		wLimiter:   wLimiter,
@@ -68,12 +69,13 @@ func New(
 }
 
 type Collector struct {
-	boltc    *bcache.Bcache
-	cluster  *cluster.Cluster
-	meta     *meta.Meta
-	persist  persistence
-	validKey *regexp.Regexp
-	settings *structs.Settings
+	boltc     *bcache.Bcache
+	cluster   *cluster.Cluster
+	meta      *meta.Meta
+	persist   persistence
+	validKey  *regexp.Regexp
+	validKSID *regexp.Regexp
+	settings  *structs.Settings
 
 	concPoints chan struct{}
 
@@ -152,10 +154,16 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 	wg.Add(len(points))
 	for i, rcvMsg := range points {
 
-		atomic.AddInt64(&collect.receivedSinceLastProbe, 1)
-		statsPoints(rcvMsg.Tags["ksid"], "number")
-
 		go func(rcvMsg gorilla.TSDBpoint, i int) {
+
+			ks := "invalid"
+			if collect.isKSIDValid(rcvMsg.Tags["ksid"]) {
+				ks = rcvMsg.Tags["ksid"]
+			}
+
+			atomic.AddInt64(&collect.receivedSinceLastProbe, 1)
+			statsPoints(ks, "number")
+
 			defer wg.Done()
 
 			packet := &pb.TSPoint{}
@@ -174,10 +182,6 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 				returnPoints.Errors = append(returnPoints.Errors, reu)
 				mtx.Unlock()
 
-				ks := "default"
-				if v, ok := rcvMsg.Tags["ksid"]; ok {
-					ks = v
-				}
 				statsPointsError(ks, "number")
 				return
 			}

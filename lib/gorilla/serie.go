@@ -322,10 +322,8 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 		zap.Int64("oldestTime", ot),
 	)
 
-	memStart := start
 	var oldPts []*pb.Point
 	if start < ot {
-		memStart = ot
 		pEnd := ot
 		if end < ot || end > now {
 			pEnd = end
@@ -345,30 +343,17 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 
 	totalCount := len(oldPts)
 
-	blksID := []int64{}
-
-	x := memStart
-	blkidEnd := utils.BlockID(end)
-
-	for {
-		blkidStart := utils.BlockID(x)
-		blksID = append(blksID, blkidStart)
-
-		x += 2 * utils.Hour
-		if blkidStart >= blkidEnd {
-			break
-		}
-	}
-
 	var memPts []*pb.Point
 	if end > ot {
 		ptsCh := make(chan query)
 		defer close(ptsCh)
 
-		for x, b := range blksID {
-			i := utils.GetIndex(b)
+		// oldest index in memory
+		i := oi
+		blkdid := ot
+		for x := 0; x < utils.MaxBlocks; x++ {
 			if t.blocks[i] == nil {
-				pByte, gerr := t.persist.Read(t.ksid, t.tsid, b)
+				pByte, gerr := t.persist.Read(t.ksid, t.tsid, blkdid)
 				if gerr != nil {
 					log.Error(
 						gerr.Error(),
@@ -376,14 +361,20 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 					)
 					return nil, gerr
 				}
-				t.blocks[i] = &block{id: b, points: pByte}
+				t.blocks[i] = &block{id: blkdid, points: pByte}
 			}
-			go t.blocks[i].rangePoints(x, start, end, ptsCh)
+			go t.blocks[i].rangePoints(i, start, end, ptsCh)
+
+			blkdid += 2 * utils.Hour
+			i++
+			if i >= utils.MaxBlocks {
+				i = 0
+			}
 		}
 
-		result := make([][]*pb.Point, len(blksID))
+		result := make([][]*pb.Point, utils.MaxBlocks)
 		var resultCount int
-		for range blksID {
+		for x := 0; x < utils.MaxBlocks; x++ {
 			q := <-ptsCh
 			result[q.id] = q.pts
 			size := len(result[q.id])
@@ -397,11 +388,15 @@ func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
 
 		var size int
 		// index must be from oldest point to the newest
-		for i := range blksID {
-
+		i = oi
+		for x := 0; x < utils.MaxBlocks; x++ {
 			if len(result[i]) > 0 {
 				copy(points[size:], result[i])
 				size += len(result[i])
+			}
+			i++
+			if i >= utils.MaxBlocks {
+				i = 0
 			}
 		}
 

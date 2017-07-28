@@ -206,25 +206,18 @@ func main() {
 		)
 
 		for pts := range wal.Load() {
-			if len(pts) > 0 {
-				tsLogger.Debug(
-					"loading points from commitlog",
-					zap.Int("count", len(pts)),
-				)
-			}
-
 			for _, p := range pts {
 				err := cluster.WAL(&p)
 				if err != nil {
 					tsLogger.Error(
-						"failure loading point from write-ahead-log",
+						"failure loading point from write-ahead-log (wal)",
 						zap.Error(err),
 					)
 				}
 			}
 		}
 
-		tsLogger.Debug("finished loading points from commitlog")
+		tsLogger.Debug("finished loading points")
 
 	}()
 

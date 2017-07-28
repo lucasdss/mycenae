@@ -64,17 +64,20 @@ func (collect *Collector) Text(w http.ResponseWriter, r *http.Request, ps httpro
 	var numKS int
 
 	for range points {
-		re := <-restChan
-		if re.Gerr != nil {
 
-			ks := "default"
-			if v, ok := re.Datapoint.Tags["ksid"]; ok {
-				ks = v
-			}
-			if ks != reqKS {
-				reqKS = ks
-				numKS++
-			}
+		re := <-restChan
+
+		ks := "invalid"
+		if collect.isKSIDValid(re.Datapoint.Tags["ksid"]) {
+			ks = re.Datapoint.Tags["ksid"]
+		}
+
+		if ks != reqKS {
+			reqKS = ks
+			numKS++
+		}
+
+		if re.Gerr != nil {
 
 			statsPointsError(ks, "text")
 
@@ -84,13 +87,11 @@ func (collect *Collector) Text(w http.ResponseWriter, r *http.Request, ps httpro
 			}
 
 			returnPoints.Errors = append(returnPoints.Errors, reu)
+
 		} else {
-			pks := re.Datapoint.Tags["ksid"]
-			if pks != reqKS {
-				reqKS = pks
-				numKS++
-			}
-			statsPoints(re.Datapoint.Tags["ksid"], "text")
+
+			statsPoints(ks, "text")
+
 		}
 	}
 
