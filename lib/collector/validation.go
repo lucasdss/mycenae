@@ -28,10 +28,6 @@ func (collector *Collector) makePoint(point *pb.TSPoint, meta *pb.Meta, rcvMsg *
 	}
 	meta.Metric = rcvMsg.Metric
 
-	//	if lt == 1 {
-	//		return errValidation(`Wrong Format: At least one tag other than "ksid" is required. NO information will be saved`)
-	//	}
-
 	lt := len(rcvMsg.Tags)
 	if lt <= 2 {
 		if lt == 0 {
@@ -41,6 +37,9 @@ func (collector *Collector) makePoint(point *pb.TSPoint, meta *pb.Meta, rcvMsg *
 		_, ksidOK := rcvMsg.Tags["ksid"]
 		if ttlOK && ksidOK {
 			return errValidation(`Wrong Format: At least one tag other than "ksid" and "ttl" is required. NO information will be saved`)
+		}
+		if lt == 1 {
+			return errValidation(`Wrong Format: At least one tag other than "ksid" is required. NO information will be saved`)
 		}
 	}
 
