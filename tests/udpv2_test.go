@@ -642,6 +642,15 @@ func TestUDPv2PayloadValuesWithOnlySpace(t *testing.T) {
 	wg.Wait()
 }
 
+func TestUDPv2PayloadWithAKsidTag(t *testing.T) {
+	t.Parallel()
+
+	p := mycenaeTools.Mycenae.GetPayload(ksMycenae)
+	delete(p.Tags, p.TagKey)
+
+	sendUDPPayloadStringAndAssertEmpty(t, string(p.Marshal()), p.Metric, p.Tags, *p.Timestamp, *p.Timestamp)
+}
+
 func TestUDPv2PayloadWithoutKsid(t *testing.T) {
 	t.Parallel()
 

@@ -883,6 +883,16 @@ func TestRESTv2TextPayloadValuesWithOnlySpace(t *testing.T) {
 	wg.Wait()
 }
 
+func TestRESTv2TextPayloadWithAKsidTag(t *testing.T) {
+	t.Parallel()
+
+	p := mycenaeTools.Mycenae.GetTextPayload(ksMycenae)
+	delete(p.Tags, p.TagKey)
+
+	errMessage := `Wrong Format: At least one tag other than "ksid" is required. NO information will be saved`
+	sendRESTextPayloadStringAndAssertErrorAndEmpty(t, errMessage, p.StringArray(), p.Tags["ksid"], p.Metric, p.Tags, *p.Timestamp, *p.Timestamp)
+}
+
 func TestRESTv2TextPayloadWithoutKsid(t *testing.T) {
 	t.Parallel()
 
