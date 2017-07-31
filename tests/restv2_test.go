@@ -860,7 +860,7 @@ func TestRESTv2PayloadWithoutKsid(t *testing.T) {
 	p := mycenaeTools.Mycenae.GetPayload(ksMycenae)
 	delete(p.Tags, "ksid")
 
-	errMessage := "Wrong Format: Tag \"ksid\" is required. NO information will be saved"
+	errMessage := `Wrong Format: At least two tags are required. One of each must be "ksid". NO information will be saved`
 	sendRESTPayloadStringAndAssertErrorAndEmpty(t, errMessage, p.StringArray(), "", p.Metric, p.Tags, *p.Timestamp, *p.Timestamp)
 }
 
