@@ -39,7 +39,7 @@ func (collector *Collector) makePoint(point *pb.TSPoint, meta *pb.Meta, rcvMsg *
 			return errValidation(`Wrong Format: At least one tag other than "ksid" and "ttl" is required. NO information will be saved`)
 		}
 		if lt == 1 {
-			return errValidation(`Wrong Format: At least one tag other than "ksid" is required. NO information will be saved`)
+			return errValidation(`Wrong Format: At least two tags are required. One of each must be "ksid". NO information will be saved`)
 		}
 	}
 
