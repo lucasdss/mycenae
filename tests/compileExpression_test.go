@@ -6,13 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uol/mycenae/tests/tools"
 )
-
-type TSDBCompileError struct {
-	Error     string `json:"error,omitempty"`
-	Message   string `json:"message,omitempty"`
-	RequestID string `json:"requestID,omitempty"`
-}
 
 func TestValidExpressionCompile(t *testing.T) {
 	cases := map[string]struct {
@@ -1942,7 +1937,7 @@ func TestInvalidExpressionCompile(t *testing.T) {
 		statusCode, resp, err := mycenaeTools.HTTP.POST("expression/compile", []byte(data.payload))
 		assert.Equal(t, 400, statusCode, test)
 
-		compare := TSDBCompileError{}
+		compare := tools.Error{}
 
 		err = json.Unmarshal(resp, &compare)
 		if err != nil {

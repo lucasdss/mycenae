@@ -12,38 +12,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uol/mycenae/tests/tools"
 )
-
-type basicResponseTsdbExpression struct {
-	TotalRecord int                        `json:"totalRecords"`
-	Payload     []TsMetaInfoTsdbExpression `json:"payload"`
-}
-
-type TsMetaInfoTsdbExpression struct {
-	TsID   string            `json:"id"`
-	Metric string            `json:"metric,omitempty"`
-	Tags   map[string]string `json:"tags,omitempty"`
-}
 
 type PointTsdbExpression struct {
 	Value     float64           `json:"value"`
 	Metric    string            `json:"metric"`
 	Tags      map[string]string `json:"tags"`
 	Timestamp int64             `json:"timestamp"`
-}
-
-type PayloadTsdbExpression struct {
-	Metric  string             `json:"metric"`
-	Tags    map[string]string  `json:"tags"`
-	AggTags []string           `json:"aggregateTags"`
-	Tsuuids []string           `json:"tsuids"`
-	Dps     map[string]float64 `json:"dps"`
-}
-
-type ExpressionPointsError struct {
-	Error     string `json:"error,omitempty"`
-	Message   string `json:"message,omitempty"`
-	RequestID string `json:"requestID,omitempty"`
 }
 
 func sendPointsExpression(msg string, points interface{}) {
@@ -263,7 +239,7 @@ func ts4TsdbExpression(startTime int) (string, string) {
 	return ts04tsdbexpression, ts4IDTsdbExpression
 }
 
-func postExpressionAndCheck(t *testing.T, expression, metric string, p, dps, tags, aggtags, tsuuidSize int) ([]PayloadTsdbExpression, []string) {
+func postExpressionAndCheck(t *testing.T, expression, metric string, p, dps, tags, aggtags, tsuuidSize int) ([]tools.ResponseQuery, []string) {
 
 	path := fmt.Sprintf("keyspaces/%s/query/expression?tsuid=true&exp=%s", ksMycenae, expression)
 	code, response, err := mycenaeTools.HTTP.GET(path)
@@ -274,7 +250,7 @@ func postExpressionAndCheck(t *testing.T, expression, metric string, p, dps, tag
 
 	assert.Equal(t, 200, code)
 
-	queryPoints := []PayloadTsdbExpression{}
+	queryPoints := []tools.ResponseQuery{}
 
 	err = json.Unmarshal(response, &queryPoints)
 	if err != nil {
@@ -670,7 +646,7 @@ func TestTsdbExpressionError(t *testing.T) {
 			t.SkipNow()
 		}
 
-		queryError := ExpressionPointsError{}
+		queryError := tools.Error{}
 
 		err = json.Unmarshal(response, &queryError)
 		if err != nil {

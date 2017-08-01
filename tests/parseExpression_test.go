@@ -8,13 +8,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uol/mycenae/tests/tools"
 )
-
-type TSDBParseError struct {
-	Error     string `json:"error,omitempty"`
-	Message   string `json:"message,omitempty"`
-	RequestID string `json:"requestID,omitempty"`
-}
 
 type TSDBquery struct {
 	Aggregator  string            `json:"aggregator"`
@@ -214,7 +209,7 @@ func parseExp(t *testing.T, urlQuery string) (int, []TSDBqueryPayload) {
 func parseAssertInvalidExp(t *testing.T, path, test, err, msg string) {
 
 	status, resp, _ := mycenaeTools.HTTP.GET(path)
-	response := TSDBParseError{}
+	response := tools.Error{}
 
 	errJSON := json.Unmarshal(resp, &response)
 	if errJSON != nil {

@@ -1084,7 +1084,20 @@ func TestRESTv2TextEmptyPayload(t *testing.T) {
 	statusCode, resp := mycenaeTools.HTTP.POSTstring("v2/text", payload)
 	assert.Equal(t, 400, statusCode)
 
-	assert.Equal(t, fmt.Sprintf(`{"error":"no points","message":"no points"}%s`, "\n"), string(resp))
+	expectedErr := tools.Error {
+		Error: "no points",
+		Message: "no points",
+	}
+
+	receivedErr := tools.Error{}
+
+	err := json.Unmarshal(resp, &receivedErr)
+	if err != nil {
+		t.Error(err, t)
+		t.SkipNow()
+	}
+
+	assert.Equal(t, expectedErr, receivedErr)
 }
 
 func TestRESTv2TextBucketLimits(t *testing.T) {

@@ -7,21 +7,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uol/mycenae/tests/tools"
 )
 
-type basicResponseMeta struct {
-	TotalRecord int              `json:"totalRecords"`
-	Payload     []TsMetaInfoMeta `json:"payload"`
-}
-
-type TsMetaInfoMeta struct {
-	TsID   string            `json:"id"`
-	Metric string            `json:"metric,omitempty"`
-	Tags   map[string]string `json:"tags,omitempty"`
-}
-
 var lookupMetaIDs []string
-var lookupMetas map[string]TsMetaInfoMeta
+var lookupMetas map[string]tools.TsMeta
 
 func sendPointsMetadata(keyspace string) {
 
@@ -38,7 +28,7 @@ func sendPointsMetadata(keyspace string) {
 	tagKy := "hostName"
 	tagVz := "a2-testMeta"
 
-	lookupMetas = map[string]TsMetaInfoMeta{
+	lookupMetas = map[string]tools.TsMeta{
 		lookupMetaIDs[0]: {Metric: metricX, Tags: map[string]string{tagKx: tagVz}},
 		lookupMetaIDs[1]: {Metric: metricY, Tags: map[string]string{tagKy: tagVx}},
 		lookupMetaIDs[2]: {Metric: metricZ, Tags: map[string]string{tagKx: tagVx}},
@@ -675,7 +665,7 @@ func TestListMetadataOnlyIDSFalse(t *testing.T) {
 
 }
 
-func requestResponse(t *testing.T, url string, payload string) (int, basicResponseMeta) {
+func requestResponse(t *testing.T, url string, payload string) (int, tools.ResponseMeta) {
 
 	code, resp, err := mycenaeTools.HTTP.POST(url, []byte(payload))
 	if err != nil {
@@ -683,7 +673,7 @@ func requestResponse(t *testing.T, url string, payload string) (int, basicRespon
 		t.SkipNow()
 	}
 
-	var response basicResponseMeta
+	var response tools.ResponseMeta
 
 	err = json.Unmarshal(resp, &response)
 	if err != nil {

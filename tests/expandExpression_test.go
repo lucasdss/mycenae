@@ -8,13 +8,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uol/mycenae/tests/tools"
 )
-
-type TSDBExpandError struct {
-	Error     string `json:"error,omitempty"`
-	Message   string `json:"message,omitempty"`
-	RequestID string `json:"requestID,omitempty"`
-}
 
 func sendPointsExpandExp(keyspace string) {
 
@@ -652,7 +647,7 @@ func TestQueryExpressionNotSent(t *testing.T) {
 
 	statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`keyspaces/%s/expression/expand`, ksMycenae))
 
-	response := TSDBExpandError{}
+	response := tools.Error{}
 
 	err := json.Unmarshal(resp, &response)
 	if err != nil {
@@ -693,7 +688,7 @@ func expandAssertInvalidExp(t *testing.T, test, urlQuery, respErr, respMessage s
 		t.SkipNow()
 	}
 
-	response := TSDBExpandError{}
+	response := tools.Error{}
 
 	err = json.Unmarshal(resp, &response)
 	if err != nil {

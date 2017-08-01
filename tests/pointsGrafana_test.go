@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uol/mycenae/tests/tools"
 )
 
 type PayloadTsdbNullQuery struct {
@@ -19,12 +20,6 @@ type PayloadTsdbNullQuery struct {
 	AggTags []string               `json:"aggregateTags"`
 	Tsuuids []string               `json:"tsuids"`
 	Dps     map[string]interface{} `json:"dps"`
-}
-
-type GrafanaPointsError struct {
-	Error     string `json:"error,omitempty"`
-	Message   string `json:"message,omitempty"`
-	RequestID string `json:"requestID,omitempty"`
 }
 
 type PointTsdbQuery struct {
@@ -7930,7 +7925,7 @@ func TestTsdbQueryInvalid(t *testing.T) {
 			t.SkipNow()
 		}
 
-		payloadError := GrafanaPointsError{}
+		payloadError := tools.Error{}
 
 		err = json.Unmarshal(response, &payloadError)
 		if err != nil {

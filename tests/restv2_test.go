@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/uol/mycenae/tests/tools"
 )
 
@@ -1049,7 +1048,20 @@ func TestRESTv2EmptyPayload(t *testing.T) {
 	statusCode, resp := mycenaeTools.HTTP.POSTstring("api/put", payload)
 	assert.Equal(t, 400, statusCode)
 
-	assert.Equal(t, fmt.Sprintf(`{"error":"no points","message":"no points"}%s`, "\n"), string(resp))
+	expectedErr := tools.Error {
+		Error: "no points",
+		Message: "no points",
+	}
+
+	receivedErr := tools.Error{}
+
+	err := json.Unmarshal(resp, &receivedErr)
+	if err != nil {
+		t.Error(err, t)
+		t.SkipNow()
+	}
+
+	assert.Equal(t, expectedErr, receivedErr)
 }
 
 func TestRESTv2BucketLimits(t *testing.T) {

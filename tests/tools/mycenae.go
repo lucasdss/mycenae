@@ -82,6 +82,31 @@ type RestError struct {
 	Error     string `json:"error"`
 }
 
+type Error struct {
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
+	//RequestID string `json:"requestID,omitempty"`
+}
+
+type ResponseMeta struct {
+	TotalRecord int      `json:"totalRecords"`
+	Payload     []TsMeta `json:"payload"`
+}
+
+type TsMeta struct {
+	TsID   string            `json:"id"`
+	Metric string            `json:"metric,omitempty"`
+	Tags   map[string]string `json:"tags,omitempty"`
+}
+
+type ResponseQuery struct {
+	Metric  string                 `json:"metric"`
+	Tags    map[string]string      `json:"tags"`
+	AggTags []string               `json:"aggregateTags"`
+	Tsuuids []string               `json:"tsuids"`
+	Dps     map[string]interface{} `json:"dps"`
+}
+
 const MetricForm string = "testMetric-"
 const TagKeyForm string = "testTagKey-"
 const TagValueForm string = "testTagValue-"

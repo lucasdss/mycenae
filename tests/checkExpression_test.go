@@ -7,13 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uol/mycenae/tests/tools"
 )
-
-type TSDBCheckError struct {
-	Error     string `json:"error,omitempty"`
-	Message   string `json:"message,omitempty"`
-	RequestID string `json:"requestID,omitempty"`
-}
 
 func TestCheckValidQuery(t *testing.T) {
 	cases := map[string]string{
@@ -352,7 +347,7 @@ func TestCheckInvalidQuery(t *testing.T) {
 		statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`expression/check?exp=%v`, url.QueryEscape(data.expression)))
 		assert.Equal(t, 400, statusCode, test)
 
-		compare := TSDBCheckError{}
+		compare := tools.Error{}
 
 		err := json.Unmarshal(resp, &compare)
 		if err != nil {
@@ -370,7 +365,7 @@ func TestCheckQueryExpressionNotSent(t *testing.T) {
 	statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`keyspaces/%v/expression/expand`, ksMycenae))
 	assert.Equal(t, 400, statusCode)
 
-	compare := TSDBCheckError{}
+	compare := tools.Error{}
 	err := json.Unmarshal(resp, &compare)
 
 	if err != nil {
