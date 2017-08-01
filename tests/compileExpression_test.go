@@ -1950,7 +1950,7 @@ func TestInvalidExpressionCompile(t *testing.T) {
 			t.SkipNow()
 		}
 
-		assert.Equal(t, data.err, compare.Error, "they should be equal", test)
-		assert.Equal(t, data.msg, compare.Message, "they should be equal", test)
+		assert.Equal(t, data.err, compare.Error, test)
+		assert.Equal(t, data.msg, compare.Message, test)
 	}
 }

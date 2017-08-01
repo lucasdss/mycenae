@@ -4,7 +4,7 @@ set -e
 name="consulTestMycenae"
 pod_name="testMycenae"
 
-docker rm -f ${name} ${pod_name}
+docker rm -f ${name} ${pod_name} || true
 
 arguments=(
     '--detach'

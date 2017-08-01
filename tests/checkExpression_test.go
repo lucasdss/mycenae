@@ -72,7 +72,7 @@ func TestCheckValidQuery(t *testing.T) {
 	for test, query := range cases {
 
 		statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`expression/check?exp=%v`, url.QueryEscape(query)))
-		assert.Equal(t, 200, statusCode, "they should be equal", test)
+		assert.Equal(t, 200, statusCode, test)
 		assert.Equal(t, "", string(resp), "It should be empty", test)
 	}
 }
@@ -350,7 +350,7 @@ func TestCheckInvalidQuery(t *testing.T) {
 	for test, data := range cases {
 
 		statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`expression/check?exp=%v`, url.QueryEscape(data.expression)))
-		assert.Equal(t, 400, statusCode, "they should be equal", test)
+		assert.Equal(t, 400, statusCode, test)
 
 		compare := TSDBCheckError{}
 
@@ -368,7 +368,7 @@ func TestCheckInvalidQuery(t *testing.T) {
 func TestCheckQueryExpressionNotSent(t *testing.T) {
 
 	statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`keyspaces/%v/expression/expand`, ksMycenae))
-	assert.Equal(t, 400, statusCode, "they should be equal")
+	assert.Equal(t, 400, statusCode)
 
 	compare := TSDBCheckError{}
 	err := json.Unmarshal(resp, &compare)
@@ -388,7 +388,7 @@ func TestCheckInvalidQueryGroupByKeyspaceNotFound(t *testing.T) {
 		`groupBy({host=*})|rate(true, null, 0, merge(sum, downsample(1m, min, none,query(os.cpu, {app=test}, 5m))))`))
 
 	statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`keyspaces/aaa/expression/expand?exp=%v`, expression))
-	assert.Equal(t, 404, statusCode, "they should be equal")
+	assert.Equal(t, 404, statusCode)
 	assert.Equal(t, 0, len(resp))
 }
 
@@ -398,6 +398,6 @@ func TestCheckInvalidQueryGroupByKeyspaceNotSent(t *testing.T) {
 		`groupBy({host=*})|rate(true, null, 0, merge(sum, downsample(1m, min,none, query(os.cpu, {app=test}, 5m))))`))
 
 	statusCode, _, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`keyspaces/expression/expand?exp=%v`, expression))
-	assert.Equal(t, 404, statusCode, "they should be equal")
+	assert.Equal(t, 404, statusCode)
 
 }

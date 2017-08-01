@@ -384,7 +384,7 @@ func TestTsdbExpressionFilterDownsampleAvg(t *testing.T) {
 	offset := "90m"
 	// if the test is run during a minute change,
 	// increment a minute in the relative time (offset) to get the first point
-	if int(time.Now().Truncate(time.Minute).Unix()-5400)-startTime == 60 {
+	if int(time.Now().Truncate(time.Minute).Unix() - 5400) - startTime == 60 {
 		offset = "91m"
 	}
 
@@ -420,7 +420,7 @@ func TestTsdbExpressionFilterDownsampleMin(t *testing.T) {
 	offset := "90m"
 	// if the test is run during a minute change,
 	// increment a minute in the relative time (offset) to get the first point
-	if int(time.Now().Truncate(time.Minute).Unix()-5400)-startTime == 60 {
+	if int(time.Now().Truncate(time.Minute).Unix() - 5400) - startTime == 60 {
 		offset = "91m"
 	}
 
@@ -454,7 +454,7 @@ func TestTsdbExpressionFilterDownsampleMax(t *testing.T) {
 	offset := "90m"
 	// if the test is run during a minute change,
 	// increment a minute in the relative time (offset) to get the first point
-	if int(time.Now().Truncate(time.Minute).Unix()-5400)-startTime == 60 {
+	if int(time.Now().Truncate(time.Minute).Unix() - 5400) - startTime == 60 {
 		offset = "91m"
 	}
 
@@ -485,7 +485,7 @@ func TestTsdbExpressionFilterDownsampleSum(t *testing.T) {
 	offset := "90m"
 	// if the test is run during a minute change,
 	// increment a minute in the relative time (offset) to get the first point
-	if int(time.Now().Truncate(time.Minute).Unix()-5400)-startTime == 60 {
+	if int(time.Now().Truncate(time.Minute).Unix() - 5400) - startTime == 60 {
 		offset = "91m"
 	}
 
@@ -536,7 +536,7 @@ func TestTsdbExpressionFilterDownsampleMaxHour(t *testing.T) {
 
 func TestTsdbExpressionFilterDownsampleMaxDay(t *testing.T) {
 	t.Parallel()
-	startTime := int(time.Now().Truncate(time.Hour*24).Unix()) - 864000
+	startTime := int(time.Now().Truncate(time.Hour * 24).Unix()) - 864000
 
 	metric, tsid := ts3TsdbExpression(startTime)
 
@@ -563,7 +563,7 @@ func TestTsdbExpressionFilterDownsampleMaxDay(t *testing.T) {
 
 func TestTsdbExpressionFilterDownsampleMaxWeek(t *testing.T) {
 	t.Parallel()
-	startTime := int(time.Now().Truncate(time.Hour*24*7).Unix()) - 125193600
+	startTime := int(time.Now().Truncate(time.Hour * 24 * 7).Unix()) - 125193600
 
 	metric, tsid := ts4TsdbExpression(startTime)
 
@@ -580,9 +580,9 @@ func TestTsdbExpressionFilterDownsampleMaxWeek(t *testing.T) {
 
 	for _, key := range keys {
 
-		assert.Exactly(t, i, queryPoints[0].Dps[key], "they should be equal", expression)
+		assert.Exactly(t, i, queryPoints[0].Dps[key], expression)
 		i += 2.0
-		assert.Exactly(t, strconv.Itoa(startTime), key, "they should be equal", expression)
+		assert.Exactly(t, strconv.Itoa(startTime), key, expression)
 		//+4weeks
 		startTime += 2419200
 	}
@@ -622,7 +622,7 @@ func TestTsdbExpressionMergeDateLimit(t *testing.T) {
 
 	for _, key := range keys {
 
-		assert.Exactly(t, i+i, queryPoints[0].Dps[key])
+		assert.Exactly(t, i + i, queryPoints[0].Dps[key])
 		assert.Exactly(t, strconv.Itoa(startTime), key)
 		startTime += 60
 		i++
@@ -636,27 +636,27 @@ func TestTsdbExpressionError(t *testing.T) {
 		errorMsg string
 	}{
 		"InvalidFunction": {
-			fmt.Sprintf(`groupBy({host=*})|test(sum, query(metric,null,1y))`),
+			`groupBy({host=*})|test(sum, query(metric,null,1y))`,
 			"unkown function test",
 		},
 		"EmptyFunction": {
-			fmt.Sprintf(`merge(sum, (metric,null,1y))`),
+			`merge(sum, (metric,null,1y))`,
 			"unkown function ",
 		},
 		"InvalidRateOptionCounter": {
-			fmt.Sprintf(`rate(a, null, 0, merge(sum,query(metric,null,1y)))`),
+			`rate(a, null, 0, merge(sum,query(metric,null,1y)))`,
 			"strconv.ParseBool: parsing \"a\": invalid syntax",
 		},
 		"InvalidRateOptionCounterMax": {
-			fmt.Sprintf(`rate(true, "a", 0, merge(sum,query(metric,null,1y)))`),
+			`rate(true, "a", 0, merge(sum,query(metric,null,1y)))`,
 			"strconv.ParseInt: parsing \"\\\"a\\\"\": invalid syntax",
 		},
 		"InvalidRateOptionCounterMaxNegative": {
-			fmt.Sprintf(`rate(true, -1, 0, merge(sum,query(metric,null,1y)))`),
+			`rate(true, -1, 0, merge(sum,query(metric,null,1y)))`,
 			"counter max needs to be a positive integer",
 		},
 		"InvalidRateOptionResetValue": {
-			fmt.Sprintf(`rate(true, null, a, merge(sum,query(metric,null,1y)))`),
+			`rate(true, null, a, merge(sum,query(metric,null,1y)))`,
 			"strconv.ParseInt: parsing \"a\": invalid syntax",
 		},
 	}

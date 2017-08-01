@@ -43,7 +43,7 @@ type PayloadTsdbQuery struct {
 }
 
 var ts10IDTsdbQuery, ts12IDTsdbQuery, ts13IDTsdbQuery, ts13IDTsdbQuery2, ts13IDTsdbQuery3,
-	ts13IDTsdbQuery4, ts13IDTsdbQuery5, ts13IDTsdbQuery6, ts13IDTsdbQuery7, ts13IDTsdbQuery8 string
+ts13IDTsdbQuery4, ts13IDTsdbQuery5, ts13IDTsdbQuery6, ts13IDTsdbQuery7, ts13IDTsdbQuery8 string
 
 var hashMap map[string]string
 
@@ -535,7 +535,7 @@ func TestTsdbQueryConcurrentPoints(t *testing.T) {
     		"metric": "ts16tsdb",
     		"aggregator": "sum"
     	}]
-	}`, dateStart, dateStart+1560)
+	}`, dateStart, dateStart + 1560)
 
 	keys, payloadPoints := postApiQueryAndCheck(t, payload, "ts16tsdb", 1, 27, 1, 0, 1, "ts16TsdbQuery")
 
@@ -1012,7 +1012,7 @@ func TestTsdbQueryFilterDownsampleCountSec(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -1543,7 +1543,7 @@ func TestTsdbQueryFilterRateTrueRateOptionsFalse(t *testing.T) {
 	dateStart := 1448452800
 	for _, key := range keys {
 
-		calc := ((i + 1.0) - i) / float32((dateStart+60)-dateStart)
+		calc := ((i + 1.0) - i) / float32((dateStart + 60) - dateStart)
 		assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		dateStart += 60
@@ -1584,7 +1584,7 @@ func TestTsdbQueryFilterRateTrueRateOptionsTrueCounter(t *testing.T) {
 	dateStart := 1448452800
 	for _, key := range keys {
 
-		calc := ((i * 10.0) - i) / float32((dateStart+60)-dateStart)
+		calc := ((i * 10.0) - i) / float32((dateStart + 60) - dateStart)
 		assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		dateStart += 60
@@ -1629,7 +1629,7 @@ func TestTsdbQueryFilterRateTrueRateOptionsTrueCounterMax(t *testing.T) {
 
 		if dateStart < 1448453040 {
 
-			calc := ((i * 10.0) - i) / float32((dateStart+60)-dateStart)
+			calc := ((i * 10.0) - i) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -1637,7 +1637,7 @@ func TestTsdbQueryFilterRateTrueRateOptionsTrueCounterMax(t *testing.T) {
 
 			i = i * 10.0
 		} else {
-			calc := (countermax - i + 1000) / float32((dateStart+60)-dateStart)
+			calc := (countermax - i + 1000) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -1680,7 +1680,7 @@ func TestTsdbQueryFilterRateTrueRateOptionsTrueResetValue(t *testing.T) {
 
 		if dateStart < 1448453040 {
 
-			calc := ((i * 10.0) - i) / float32((dateStart+60)-dateStart)
+			calc := ((i * 10.0) - i) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -1733,7 +1733,7 @@ func TestTsdbQueryFilterRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testin
 
 		if dateStart < 1448453040 {
 
-			calc := ((i * 10.0) - i) / float32((dateStart+60)-dateStart)
+			calc := ((i * 10.0) - i) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -1741,7 +1741,7 @@ func TestTsdbQueryFilterRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testin
 
 			i = i * 10.0
 		} else if dateStart < 1448453100 {
-			calc := (countermax - i + 1000) / float32((dateStart+60)-dateStart)
+			calc := (countermax - i + 1000) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -1756,7 +1756,7 @@ func TestTsdbQueryFilterRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testin
 			i = 1.0
 
 		} else if dateStart < 1448453400 {
-			calc := ((i * 10.0) - i) / float32((dateStart+60)-dateStart)
+			calc := ((i * 10.0) - i) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -1764,7 +1764,7 @@ func TestTsdbQueryFilterRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testin
 
 			i = i * 10.0
 		} else {
-			calc := (countermax - i + 3000.0) / float32((dateStart+60)-dateStart)
+			calc := (countermax - i + 3000.0) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -1792,7 +1792,7 @@ func TestTsdbQueryFilterRateTrueNoPoints(t *testing.T) {
 		}]
 	}`
 
-	code, response, _ := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, _ := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 
 	assert.Equal(t, 200, code)
 	assert.Equal(t, "[]", string(response))
@@ -2266,7 +2266,7 @@ func TestTsdbQueryMergeDateLimit(t *testing.T) {
 
 	for _, key := range keys {
 
-		assert.Exactly(t, i+i, payloadPoints[0].Dps[key])
+		assert.Exactly(t, i + i, payloadPoints[0].Dps[key])
 		i++
 
 		assert.Exactly(t, strconv.Itoa(dateStart), key)
@@ -2296,7 +2296,7 @@ func TestTsdbQueryMergeBiggerPointsSameDate(t *testing.T) {
 
 	for _, key := range keys {
 
-		assert.Exactly(t, i*2, payloadPoints[0].Dps[key])
+		assert.Exactly(t, i * 2, payloadPoints[0].Dps[key])
 		i++
 
 		assert.Exactly(t, strconv.Itoa(dateStart), key)
@@ -2502,7 +2502,7 @@ func TestTsdbQueryMergeSumDownAvgMinute(t *testing.T) {
 
 	for _, key := range keys {
 
-		sum := (i+i+1+i+2)/3 + (j+j+5+j+10)/3
+		sum := (i + i + 1 + i + 2) / 3 + (j + j + 5 + j + 10) / 3
 		assert.Exactly(t, sum, payloadPoints[0].Dps[key])
 		i += 3
 		j += 15
@@ -2599,7 +2599,7 @@ func TestTsdbQueryMergeTimeDiffDownsampleExactBeginAndEnd(t *testing.T) {
 	dateStart := 1448452800
 	for _, key := range keys {
 
-		assert.Exactly(t, i+i, payloadPoints[0].Dps[key])
+		assert.Exactly(t, i + i, payloadPoints[0].Dps[key])
 		i += 3
 
 		assert.Exactly(t, strconv.Itoa(dateStart), key)
@@ -2637,7 +2637,7 @@ func TestTsdbQueryMergeTimeDiffDownsample(t *testing.T) {
 			i += 3
 
 		} else {
-			assert.Exactly(t, i+i, payloadPoints[0].Dps[key])
+			assert.Exactly(t, i + i, payloadPoints[0].Dps[key])
 			i += 3
 		}
 		assert.Exactly(t, strconv.Itoa(dateStart), key)
@@ -2783,7 +2783,7 @@ func TestTsdbQueryNullValuesDownsampleNan(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -2852,7 +2852,7 @@ func TestTsdbQueryNullValuesDownsampleZero(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -3086,7 +3086,7 @@ func TestTsdbQueryBothValuesNullMergeAndDownsampleNull(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -3157,7 +3157,7 @@ func TestTsdbQueryBothValuesNullMergeAndDownsampleNan(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -4025,7 +4025,7 @@ func TestTsdbQueryRateTrueRateOptionsFalse(t *testing.T) {
 	dateStart := 1448452800
 	for _, key := range keys {
 
-		calc := ((i + 1.0) - i) / float32((dateStart+60)-dateStart)
+		calc := ((i + 1.0) - i) / float32((dateStart + 60) - dateStart)
 		assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		dateStart += 60
@@ -4061,7 +4061,7 @@ func TestTsdbQueryRateTrueAndMergeRateOptionsFalse(t *testing.T) {
 	for _, key := range keys {
 
 		// Rate: (v2 - v1) / (t2 - t1)
-		calc := (((i + 1) + (j + 5)) - (i + j)) / float32((dateStart+60)-dateStart)
+		calc := (((i + 1) + (j + 5)) - (i + j)) / float32((dateStart + 60) - dateStart)
 
 		assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 		i++
@@ -4100,7 +4100,7 @@ func TestTsdbQueryRateTrueDownsampleAndMergeRateOptionsFalse(t *testing.T) {
 	for _, key := range keys {
 
 		// Rate: (v2 - v1) / (t2 - t1)
-		calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+15)+(j+15)+5+(j+15)+10)/3) - ((i+i+1+i+2)/3 + (j+j+5+j+10)/3)) / (float32((dateStart + 180) - dateStart))
+		calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart))
 
 		assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 		i += 3
@@ -4140,7 +4140,7 @@ func TestTsdbQueryRateFillNone(t *testing.T) {
 		if i < 12 || i > 15 {
 			//sum := i + 2 + j + 2
 			//assert.Exactly(t, sum, payloadPoints[0].Dps[key])
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / float32((dateStart+180)-dateStart)
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			assert.Exactly(t, strconv.Itoa(dateStart), key)
@@ -4151,7 +4151,7 @@ func TestTsdbQueryRateFillNone(t *testing.T) {
 			j = 75
 			//sum := i + 2 + j + 2
 			//assert.Exactly(t, sum, payloadPoints[0].Dps[key])
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / float32((dateStart+180)-dateStart)
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart = 1448457300
@@ -4195,15 +4195,15 @@ func TestTsdbQueryRateFillZero(t *testing.T) {
 	for _, key := range keys {
 
 		if i < 12 || i >= 75 {
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / float32((dateStart+180)-dateStart)
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		} else if i == 12 {
-			calc := (0 - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / float32((dateStart+180)-dateStart)
+			calc := (0 - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		} else if i == 72 {
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - 0) / float32((dateStart+180)-dateStart)
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - 0) / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		} else {
@@ -4234,7 +4234,7 @@ func TestTsdbQueryRateFillNull(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -4259,14 +4259,14 @@ func TestTsdbQueryRateFillNull(t *testing.T) {
 
 	sort.Strings(keys)
 
-	assert.Equal(t, 200, code, "they should be equal")
-	assert.Equal(t, 1, len(payloadPoints), "they should be equal")
-	assert.Equal(t, 29, len(payloadPoints[0].Dps), "they should be equal")
-	assert.Equal(t, 0, len(payloadPoints[0].Tags), "they should be equal")
-	assert.Equal(t, 1, len(payloadPoints[0].AggTags), "they should be equal")
-	assert.Equal(t, 2, len(payloadPoints[0].Tsuuids), "they should be equal")
-	assert.Equal(t, "ts09_1tsdb", payloadPoints[0].Metric, "they should be equal")
-	assert.Equal(t, "host", payloadPoints[0].AggTags[0], "they should be equal")
+	assert.Equal(t, 200, code)
+	assert.Equal(t, 1, len(payloadPoints))
+	assert.Equal(t, 29, len(payloadPoints[0].Dps))
+	assert.Equal(t, 0, len(payloadPoints[0].Tags))
+	assert.Equal(t, 1, len(payloadPoints[0].AggTags))
+	assert.Equal(t, 2, len(payloadPoints[0].Tsuuids))
+	assert.Equal(t, "ts09_1tsdb", payloadPoints[0].Metric)
+	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
 
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
 
@@ -4280,7 +4280,7 @@ func TestTsdbQueryRateFillNull(t *testing.T) {
 	for _, key := range keys {
 
 		if i < 12 || i >= 75 {
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / float32((dateStart+180)-dateStart)
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 		} else {
@@ -4311,7 +4311,7 @@ func TestTsdbQueryRateFillNan(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -4336,14 +4336,14 @@ func TestTsdbQueryRateFillNan(t *testing.T) {
 
 	sort.Strings(keys)
 
-	assert.Equal(t, 200, code, "they should be equal")
-	assert.Equal(t, 1, len(payloadPoints), "they should be equal")
-	assert.Equal(t, 29, len(payloadPoints[0].Dps), "they should be equal")
-	assert.Equal(t, 0, len(payloadPoints[0].Tags), "they should be equal")
-	assert.Equal(t, 1, len(payloadPoints[0].AggTags), "they should be equal")
-	assert.Equal(t, 2, len(payloadPoints[0].Tsuuids), "they should be equal")
-	assert.Equal(t, "ts09_1tsdb", payloadPoints[0].Metric, "they should be equal")
-	assert.Equal(t, "host", payloadPoints[0].AggTags[0], "they should be equal")
+	assert.Equal(t, 200, code)
+	assert.Equal(t, 1, len(payloadPoints))
+	assert.Equal(t, 29, len(payloadPoints[0].Dps))
+	assert.Equal(t, 0, len(payloadPoints[0].Tags))
+	assert.Equal(t, 1, len(payloadPoints[0].AggTags))
+	assert.Equal(t, 2, len(payloadPoints[0].Tsuuids))
+	assert.Equal(t, "ts09_1tsdb", payloadPoints[0].Metric)
+	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
 
 	var i, j float32
@@ -4356,7 +4356,7 @@ func TestTsdbQueryRateFillNan(t *testing.T) {
 	for _, key := range keys {
 
 		if i < 12 || i >= 75 {
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / float32((dateStart+180)-dateStart)
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 		} else {
@@ -4406,15 +4406,15 @@ func TestTsdbQueryOrderDownsampleMergeRateAndFilterValues(t *testing.T) {
 
 		//first point
 		if key == "1448452980" {
-			calc := 10 / float32((dateStart+180)-dateStart)
+			calc := 10 / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 			//second point
 		} else if key == "1448453160" {
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+15)+(j+15)+5+(j+15)+10)/3) - ((j + j + 5 + j + 10) / 3)) / float32((dateStart+180)-dateStart)
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - ((j + j + 5 + j + 10) / 3)) / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		} else {
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+15)+(j+15)+5+(j+15)+10)/3) - ((i+i+1+i+2)/3 + (j+j+5+j+10)/3)) / float32((dateStart+180)-dateStart)
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 5 + j + 10) / 3)) / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		}
@@ -4459,8 +4459,8 @@ func TestTsdbQueryOrderDownsampleRateAndMerge(t *testing.T) {
 		// Rate: (v2 - v1) / (t2 - t1)
 		// Downsample: 3min
 		// DefaultOrder:	Downsample - Rate - Merge
-		calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3) - (i+i+1+i+2)/3) / float32((dateStart+180)-dateStart)) +
-			(((((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - (j+j+5+j+10)/3) / float32((dateStart+180)-dateStart))
+		calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3) - (i + i + 1 + i + 2) / 3) / float32((dateStart + 180) - dateStart)) +
+			(((((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - (j + j + 5 + j + 10) / 3) / float32((dateStart + 180) - dateStart))
 
 		assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 		i += 3
@@ -4504,7 +4504,7 @@ func TestTsdbQueryOrderMergeDownsampleAndRate(t *testing.T) {
 		// Rate: (v2 - v1) / (t2 - t1)
 		// Downsample: 3min
 		// DefaultOrder: Merge - Downsample - Rate
-		calc := (((i+3+j+15)+(i+3+1+j+15+5)+(i+3+2+j+15+10))/6 - ((i+j)+(i+1+j+5)+(i+2+j+10))/6) / float32((dateStart+180)-dateStart)
+		calc := (((i + 3 + j + 15) + (i + 3 + 1 + j + 15 + 5) + (i + 3 + 2 + j + 15 + 10)) / 6 - ((i + j) + (i + 1 + j + 5) + (i + 2 + j + 10)) / 6) / float32((dateStart + 180) - dateStart)
 
 		assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 		i += 3
@@ -4570,7 +4570,7 @@ func TestTsdbQueryOrderMergeRateAndDownsample(t *testing.T) {
 				(((i + 2) - (j + 5)) / 59) +
 				(((j + 10) - (i + 2)) / 1) +
 				(((i + 3) - (j + 10)) / 59) +
-				((j + 15) - (i+3)/1)) / 6
+				((j + 15) - (i + 3) / 1)) / 6
 
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 			i += 3
@@ -4693,7 +4693,7 @@ func TestTsdbQueryDefaultOrder(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -4744,15 +4744,15 @@ func TestTsdbQueryDefaultOrder(t *testing.T) {
 
 		//first point
 		if key == "1448452980" {
-			calc := 10 / float32((dateStart+180)-dateStart)
+			calc := 10 / float32((dateStart + 180) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 			//second point
 		} else if key == "1448453160" {
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+15)+(j+15)+5+(j+15)+10)/3) - ((j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart))
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - ((j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart))
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		} else {
-			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+15)+(j+15)+5+(j+15)+10)/3) - ((i+i+1+i+2)/3 + (j+j+5+j+10)/3)) / (float32((dateStart + 180) - dateStart))
+			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart))
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 		}
@@ -4819,7 +4819,7 @@ func TestTsdbQueryOrderFunctionNotUsed(t *testing.T) {
 				(((i + 2) - (j + 5)) / 59) +
 				(((j + 10) - (i + 2)) / 1) +
 				(((i + 3) - (j + 10)) / 59) +
-				((j + 15) - (i+3)/1)) / 6
+				((j + 15) - (i + 3) / 1)) / 6
 
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 			i += 3
@@ -4949,7 +4949,7 @@ func TestTsdbQueryRateTrueRateOptionsTrueResetValue(t *testing.T) {
 
 		if dateStart < 1448453040 {
 
-			calc := ((i * 10.0) - i) / float32((dateStart+60)-dateStart)
+			calc := ((i * 10.0) - i) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -4999,7 +4999,7 @@ func TestTsdbQueryRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testing.T) {
 
 		if dateStart < 1448453040 {
 
-			calc := ((i * 10.0) - i) / float32((dateStart+60)-dateStart)
+			calc := ((i * 10.0) - i) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -5007,7 +5007,7 @@ func TestTsdbQueryRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testing.T) {
 
 			i = i * 10.0
 		} else if dateStart < 1448453100 {
-			calc := (countermax - i + 1000) / float32((dateStart+60)-dateStart)
+			calc := (countermax - i + 1000) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -5022,7 +5022,7 @@ func TestTsdbQueryRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testing.T) {
 			i = 1.0
 
 		} else if dateStart < 1448453400 {
-			calc := ((i * 10.0) - i) / float32((dateStart+60)-dateStart)
+			calc := ((i * 10.0) - i) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -5030,7 +5030,7 @@ func TestTsdbQueryRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testing.T) {
 
 			i = i * 10.0
 		} else {
-			calc := (countermax - i + 3000.0) / float32((dateStart+60)-dateStart)
+			calc := (countermax - i + 3000.0) / float32((dateStart + 60) - dateStart)
 			assert.Exactly(t, calc, payloadPoints[0].Dps[key])
 
 			dateStart += 60
@@ -5055,7 +5055,7 @@ func TestTsdbQueryRateTrueNoPoints(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5084,7 +5084,7 @@ func TestTsdbQueryFilterGroupByWildcard(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5253,7 +5253,7 @@ func TestTsdbQueryFilterGroupByWildcardPartialName(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5431,7 +5431,7 @@ func TestTsdbQueryFilterGroupByWildcardTagWithDot(t *testing.T) {
 	dateStart := 1348452780
 	for _, key := range keys {
 
-		assert.Exactly(t, i+i, payloadPoints[0].Dps[key])
+		assert.Exactly(t, i + i, payloadPoints[0].Dps[key])
 		i += 3
 
 		assert.Exactly(t, strconv.Itoa(dateStart), key)
@@ -5494,7 +5494,7 @@ func TestTsdbQueryFilterGroupByWildcardTagWithoutDot(t *testing.T) {
 		}]
 	}`
 
-	code, response, _ := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, _ := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 
 	assert.Equal(t, 200, code)
 	assert.Equal(t, "[]", string(response))
@@ -5519,7 +5519,7 @@ func TestTsdbQueryFilterGroupByLiteralOr(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5643,7 +5643,7 @@ func TestTsdbQueryFilterGroupByNotLiteralOr(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5711,7 +5711,7 @@ func TestTsdbQueryFilterGroupByRegexp(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5880,7 +5880,7 @@ func TestTsdbQueryFilterGroupByRegexpNumbers(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6049,7 +6049,7 @@ func TestTsdbQueryFilterGroupByILiteralOr(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6223,7 +6223,7 @@ func TestTsdbQueryFilterGroupByAllEspecificTag(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6372,7 +6372,7 @@ func TestTsdbQueryFilterGroupByIsntTheFirstFilter(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6521,7 +6521,7 @@ func TestTsdbQueryFilterGroupByLiteralOrEspecificTag(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6637,7 +6637,7 @@ func TestTsdbQueryFilterGroupByWildcardTwoTags(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6856,7 +6856,7 @@ func TestTsdbQueryFilterGroupByWildcardTwoTagsFiltersOutOfOrder1(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7010,7 +7010,7 @@ func TestTsdbQueryFilterGroupByWildcardTwoTagsFiltersOutOfOrder2(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7164,7 +7164,7 @@ func TestTsdbQueryFilterGroupByWildcardTwoTagsFiltersOutOfOrder3(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7313,7 +7313,7 @@ func TestTsdbQueryFilterGroupBySameTagk(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7392,7 +7392,7 @@ func TestTsdbQueryFilterSameTagkOnGroupByAndTags(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7466,7 +7466,7 @@ func TestTsdbQueryFilterGroupByNoPoints(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7502,7 +7502,7 @@ func TestTsdbQueryFilterGroupByTagNotFound(t *testing.T) {
 		}]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
