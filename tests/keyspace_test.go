@@ -82,8 +82,8 @@ func testKeyspaceFail(data interface{}, name, test string, t *testing.T) {
 	//fmt.Printf("\n%s: %vdata: %v\n", test, string(resp), string(body))
 
 	assert.Equal(t, 400, code, "The request did not return the expected http code", test)
-	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces(), "They should be the same")
-	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces(), "They should be the same")
+	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces())
+	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces())
 }
 
 func testKeyspaceCreated(data *keyspace, t *testing.T) {
@@ -122,8 +122,8 @@ func testCheckEdition(name, testName string, data2 interface{}, status int, t *t
 	//fmt.Printf("\n%s: %vdata: %v\n", testName, string(resp), string(body))
 
 	assert.Equal(t, status, code, "The request did not return the expected http code", testName)
-	//assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces(), "They should be the same")
-	//assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces(), "They should be the same")
+	//assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces())
+	//assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces())
 }
 
 func checkTables(data keyspace, t *testing.T) {
@@ -426,8 +426,8 @@ func TestKeyspaceCreateNewTimeseriesNewErrorNilPayload(t *testing.T) {
 	assert.NoError(t, err, "There was an error with request")
 	assert.Equal(t, 400, code, "The request did not return the expected http code")
 
-	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces(), "They should be the same")
-	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces(), "They should be the same")
+	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces())
+	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces())
 }
 
 func TestKeyspaceCreateNewTimeseriesNewErrorEmptyPayload(t *testing.T) {
@@ -444,8 +444,8 @@ func TestKeyspaceCreateNewTimeseriesNewErrorEmptyPayload(t *testing.T) {
 	assert.NoError(t, err, "There was an error with request")
 	assert.Equal(t, 400, code, "The request did not return the expected http code")
 
-	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces(), "They should be the same")
-	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces(), "They should be the same")
+	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces())
+	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces())
 }
 
 func TestKeyspaceCreateNewTimeseriesNewErrorInvalidPayload(t *testing.T) {
@@ -568,8 +568,8 @@ func TestKeyspaceEditTimeseriesNewSuccessConcurrent(t *testing.T) {
 	for count < 2 {
 		time.Sleep(1 * time.Second)
 	}
-	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces(), "They should be the same")
-	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces(), "They should be the same")
+	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces())
+	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces())
 }
 
 func TestKeyspaceEditTimeseriesNewErrorConflictName(t *testing.T) {
@@ -618,8 +618,8 @@ func TestKeyspaceEditTimeseriesNewErrorEmptyPayload(t *testing.T) {
 	assert.NoError(t, err, "There was an error with request to edit keyspace #%v", data.keyspace)
 	assert.Equal(t, 400, code, "The request to edit keyspace #%v did not return the expected http code", data.keyspace)
 
-	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces(), "They should be the same")
-	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces(), "They should be the same")
+	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces())
+	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces())
 }
 
 func TestKeyspaceEditTimeseriesNewErrorInvalidPayload(t *testing.T) {

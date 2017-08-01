@@ -73,7 +73,7 @@ func TestCheckValidQuery(t *testing.T) {
 
 		statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`expression/check?exp=%v`, url.QueryEscape(query)))
 		assert.Equal(t, 200, statusCode, test)
-		assert.Equal(t, "", string(resp), "It should be empty", test)
+		assert.Empty(t, resp, test)
 	}
 }
 
@@ -360,8 +360,8 @@ func TestCheckInvalidQuery(t *testing.T) {
 			t.SkipNow()
 		}
 
-		assert.Equal(t, data.msg, compare.Message, "response is different than expected", test)
-		assert.Equal(t, data.err, compare.Error, "response is different than expected", test)
+		assert.Equal(t, data.msg, compare.Message, test)
+		assert.Equal(t, data.err, compare.Error, test)
 	}
 }
 
@@ -378,8 +378,8 @@ func TestCheckQueryExpressionNotSent(t *testing.T) {
 		t.SkipNow()
 	}
 
-	assert.Equal(t, "no expression found", compare.Error, "response is different than expected")
-	assert.Equal(t, "no expression found", compare.Message, "response is different than expected")
+	assert.Equal(t, "no expression found", compare.Error)
+	assert.Equal(t, "no expression found", compare.Message)
 }
 
 func TestCheckInvalidQueryGroupByKeyspaceNotFound(t *testing.T) {
