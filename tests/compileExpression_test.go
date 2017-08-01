@@ -889,7 +889,7 @@ func TestValidExpressionCompile(t *testing.T) {
 			t.SkipNow()
 		}
 
-		assert.Equal(t, 200, statusCode, "the HTTP return code is different than expected", test)
+		assert.Equal(t, 200, statusCode, test)
 		assert.Equal(t, data.expression, string(resp), test)
 	}
 
@@ -1047,7 +1047,7 @@ func TestValidExpressionCompile2Expressions(t *testing.T) {
 			t.SkipNow()
 		}
 
-		assert.Equal(t, 200, statusCode, "the HTTP return code is different than expected", test)
+		assert.Equal(t, 200, statusCode, test)
 		assert.Condition(t, func() bool { return (data.expression == string(resp)) || (data.expression2 == string(resp)) }, fmt.Sprintf("Found: %v,  Expected: %v or %v", string(resp), data.expression, data.expression2), test)
 	}
 }
@@ -1940,7 +1940,7 @@ func TestInvalidExpressionCompile(t *testing.T) {
 	for test, data := range cases {
 
 		statusCode, resp, err := mycenaeTools.HTTP.POST("expression/compile", []byte(data.payload))
-		assert.Equal(t, 400, statusCode, "the HTTP return code is different than expected", test)
+		assert.Equal(t, 400, statusCode, test)
 
 		compare := TSDBCompileError{}
 

@@ -123,7 +123,7 @@ func TestTsdb(t *testing.T) {
 			t.SkipNow()
 		}
 
-		assert.Equal(t, 200, code, "the HTTP return code is different than expected", test)
+		assert.Equal(t, 200, code, test)
 
 		respList := []string{}
 
@@ -165,7 +165,7 @@ func TestTsdbLookupMetricFullNameMoreThanOneResult(t *testing.T) {
 		t.SkipNow()
 	}
 
-	assert.Equal(t, 200, code, "the HTTP return code is different than expected")
+	assert.Equal(t, 200, code)
 	assert.Condition(
 		t,
 		func() bool {
@@ -188,7 +188,7 @@ func TestTsdbLookupMetricFullNameOnlyOneResult(t *testing.T) {
 		t.SkipNow()
 	}
 
-	assert.Equal(t, 200, code, "the HTTP return code is different than expected")
+	assert.Equal(t, 200, code)
 	assert.Condition(
 		t,
 		func() bool { return string(response) == lookupExpected },
@@ -203,7 +203,7 @@ func TestTsdbLookupMetricFullNameOnlyOneResult(t *testing.T) {
 //
 //    code := tsdbLookupTools.HTTP.GETjson(fmt.Sprintf("keyspaces/"+ keyspacetsdbLookup +"/api/search/lookup?m=xxx"), &lookupList)
 //
-//    assert.Equal(t, 400, code, "the HTTP return code is different than expected")
+//    assert.Equal(t, 400, code)
 //    assert.Equal(t, "no tsuids found", lookupList.Error, "the total records are different than expected")
 //}
 //
@@ -213,6 +213,6 @@ func TestTsdbLookupMetricFullNameOnlyOneResult(t *testing.T) {
 //
 //    code := tsdbLookupTools.HTTP.GETjson(fmt.Sprintf("keyspaces/"+ keyspacetsdbLookup +"/api/search/lookup"), &lookupList)
 //
-//    assert.Equal(t, 400, code, "the HTTP return code is different than expected")
+//    assert.Equal(t, 400, code)
 //    assert.Equal(t, "missing query parameter \"m\"", lookupList.Error, "the total records are different than expected")
 //}
