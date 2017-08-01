@@ -13,6 +13,7 @@ import (
 // block contains compressed points
 type block struct {
 	mtx      sync.RWMutex
+	toDepot  bool
 	points   []byte
 	id       int64
 	prevDate int64
@@ -243,4 +244,16 @@ func (b *block) rangePoints(id int, start, end int64, queryCh chan query) {
 		pts: pts,
 	}
 
+}
+
+func (b *block) SendToDepot() bool {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+	return b.toDepot
+}
+
+func (b *block) ToDepot(tdp bool) {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+	b.toDepot = tdp
 }

@@ -150,21 +150,44 @@ func (wal *WAL) Start() {
 
 	wal.sync()
 
-	go func() {
-		ticker := time.NewTicker(wal.settings.cleanupInterval)
-		for {
-			select {
-			case <-ticker.C:
-				go wal.cleanup()
-			}
+	for i := 0; i < wal.settings.MaxConcWrite; i++ {
+		wal.worker()
+	}
+
+	wal.checkpoint()
+	wal.cleanup()
+
+}
+
+func (wal *WAL) Stop() {
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < wal.settings.MaxConcWrite; i++ {
+		wg.Add(1)
+		go func() {
+			ch := make(chan struct{})
+			wal.stopCh <- ch
+			<-ch
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+
+	if wal.fd != nil {
+		wal.fd.Sync()
+		if err := wal.fd.Close(); err != nil {
+			logger.Sugar().Errorf("error closing commitlog: %v", err)
 		}
+	}
+}
 
-	}()
-
+func (wal *WAL) worker() {
 	go func() {
 		maxBufferSize := wal.settings.MaxBufferSize
 		si := wal.settings.syncInterval
-		ticker := time.NewTicker(si)
+		ticker := time.NewTicker(500 * time.Millisecond)
 		buffer := make([]pb.TSPoint, maxBufferSize)
 		buffTimer := time.Now()
 		index := 0
@@ -178,10 +201,11 @@ func (wal *WAL) Start() {
 				}
 
 				buffer[index] = *pt
+				buffTimer = time.Now()
 				index++
 
 			case <-ticker.C:
-				if time.Now().Sub(buffTimer) >= si && index > 0 {
+				if time.Now().Sub(buffTimer) > si && index > 0 {
 					wal.write(buffer[:index])
 					index = 0
 				}
@@ -218,23 +242,6 @@ func (wal *WAL) Start() {
 
 		}
 	}()
-
-	wal.checkpoint()
-
-}
-
-func (wal *WAL) Stop() {
-	ch := make(chan struct{})
-	wal.stopCh <- ch
-
-	<-ch
-
-	if wal.fd != nil {
-		wal.fd.Sync()
-		if err := wal.fd.Close(); err != nil {
-			logger.Sugar().Errorf("error closing commitlog: %v", err)
-		}
-	}
 }
 
 // Add append point at the end of the file
@@ -369,116 +376,87 @@ func (wal *WAL) write(pts []pb.TSPoint) {
 
 func (wal *WAL) sync() {
 	go func() {
-		b := new(bytes.Buffer)
+		ticker := time.NewTicker(time.Second)
 		for {
 			select {
-			case buffer := <-wal.syncCh:
-				wal.wg.Add(1)
-
-				b.Reset()
-
-				encoder := gob.NewEncoder(b)
-
-				err := encoder.Encode(buffer)
-				if err != nil {
-					logger.Sugar().Errorf("error creating buffer to be saved at commitlog: %v", err)
-					wal.give <- buffer
-					wal.wg.Done()
-					continue
-				}
-
-				encodePts := make([]byte, len(buffer))
-				compressed := snappy.Encode(encodePts, b.Bytes())
-				b.Reset()
-				size := make([]byte, offset)
-				size[0] = logTypePoints
-				binary.BigEndian.PutUint32(size[1:], uint32(len(compressed)))
-				date := make([]byte, 8)
-				binary.BigEndian.PutUint64(date, uint64(time.Now().Unix()))
-
-				if _, err := wal.fd.Write(date); err != nil {
-					logger.Sugar().Errorf("error writing date to commitlog: %v", err)
-					wal.give <- buffer
-					wal.wg.Done()
-					continue
-				}
-
-				if _, err := wal.fd.Write(size); err != nil {
-					logger.Sugar().Errorf("error writing header to commitlog: %v", err)
-					wal.give <- buffer
-					wal.wg.Done()
-					continue
-				}
-
-				if _, err := wal.fd.Write(compressed); err != nil {
-					logger.Sugar().Errorf("error writing data to commitlog: %v", err)
-					wal.give <- buffer
-					wal.wg.Done()
-					continue
-				}
-
-				err = wal.fd.Sync()
-				if err != nil {
+			case <-ticker.C:
+				if err := wal.fd.Sync(); err != nil {
 					logger.Sugar().Errorf("error sycing data to commitlog: %v", err)
-					wal.give <- buffer
-					wal.wg.Done()
-					continue
+				} else {
+					logger.Sugar().Debugf("%05d-%s synced", wal.id, fileSuffixName)
 				}
-
-				stat, err := wal.fd.Stat()
-				if err != nil {
-					logger.Sugar().Errorf("error doing stat at commitlog: %v", err)
-					wal.give <- buffer
-					wal.wg.Done()
-					continue
-				}
-
-				logger.Sugar().Debugf("%05d-%s synced", wal.id, fileSuffixName)
-				if stat.Size() > maxFileSize {
-					err = wal.newFile()
-					if err != nil {
-						logger.Sugar().Errorf("error creating new commitlog: %v", err)
-					}
-				}
-				wal.give <- buffer
-				wal.wg.Done()
-
 			}
-
 		}
 	}()
 
-}
+	go func() {
+		b := new(bytes.Buffer)
+		for {
+			buffer := <-wal.syncCh
+			wal.wg.Add(1)
 
-func (wal *WAL) Flush(metas map[string]int64) {
+			b.Reset()
 
-	b := new(bytes.Buffer)
-	encoder := gob.NewEncoder(b)
+			encoder := gob.NewEncoder(b)
 
-	err := encoder.Encode(metas)
-	if err != nil {
-		logger.Sugar().Errorf("error creating buffer to be saved at commitlog: %v", err)
-		return
-	}
+			err := encoder.Encode(buffer)
+			if err != nil {
+				logger.Sugar().Errorf("error creating buffer to be saved at commitlog: %v", err)
+				wal.give <- buffer
+				wal.wg.Done()
+				continue
+			}
 
-	fileName := filepath.Join(wal.settings.PathWAL, fileFlush)
-	fd, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR, 0666)
-	if err != nil {
-		logger.Sugar().Errorf("error to open %v: %v", fileFlush, err)
-		return
-	}
-	defer fd.Close()
+			encodePts := make([]byte, len(buffer))
+			compressed := snappy.Encode(encodePts, b.Bytes())
+			b.Reset()
+			size := make([]byte, offset)
+			size[0] = logTypePoints
+			binary.BigEndian.PutUint32(size[1:], uint32(len(compressed)))
+			date := make([]byte, 8)
+			binary.BigEndian.PutUint64(date, uint64(time.Now().Unix()))
 
-	if _, err := fd.Write(b.Bytes()); err != nil {
-		logger.Sugar().Errorf("error writing data to %v: %v", fileFlush, err)
-		return
-	}
+			if _, err := wal.fd.Write(date); err != nil {
+				logger.Sugar().Errorf("error writing date to commitlog: %v", err)
+				wal.give <- buffer
+				wal.wg.Done()
+				continue
+			}
 
-	err = fd.Sync()
-	if err != nil {
-		logger.Sugar().Errorf("error sycing data to %v: %v", fileFlush, err)
-		return
-	}
+			if _, err := wal.fd.Write(size); err != nil {
+				logger.Sugar().Errorf("error writing header to commitlog: %v", err)
+				wal.give <- buffer
+				wal.wg.Done()
+				continue
+			}
+
+			if _, err := wal.fd.Write(compressed); err != nil {
+				logger.Sugar().Errorf("error writing data to commitlog: %v", err)
+				wal.give <- buffer
+				wal.wg.Done()
+				continue
+			}
+
+			stat, err := wal.fd.Stat()
+			if err != nil {
+				logger.Sugar().Errorf("error doing stat at commitlog: %v", err)
+				wal.give <- buffer
+				wal.wg.Done()
+				continue
+			}
+
+			if stat.Size() > maxFileSize {
+				err = wal.newFile()
+				if err != nil {
+					logger.Sugar().Errorf("error creating new commitlog: %v", err)
+				}
+			}
+			wal.give <- buffer
+			wal.wg.Done()
+
+		}
+
+	}()
 
 }
 
@@ -494,6 +472,9 @@ func idFromFileName(name string) (int64, error) {
 // newFile will close the current file and open a new one
 func (wal *WAL) newFile() error {
 	if wal.fd != nil {
+		if err := wal.fd.Sync(); err != nil {
+			return err
+		}
 		if err := wal.fd.Close(); err != nil {
 			return err
 		}
@@ -576,14 +557,20 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 
 		rp := make([]pb.TSPoint, wal.settings.MaxBufferSize)
 
+		currentLog := filepath.Join(
+			wal.settings.PathWAL,
+			fmt.Sprintf("%05d-%s", wal.id, fileSuffixName),
+		)
 		for {
-			fCount--
-			if fCount < 0 {
-				log.Debug("no more wal files to load")
-				break
-			}
 
 			filepath := names[fCount]
+			if filepath == currentLog {
+				fCount--
+				if fCount < 0 {
+					break
+				}
+				continue
+			}
 
 			log.Info(
 				"loading wal",
@@ -599,7 +586,7 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 				continue
 			}
 
-			for len(fileData) > offset {
+			for {
 				fileData = fileData[8:]
 				typeSize := fileData[:offset]
 				length := binary.BigEndian.Uint32(typeSize[1:])
@@ -674,7 +661,18 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 					zap.Int("data_lenght", len(fileData)),
 				)
 
+				if len(fileData) < offset {
+					break
+				}
+
 			}
+
+			fCount--
+			if fCount < 0 {
+				log.Debug("no more wal files to load")
+				break
+			}
+
 		}
 
 		return
@@ -709,26 +707,38 @@ func (wal *WAL) loadCheckpoint() (int64, map[string]int64, error) {
 
 func (wal *WAL) cleanup() {
 
-	timeout := time.Now().UTC().Add(-2 * time.Hour)
+	go func() {
+		ticker := time.NewTicker(wal.settings.cleanupInterval)
+		for {
+			select {
+			case <-ticker.C:
 
-	names, err := wal.listFiles()
-	if err != nil {
-		logger.Error("Error getting list of files", zap.Error(err))
-	}
+				timeout := time.Now().UTC().Add(-2 * time.Hour)
 
-	for _, f := range names {
+				names, err := wal.listFiles()
+				if err != nil {
+					logger.Error("Error getting list of files", zap.Error(err))
+				}
 
-		stat, err := os.Stat(f)
-		if err != nil {
-			logger.Sugar().Errorf("error to stat file %v: %v", f, err)
-		}
+				for _, f := range names {
 
-		if !stat.ModTime().UTC().After(timeout) {
-			logger.Sugar().Infof("removing write-ahead file %v", f)
-			err = os.Remove(f)
-			if err != nil {
-				logger.Sugar().Errorf("error to remove file %v: %v", f, err)
+					stat, err := os.Stat(f)
+					if err != nil {
+						logger.Sugar().Errorf("error to stat file %v: %v", f, err)
+					}
+
+					if !stat.ModTime().UTC().After(timeout) {
+						logger.Sugar().Infof("removing write-ahead file %v", f)
+						err = os.Remove(f)
+						if err != nil {
+							logger.Sugar().Errorf("error to remove file %v: %v", f, err)
+						}
+					}
+				}
+
 			}
 		}
-	}
+
+	}()
+
 }

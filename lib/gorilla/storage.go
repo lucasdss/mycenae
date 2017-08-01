@@ -145,9 +145,6 @@ func (s *Storage) Start() {
 				}
 				wg.Wait()
 
-				// write file
-				s.wal.Flush(u)
-
 				stpC <- struct{}{}
 				return
 
