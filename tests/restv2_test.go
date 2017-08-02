@@ -12,7 +12,7 @@ import (
 	"github.com/uol/mycenae/tests/tools"
 )
 
-var waitREST time.Duration = 3 * time.Second
+var waitREST = 3 * time.Second
 
 func assertElastic(t *testing.T, keyspace string, metric string, tags map[string]string, hashID string) {
 
@@ -91,13 +91,13 @@ func assertRESTError(t *testing.T, err tools.RestErrors, payload *tools.Payload,
 	if assert.Equal(t, 1, len(err.Errors)) {
 
 		if payload.Metric == "" {
-			assert.Nil(t, err.Errors[0].Datapoint.Metric)
+			assert.Empty(t, err.Errors[0].Datapoint.Metric)
 		} else {
-			assert.Equal(t, payload.Metric, *err.Errors[0].Datapoint.Metric)
+			assert.Equal(t, payload.Metric, err.Errors[0].Datapoint.Metric)
 		}
 
 		if payload.Value != nil {
-			assert.Equal(t, *payload.Value, *err.Errors[0].Datapoint.Value)
+			assert.Equal(t, *payload.Value, err.Errors[0].Datapoint.Value)
 		}
 
 		assert.Equal(t, len(payload.Tags), len(err.Errors[0].Datapoint.Tags))
@@ -705,7 +705,7 @@ func TestRESTv2PayloadWithInvalidCharsAtOnce(t *testing.T) {
 
 	for i, err := range restError.Errors {
 
-		assert.Equal(t, *payload[0].Value, *restError.Errors[i].Datapoint.Value)
+		assert.Equal(t, *payload[0].Value, restError.Errors[i].Datapoint.Value)
 		assert.Equal(t, len(payload[0].Tags), len(restError.Errors[i].Datapoint.Tags))
 		assert.Equal(t, payload[0].Tags["ksid"], restError.Errors[i].Datapoint.Tags["ksid"])
 		assert.Contains(t, err.Error, "Wrong Format: ")
@@ -1048,8 +1048,8 @@ func TestRESTv2EmptyPayload(t *testing.T) {
 	statusCode, resp := mycenaeTools.HTTP.POSTstring("api/put", payload)
 	assert.Equal(t, 400, statusCode)
 
-	expectedErr := tools.Error {
-		Error: "no points",
+	expectedErr := tools.Error{
+		Error:   "no points",
 		Message: "no points",
 	}
 

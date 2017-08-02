@@ -64,11 +64,11 @@ type PayloadSlice struct {
 }
 
 type MsgV2 struct {
-	Value     *float32          `json:"value,omitempty"`
-	Text      *string           `json:"text,omitempty"`
-	Metric    *string           `json:"metric,omitempty"`
+	Value     float32          `json:"value,omitempty"`
+	Text      string           `json:"text,omitempty"`
+	Metric    string           `json:"metric,omitempty"`
 	Tags      map[string]string `json:"tags,omitempty"`
-	Timestamp *int64            `json:"timestamp,omitempty"`
+	Timestamp int64            `json:"timestamp,omitempty"`
 }
 
 type RestErrors struct {
