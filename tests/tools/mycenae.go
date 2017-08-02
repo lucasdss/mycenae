@@ -12,12 +12,13 @@ type mycenaeTool struct {
 	client *httpTool
 }
 
-type KeyspaceReq struct {
-	Name              string `json:"name"`
-	Datacenter        string `json:"datacenter"`
-	ReplicationFactor int    `json:"replicationFactor"`
-	Contact           string `json:"contact"`
-	TTL               int    `json:"ttl"`
+type Keyspace struct {
+	Name               string `json:"name,omitempty"`
+	Datacenter         string `json:"datacenter,omitempty"`
+	ReplicationFactor  int    `json:"replicationFactor,omitempty"`
+	Contact            string `json:"contact,omitempty"`
+	TTL                int    `json:"ttl,omitempty"`
+	Keyspace           string
 }
 
 type KeyspaceResp struct {
@@ -121,6 +122,11 @@ type ResponseQuery struct {
 	Dps     map[string]interface{} `json:"dps"`
 }
 
+type ResponseMetricTags struct {
+	TotalRec int      `json:"totalRecords,omitempty"`
+	Payload  []string `json:"payload,omitempty"`
+}
+
 const MetricForm string = "testMetric-"
 const TagKeyForm string = "testTagKey-"
 const TagValueForm string = "testTagValue-"
@@ -135,7 +141,7 @@ func (m *mycenaeTool) Init(set MycenaeSettings) {
 
 func (m *mycenaeTool) CreateKeyspace(dc, name, contact string, ttl, repFactor int) string {
 
-	req := KeyspaceReq{
+	req := Keyspace{
 		Datacenter:        dc,
 		Name:              name,
 		Contact:           contact,

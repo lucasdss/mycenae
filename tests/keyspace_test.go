@@ -8,17 +8,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uol/mycenae/tests/tools"
 )
-
-type keyspace struct {
-	DC       *string `json:"datacenter,omitempty"`
-	Factor   *int    `json:"replicationFactor,omitempty"`
-	TTL      *int    `json:"ttl,omitempty"`
-	TUUID    *bool   `json:"tuuid,omitempty"`
-	Contact  *string `json:"contact,omitempty"`
-	name     string
-	keyspace string
-}
 
 type ks struct {
 	Name    string
@@ -49,21 +40,17 @@ type keyspaceResponse struct {
 	Ksid string
 }
 
-func getKeyspace() (string, string, keyspace) {
+func getKeyspace() (tools.Keyspace) {
 
-	var (
-		dc      = "datacenter1"
-		rf      = 1
-		ttl     = 90
-		tuuid   = false
-		id      = testUUID()
-		contact = fmt.Sprintf("test-%d@domain.com", time.Now().Unix())
-	)
-	data := keyspace{
-		&dc, &rf, &ttl, &tuuid, &contact, id, "",
+	data := tools.Keyspace{
+		Name: testUUID(),
+		Datacenter: "datacenter1",
+		ReplicationFactor: 1,
+		Contact: fmt.Sprintf("test-%d@domain.com", time.Now().Unix()),
+		TTL: 90,
 	}
 
-	return id, contact, data
+	return data
 }
 
 func testKeyspaceFail(data interface{}, name, test string, t *testing.T) {
@@ -86,13 +73,14 @@ func testKeyspaceFail(data interface{}, name, test string, t *testing.T) {
 	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces())
 }
 
-func testKeyspaceCreated(data *keyspace, t *testing.T) {
+func testKeyspaceCreated(data *tools.Keyspace, t *testing.T) {
 
 	body, err := json.Marshal(data)
 	assert.NoError(t, err, "Could not marshal value")
 
-	path := fmt.Sprintf("keyspaces/%s", data.name)
+	path := fmt.Sprintf("keyspaces/%s", data.Name)
 	code, content, err := mycenaeTools.HTTP.POST(path, body)
+
 	assert.NoError(t, err, "There was an error with request")
 	assert.Equal(t, 201, code, "The request did not return the expected http code")
 
@@ -100,10 +88,10 @@ func testKeyspaceCreated(data *keyspace, t *testing.T) {
 	err = json.Unmarshal(content, &ksr)
 	assert.NoError(t, err, "It was not possible to unmarshal the response for request")
 
-	data.keyspace = ksr.Ksid
-	assert.Contains(t, data.keyspace, "ts_", "We received a weird keyspace name for request")
-	assert.True(t, mycenaeTools.Cassandra.Keyspace.Exists(data.keyspace), fmt.Sprintf("Keyspace %v was not created", data.keyspace))
-	assert.True(t, mycenaeTools.Cassandra.Keyspace.ExistsInformation(data.keyspace, data.name, *data.Factor, *data.DC, *data.TTL, *data.TUUID, *data.Contact), "Keyspace information was not stored")
+	data.Keyspace = ksr.Ksid
+	assert.Contains(t, data.Keyspace, "ts_", "We received a weird keyspace name for request")
+	assert.True(t, mycenaeTools.Cassandra.Keyspace.Exists(data.Keyspace), fmt.Sprintf("Keyspace %v was not created", data.Keyspace))
+	assert.True(t, mycenaeTools.Cassandra.Keyspace.ExistsInformation(data.Keyspace, data.Name, data.ReplicationFactor, data.Datacenter, data.TTL, false, data.Contact), "Keyspace information was not stored")
 }
 
 func testCheckEdition(name, testName string, data2 interface{}, status int, t *testing.T) {
@@ -126,20 +114,20 @@ func testCheckEdition(name, testName string, data2 interface{}, status int, t *t
 	//assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces())
 }
 
-func checkTables(data keyspace, t *testing.T) {
+func checkTables(data tools.Keyspace, t *testing.T) {
 
-	esIndexResponse := mycenaeTools.ElasticSearch.Keyspace.GetIndex(data.keyspace)
-	tableProperties := mycenaeTools.Cassandra.Keyspace.TableProperties(data.keyspace, "timeseries")
+	esIndexResponse := mycenaeTools.ElasticSearch.Keyspace.GetIndex(data.Keyspace)
+	tableProperties := mycenaeTools.Cassandra.Keyspace.TableProperties(data.Keyspace, "timeseries")
 
 	for _, table := range ttlTables {
-		tableProperties = mycenaeTools.Cassandra.Keyspace.TableProperties(data.keyspace, table)
+		tableProperties = mycenaeTools.Cassandra.Keyspace.TableProperties(data.Keyspace, table)
 		assert.Exactly(t, 0.01, tableProperties.Bloom_filter_fp_chance, "Properties don't match")
 		assert.Exactly(t, caching, tableProperties.Caching, "Properties don't match")
 		assert.Exactly(t, "", tableProperties.Comment, "Properties don't match")
 		assert.Exactly(t, compaction, tableProperties.Compaction, "Properties don't match")
 		assert.Exactly(t, compression, tableProperties.Compression, "Properties don't match")
 		assert.Exactly(t, 0.0, tableProperties.Dclocal_read_repair_chance, "Properties don't match")
-		assert.Exactly(t, *data.TTL*86400, tableProperties.Default_time_to_live, "Properties don't match")
+		assert.Exactly(t, data.TTL*86400, tableProperties.Default_time_to_live, "Properties don't match")
 		assert.Exactly(t, 0, tableProperties.Gc_grace_seconds, "Properties don't match")
 		assert.Exactly(t, 2048, tableProperties.Max_index_interval, "Properties don't match")
 		assert.Exactly(t, 0, tableProperties.Memtable_flush_period_in_ms, "Properties don't match")
@@ -148,11 +136,11 @@ func checkTables(data keyspace, t *testing.T) {
 		assert.Exactly(t, "99PERCENTILE", tableProperties.Speculative_retry, "Properties don't match")
 	}
 
-	assert.Contains(t, data.keyspace, "ts_", "We received a weird keyspace name for request")
-	assert.True(t, mycenaeTools.Cassandra.Keyspace.Exists(data.keyspace), "Keyspace was not created")
-	assert.True(t, mycenaeTools.Cassandra.Keyspace.ExistsInformation(data.keyspace, data.name, *data.Factor, *data.DC, *data.TTL, *data.TUUID, *data.Contact), "Keyspace information was not stored")
+	assert.Contains(t, data.Keyspace, "ts_", "We received a weird keyspace name for request")
+	assert.True(t, mycenaeTools.Cassandra.Keyspace.Exists(data.Keyspace), "Keyspace was not created")
+	assert.True(t, mycenaeTools.Cassandra.Keyspace.ExistsInformation(data.Keyspace, data.Name, data.ReplicationFactor, data.Datacenter, data.TTL, false, data.Contact), "Keyspace information was not stored")
 
-	keyspaceCassandraTables := mycenaeTools.Cassandra.Keyspace.KeyspaceTables(data.keyspace)
+	keyspaceCassandraTables := mycenaeTools.Cassandra.Keyspace.KeyspaceTables(data.Keyspace)
 	sort.Strings(keyspaceCassandraTables)
 	sort.Strings(keyspaceTables)
 	assert.Equal(t, keyspaceTables, keyspaceCassandraTables, fmt.Sprintf("FOUND: %v, EXPECTED: %v", keyspaceCassandraTables, keyspaceCassandraTables))
@@ -250,8 +238,8 @@ func TestKeyspaceCreateNewTimeseriesNewSuccessRF1(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, _, data := getKeyspace()
-	*data.Factor = 1
+	data := getKeyspace()
+	data.ReplicationFactor = 1
 	testKeyspaceCreated(&data, t)
 	checkTables(data, t)
 }
@@ -261,8 +249,8 @@ func TestKeyspaceCreateNewTimeseriesNewSuccessRF2(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, _, data := getKeyspace()
-	*data.Factor = 2
+	data := getKeyspace()
+	data.ReplicationFactor = 2
 	testKeyspaceCreated(&data, t)
 	checkTables(data, t)
 }
@@ -272,8 +260,8 @@ func TestKeyspaceCreateNewTimeseriesNewSuccessRF3(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, _, data := getKeyspace()
-	*data.Factor = 3
+	data := getKeyspace()
+	data.ReplicationFactor = 3
 	testKeyspaceCreated(&data, t)
 	checkTables(data, t)
 }
@@ -283,14 +271,14 @@ func TestKeyspaceCreateNewTimeseriesNewErrorConflict(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, _, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	body, err := json.Marshal(data)
 	assert.NoError(t, err, "Could not marshal data")
 
 	// Attempt to create again to validate Conflict
-	path := fmt.Sprintf("keyspaces/%s", data.name)
+	path := fmt.Sprintf("keyspaces/%s", data.Name)
 	code, _, err := mycenaeTools.HTTP.POST(path, body)
 	if assert.NoError(t, err, "There was an error with request") {
 		assert.Equal(t, 409, code, "The request did not return the expected http code")
@@ -484,14 +472,14 @@ func TestKeyspaceEditTimeseriesNewNameSuccess(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	id, contact, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	data2 := ks{
-		"edit_" + id,
-		contact,
+		"edit_" + data.Name,
+		data.Contact,
 	}
-	testCheckEdition(data.keyspace, "", data2, 200, t)
+	testCheckEdition(data.Keyspace, "", data2, 200, t)
 }
 
 func TestKeyspaceEditTimeseriesNewContactSuccess(t *testing.T) {
@@ -499,14 +487,14 @@ func TestKeyspaceEditTimeseriesNewContactSuccess(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	id, _, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	data2 := ks{
-		id,
+		data.Name,
 		"test2edit@domain.com",
 	}
-	testCheckEdition(data.keyspace, "", data2, 200, t)
+	testCheckEdition(data.Keyspace, "", data2, 200, t)
 }
 
 func TestKeyspaceEdit2TimesTimeseriesNewSuccess(t *testing.T) {
@@ -514,20 +502,20 @@ func TestKeyspaceEdit2TimesTimeseriesNewSuccess(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, contact, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	data2 := ks{
 		"edit_" + testUUID(),
 		"test2edit@domain.com",
 	}
-	testCheckEdition(data.keyspace, "", data2, 200, t)
+	testCheckEdition(data.Keyspace, "", data2, 200, t)
 
 	data3 := ks{
 		"edit2_" + testUUID(),
-		contact,
+		data.Contact,
 	}
-	testCheckEdition(data.keyspace, "", data3, 200, t)
+	testCheckEdition(data.Keyspace, "", data3, 200, t)
 }
 
 func TestKeyspaceEditTimeseriesNewSuccessConcurrent(t *testing.T) {
@@ -535,17 +523,17 @@ func TestKeyspaceEditTimeseriesNewSuccessConcurrent(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, contact, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
-	path := fmt.Sprintf("keyspaces/%s", data.keyspace)
+	path := fmt.Sprintf("keyspaces/%s", data.Keyspace)
 	body, _ := json.Marshal(ks{
 		"edit1_" + testUUID(),
-		contact,
+		data.Contact,
 	})
 	body2, _ := json.Marshal(ks{
 		"edit2_" + testUUID(),
-		contact,
+		data.Contact,
 	})
 	count := 0
 
@@ -554,14 +542,14 @@ func TestKeyspaceEditTimeseriesNewSuccessConcurrent(t *testing.T) {
 
 	go func() {
 		code, _, err := mycenaeTools.HTTP.PUT(path, body)
-		assert.NoError(t, err, "There was an error with request to edit keyspace #%v", data.keyspace)
-		assert.Equal(t, 200, code, "The request to edit keyspace #%v did not return the expected http code", data.keyspace)
+		assert.NoError(t, err, "There was an error with request to edit keyspace #%v", data.Keyspace)
+		assert.Equal(t, 200, code, "The request to edit keyspace #%v did not return the expected http code", data.Keyspace)
 		count++
 	}()
 	go func() {
 		code, _, err := mycenaeTools.HTTP.PUT(path, body2)
-		assert.NoError(t, err, "There was an error with request to edit keyspace #%v", data.keyspace)
-		assert.Equal(t, 200, code, "The request to edit keyspace #%v did not return the expected http code", data.keyspace)
+		assert.NoError(t, err, "There was an error with request to edit keyspace #%v", data.Keyspace)
+		assert.Equal(t, 200, code, "The request to edit keyspace #%v did not return the expected http code", data.Keyspace)
 		count++
 	}()
 
@@ -577,17 +565,17 @@ func TestKeyspaceEditTimeseriesNewErrorConflictName(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, contact, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
-	id2, _, data2 := getKeyspace()
+	data2 := getKeyspace()
 	testKeyspaceCreated(&data2, t)
 
 	data3 := ks{
-		id2,
-		contact,
+		Name: data2.Name,
+		Contact: data2.Contact,
 	}
-	testCheckEdition(data.keyspace, "ConflictName", data3, 409, t)
+	testCheckEdition(data.Keyspace, "ConflictName", data3, 409, t)
 }
 
 func TestKeyspaceEditTimeseriesNewErrorDoesNotExists(t *testing.T) {
@@ -607,16 +595,16 @@ func TestKeyspaceEditTimeseriesNewErrorEmptyPayload(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, _, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	keyspaceBefore := mycenaeTools.Cassandra.Keyspace.CountKeyspaces()
 	keyspaceTsBefore := mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces()
 
-	path := fmt.Sprintf("keyspaces/%s", data.keyspace)
+	path := fmt.Sprintf("keyspaces/%s", data.Keyspace)
 	code, _, err := mycenaeTools.HTTP.PUT(path, nil)
-	assert.NoError(t, err, "There was an error with request to edit keyspace #%v", data.keyspace)
-	assert.Equal(t, 400, code, "The request to edit keyspace #%v did not return the expected http code", data.keyspace)
+	assert.NoError(t, err, "There was an error with request to edit keyspace #%v", data.Keyspace)
+	assert.Equal(t, 400, code, "The request to edit keyspace #%v did not return the expected http code", data.Keyspace)
 
 	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Keyspace.CountKeyspaces())
 	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Keyspace.CountTsKeyspaces())
@@ -627,7 +615,7 @@ func TestKeyspaceEditTimeseriesNewErrorInvalidPayload(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, contact, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	type ks struct {
@@ -637,9 +625,9 @@ func TestKeyspaceEditTimeseriesNewErrorInvalidPayload(t *testing.T) {
 
 	data2 := ks{
 		1,
-		contact,
+		data.Contact,
 	}
-	testCheckEdition(data.name, "InvalidPayload", data2, 400, t)
+	testCheckEdition(data.Name, "InvalidPayload", data2, 400, t)
 }
 
 func TestKeyspaceEditNewTimeseriesNewErrorInvalidContactAndName(t *testing.T) {
@@ -647,24 +635,24 @@ func TestKeyspaceEditNewTimeseriesNewErrorInvalidContactAndName(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	id, contact, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	cases := map[string]ks{
-		"EditInvalidContact1": {id, "test@test@test.com"},
-		"EditInvalidContact2": {id, "test@testcom"},
-		"EditInvalidContact3": {id, "testtest.com"},
-		"EditInvalidContact4": {id, "@test.com"},
-		"EditInvalidContact5": {id, "test@"},
-		"EditInvalidContact6": {id, "test@t est.com"},
-		"EditEmptyContact":    {id, ""},
+		"EditInvalidContact1": {data.Name, "test@test@test.com"},
+		"EditInvalidContact2": {data.Name, "test@testcom"},
+		"EditInvalidContact3": {data.Name, "testtest.com"},
+		"EditInvalidContact4": {data.Name, "@test.com"},
+		"EditInvalidContact5": {data.Name, "test@"},
+		"EditInvalidContact6": {data.Name, "test@t est.com"},
+		"EditEmptyContact":    {data.Name, ""},
 
-		"EditBadName":            {"test_*123", contact},
-		"EditBadNameStartsWith_": {"_test", contact},
+		"EditBadName":            {"test_*123", data.Contact},
+		"EditBadNameStartsWith_": {"_test", data.Contact},
 	}
 
 	for testName, data2 := range cases {
-		testCheckEdition(data.name, testName, data2, 400, t)
+		testCheckEdition(data.Name, testName, data2, 400, t)
 	}
 }
 
@@ -673,14 +661,14 @@ func TestKeyspaceEditNewTimeseriesNewErrorEmptyName(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	id, contact, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	data2 := ks{
 		"",
-		contact,
+		data.Contact,
 	}
-	testCheckEdition(id, "EmptyName", data2, 400, t)
+	testCheckEdition(data.Name, "EmptyName", data2, 400, t)
 }
 
 func TestKeyspaceEditNewTimeseriesNewErrorMissingField(t *testing.T) {
@@ -688,19 +676,19 @@ func TestKeyspaceEditNewTimeseriesNewErrorMissingField(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	id, contact, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	cases := map[string]struct {
 		Name    *string
 		Contact *string
 	}{
-		"NameNil":    {nil, &contact},
-		"ContactNil": {&id, nil},
+		"NameNil":    {nil, &data.Contact},
+		"ContactNil": {&data.Name, nil},
 	}
 
 	for test, data2 := range cases {
-		testCheckEdition(data.name, test, data2, 400, t)
+		testCheckEdition(data.Name, test, data2, 400, t)
 	}
 }
 
@@ -711,7 +699,7 @@ func TestKeyspaceListTimeseriesNew(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	_, _, data := getKeyspace()
+	data := getKeyspace()
 	testKeyspaceCreated(&data, t)
 
 	path := fmt.Sprintf("keyspaces")
