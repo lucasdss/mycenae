@@ -11,13 +11,6 @@ import (
 	"github.com/uol/mycenae/tests/tools"
 )
 
-type Point struct {
-	Value     float64           `json:"value"`
-	Metric    string            `json:"metric"`
-	Tags      map[string]string `json:"tags"`
-	Timestamp int64             `json:"timestamp"`
-}
-
 var ts10ID string
 
 var hashMapPV2 map[string]string
@@ -73,10 +66,10 @@ func tsPointsV2(keyspace string) {
 
 	for test, data := range cases {
 
-		Points := make([]Point, data.numTotal)
+		Points := make([]tools.Point, data.numTotal)
 
 		for i := 0; i < data.numTotal; i++ {
-			Points[i].Value = data.value
+			Points[i].Value = float32(data.value)
 			Points[i].Metric = data.metric
 			Points[i].Tags = map[string]string{
 				"ksid": keyspace,
@@ -112,10 +105,10 @@ func ts10(keyspace string) {
 	value := 0.0
 	value2 := 0.0
 	const numTotal int = 75
-	Points := [numTotal]Point{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
-		Points[i].Value = value
+		Points[i].Value = float32(value)
 		Points[i].Metric = metric
 		Points[i].Tags = map[string]string{
 			"ksid": keyspace,
@@ -124,7 +117,7 @@ func ts10(keyspace string) {
 		Points[i].Timestamp = int64(startTime)
 		i++
 
-		Points[i].Value = value2
+		Points[i].Value = float32(value2)
 		Points[i].Metric = metric
 		Points[i].Tags = map[string]string{
 			"ksid":  keyspace,
@@ -135,7 +128,7 @@ func ts10(keyspace string) {
 		i++
 		value2++
 
-		Points[i].Value = value2
+		Points[i].Value = float32(value2)
 		Points[i].Metric = metric
 		Points[i].Tags = map[string]string{
 			"ksid":  keyspace,

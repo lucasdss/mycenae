@@ -11,20 +11,6 @@ import (
 	"github.com/uol/mycenae/tests/tools"
 )
 
-type TextPoint struct {
-	Text      string            `json:"text"`
-	Metric    string            `json:"metric"`
-	Tags      map[string]string `json:"tags"`
-	Timestamp int64             `json:"timestamp"`
-}
-
-type NumericPoint struct {
-	Value     float64           `json:"value"`
-	Metric    string            `json:"metric"`
-	Tags      map[string]string `json:"tags"`
-	Timestamp int64             `json:"timestamp"`
-}
-
 var hashMapPV2T map[string]string
 
 func tsPointsV2Text(keyspace string) {
@@ -68,7 +54,7 @@ func tsPointsV2Text(keyspace string) {
 
 	for test, data := range cases {
 
-		Points := make([]TextPoint, data.numTotal)
+		Points := make([]tools.TextPoint, data.numTotal)
 
 		for i := 0; i < data.numTotal; i++ {
 			Points[i].Text = fmt.Sprintf("%v%.1f", data.value, data.count)
@@ -109,7 +95,7 @@ func tsText4(keyspace string) bool {
 	}
 
 	const numTotal int = 100
-	Points := [numTotal]TextPoint{}
+	Points := [numTotal]tools.TextPoint{}
 
 	for i := 0; i < numTotal; i++ {
 		Points[i].Text = value
@@ -152,8 +138,8 @@ func tsText6(keyspace string) bool {
 	value := "test"
 	count := 1.0
 	const numTotal int = 100
-	TextPoints := [numTotal]TextPoint{}
-	Points := [numTotal]NumericPoint{}
+	TextPoints := [numTotal]tools.TextPoint{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
 		TextPoints[i].Text = fmt.Sprintf("%v%.1f", value, count)
@@ -178,7 +164,7 @@ func tsText6(keyspace string) bool {
 	count = 1.0
 	startTime = 1448452800
 	for i := 0; i < numTotal; i++ {
-		Points[i].Value = count
+		Points[i].Value = float32(count)
 		Points[i].Metric = metric
 		Points[i].Tags = map[string]string{
 			"ksid": keyspace,
