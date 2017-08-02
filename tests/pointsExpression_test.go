@@ -15,13 +15,6 @@ import (
 	"github.com/uol/mycenae/tests/tools"
 )
 
-type PointTsdbExpression struct {
-	Value     float64           `json:"value"`
-	Metric    string            `json:"metric"`
-	Tags      map[string]string `json:"tags"`
-	Timestamp int64             `json:"timestamp"`
-}
-
 func sendPointsExpression(msg string, points interface{}) {
 
 	jsonPoints, err := json.Marshal(points)
@@ -48,10 +41,10 @@ func ts1TsdbExpression(startTime int) (string, string) {
 	ts01tsdbexpression := fmt.Sprintf("ts01tsdb.expression-%d-%d", rand.Int(), startTime)
 	value := 0.0
 	const numTotal int = 100
-	Points := [numTotal]PointTsdbExpression{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
-		Points[i].Value = value
+		Points[i].Value = float32(value)
 		Points[i].Metric = ts01tsdbexpression
 		Points[i].Tags = map[string]string{
 			"ksid": ksMycenae,
@@ -82,10 +75,10 @@ func ts1_1TsdbExpression(startTime int) (string, string, string) {
 	ts01_1tsdbexpression := fmt.Sprint("ts01_1tsdb.expression-", startTime)
 	value := 0.0
 	const numTotal int = 100
-	Points := [numTotal]PointTsdbExpression{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
-		Points[i].Value = value
+		Points[i].Value = float32(value)
 		Points[i].Metric = ts01_1tsdbexpression
 		Points[i].Tags = map[string]string{
 			"ksid": ksMycenae,
@@ -103,10 +96,10 @@ func ts1_1TsdbExpression(startTime int) (string, string, string) {
 	//startTime = 1448452800
 	dateStart = startTime
 	value = 0.0
-	Points = [numTotal]PointTsdbExpression{}
+	Points = [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
-		Points[i].Value = value
+		Points[i].Value = float32(value)
 		Points[i].Metric = ts01_1tsdbexpression
 		Points[i].Tags = map[string]string{
 			"ksid": ksMycenae,
@@ -134,10 +127,10 @@ func ts2TsdbExpression(startTime int) (string, string) {
 	value := 0.0
 	const numTotal int = 90
 	ts02tsdbexpression := fmt.Sprintf("ts02tsdb.expression-%d-%d", rand.Int(), startTime)
-	Points := [numTotal]PointTsdbExpression{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
-		Points[i].Value = value
+		Points[i].Value = float32(value)
 		Points[i].Metric = ts02tsdbexpression
 		Points[i].Tags = map[string]string{
 			"ksid": ksMycenae,
@@ -146,7 +139,7 @@ func ts2TsdbExpression(startTime int) (string, string) {
 		Points[i].Timestamp = int64(startTime)
 		startTime += 60
 		i++
-		Points[i].Value = value + 1.0
+		Points[i].Value = float32(value + 1.0)
 		Points[i].Metric = ts02tsdbexpression
 		Points[i].Tags = map[string]string{
 			"ksid": ksMycenae,
@@ -155,7 +148,7 @@ func ts2TsdbExpression(startTime int) (string, string) {
 		Points[i].Timestamp = int64(startTime)
 		i++
 		startTime += 60
-		Points[i].Value = value + 2.0
+		Points[i].Value = float32(value + 2.0)
 		Points[i].Metric = ts02tsdbexpression
 		Points[i].Tags = map[string]string{
 			"ksid": ksMycenae,
@@ -185,10 +178,10 @@ func ts3TsdbExpression(startTime int) (string, string) {
 	value := 0.0
 
 	const numTotal int = 480
-	Points := [numTotal]PointTsdbExpression{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
-		Points[i].Value = value
+		Points[i].Value = float32(value)
 		Points[i].Metric = ts03tsdbexpression
 		Points[i].Tags = map[string]string{
 			"ksid": ksMycenae,
@@ -218,10 +211,10 @@ func ts4TsdbExpression(startTime int) (string, string) {
 	value := 0.0
 
 	const numTotal int = 208
-	Points := [numTotal]PointTsdbExpression{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
-		Points[i].Value = value
+		Points[i].Value = float32(value)
 		Points[i].Metric = ts04tsdbexpression
 		Points[i].Tags = map[string]string{
 			"ksid": ksMycenae,

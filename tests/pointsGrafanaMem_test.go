@@ -13,45 +13,9 @@ import (
 	"github.com/uol/mycenae/tests/tools"
 )
 
-type PayloadTsdbQueryMemMeta struct {
-	info TsMetaInfoTsdbQueryMem
-}
-
-type basicResponseTsdbQueryMem struct {
-	TotalRecord int                      `json:"totalRecords"`
-	Payload     []TsMetaInfoTsdbQueryMem `json:"payload"`
-}
-
-type TsMetaInfoTsdbQueryMem struct {
-	TsID   string            `json:"id"`
-	Metric string            `json:"metric,omitempty"`
-	Tags   map[string]string `json:"tags,omitempty"`
-}
-
-type PointsTsdbQueryMem struct {
-	Data DataTsdbQueryMem `json:"points"`
-}
-
-type DataTsdbQueryMem struct {
-	Count int         `json:"count"`
-	Total int         `json:"total"`
-	Ts    [][]float32 `json:"ts"`
-}
-
-type PayloadPointsTsdbQueryMem struct {
-	ID map[string]PointsTsdbQueryMem `json:"payload"`
-}
-
-type PointTsdbQueryMem struct {
-	Value     float32           `json:"value"`
-	Metric    string            `json:"metric"`
-	Tags      map[string]string `json:"tags"`
-	Timestamp int64             `json:"timestamp"`
-}
-
 var ts10IDTsdbQueryMem, ts10_1IDTsdbQueryMem, ts12IDTsdbQueryMem, ts13IDTsdbQueryMem,
-ts13IDTsdbQueryMem2, ts13IDTsdbQueryMem3, ts13IDTsdbQueryMem4, ts13IDTsdbQueryMem5,
-ts13IDTsdbQueryMem6, ts13IDTsdbQueryMem7, ts13IDTsdbQueryMem8 string
+	ts13IDTsdbQueryMem2, ts13IDTsdbQueryMem3, ts13IDTsdbQueryMem4, ts13IDTsdbQueryMem5,
+	ts13IDTsdbQueryMem6, ts13IDTsdbQueryMem7, ts13IDTsdbQueryMem8 string
 
 var ts12TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime int64
 
@@ -111,7 +75,7 @@ func tsInsertMem(keyspace string) {
 
 	for test, data := range cases {
 
-		Points := make([]PointTsdbQueryMem, data.numTotal)
+		Points := make([]tools.Point, data.numTotal)
 
 		hashMapStartTime[test] = data.startTime
 
@@ -144,7 +108,7 @@ func ts10TsdbQueryMem(keyspace string) bool {
 	startTime := hashMapStartTime["ts1TsdbQueryMem"]
 	var value, value2 float32
 	const numTotal int = 75
-	Points := [numTotal]PointTsdbQueryMem{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
 		Points[i].Value = value
@@ -218,7 +182,7 @@ func ts12TsdbQueryMem(keyspace string) bool {
 	startTime := ts12TsdbQueryMemStartTime
 	var value float32 = 1.0
 	const numTotal int = 12
-	Points := [numTotal]PointTsdbQueryMem{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
 
@@ -303,7 +267,7 @@ func ts13TsdbQueryMem(keyspace string) bool {
 	var value float32 = 1.0
 
 	const numTotal int = 40
-	Points := [numTotal]PointTsdbQueryMem{}
+	Points := [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
 		Points[i].Value = value
@@ -353,7 +317,7 @@ func ts13TsdbQueryMem(keyspace string) bool {
 	startTime = ts13TsdbQueryMemStartTime
 	value = 1.0
 
-	Points = [numTotal]PointTsdbQueryMem{}
+	Points = [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
 		Points[i].Value = value * 3
@@ -401,7 +365,7 @@ func ts13TsdbQueryMem(keyspace string) bool {
 	startTime = ts13TsdbQueryMemStartTime
 	value = 1.0
 
-	Points = [numTotal]PointTsdbQueryMem{}
+	Points = [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
 		Points[i].Value = value * 5
@@ -450,7 +414,7 @@ func ts13TsdbQueryMem(keyspace string) bool {
 	//time.Sleep(2 * time.Second)
 	tagValue3 = "type4"
 	tagValue5 := "type5"
-	Points = [numTotal]PointTsdbQueryMem{}
+	Points = [numTotal]tools.Point{}
 
 	for i := 0; i < numTotal; i++ {
 		Points[i].Value = value * 7
@@ -508,7 +472,7 @@ func ts16TsdbQueryMem(keyspace string) {
 		go func(i int, startTime int64) {
 
 			start.Wait()
-			sendPointsGrafana("ts16TsdbQueryMem", []PointTsdbQueryMem{
+			sendPointsGrafana("ts16TsdbQueryMem", []tools.Point{
 				{
 					Value:  float32(i),
 					Metric: "ts16tsdbmem",
@@ -555,7 +519,7 @@ func ts17TsdbQueryMem(keyspace string) {
 	startTime := time.Now().Truncate(time.Hour).Unix()
 	hashMapStartTime["ts17TsdbQueryMem"] = startTime
 
-	sendPointsGrafana("ts17TsdbQueryMem", []PointTsdbQueryMem{
+	sendPointsGrafana("ts17TsdbQueryMem", []tools.Point{
 		{
 			Value:  float32(0),
 			Metric: "ts17tsdbmem",
@@ -592,7 +556,7 @@ func ts17bTsdbQueryMem(keyspace string) {
 
 	startTime := hashMapStartTime["ts17TsdbQueryMem"] + 7200
 
-	sendPointsGrafana("ts17bTsdbQueryMem", []PointTsdbQueryMem{
+	sendPointsGrafana("ts17bTsdbQueryMem", []tools.Point{
 		{
 			Value:  float32(3),
 			Metric: "ts17tsdbmem",
@@ -998,9 +962,9 @@ func TestTsdbQueryMemFilterDownsampleCountSec(t *testing.T) {
         		"groupBy": false
 	      	}]
 	    }]
-	}`, hashMapStartTime["ts2TsdbQueryMem"], hashMapStartTime["ts2TsdbQueryMem"] + 5400)
+	}`, hashMapStartTime["ts2TsdbQueryMem"], hashMapStartTime["ts2TsdbQueryMem"]+5400)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -1494,7 +1458,7 @@ func TestTsdbQueryMemFilterRegexpValidChars(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt((ts12TsdbQueryMemStartTime + 240), 10) + `,
+		"end": ` + strconv.FormatInt((ts12TsdbQueryMemStartTime+240), 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -1527,7 +1491,7 @@ func TestTsdbQueryMemFilterWildcardValidChars(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt((ts12TsdbQueryMemStartTime + 240), 10) + `,
+		"end": ` + strconv.FormatInt((ts12TsdbQueryMemStartTime+240), 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -1559,7 +1523,7 @@ func TestTsdbQueryMemFilterLiteralOrValidChars(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt((ts12TsdbQueryMemStartTime + 240), 10) + `,
+		"end": ` + strconv.FormatInt((ts12TsdbQueryMemStartTime+240), 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -1591,7 +1555,7 @@ func TestTsdbQueryMemFilterNotLiteralOrValidChars(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime + 240, 10) + `,
+		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime+240, 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -1658,7 +1622,7 @@ func TestTsdbQueryMemFilterRateTrueRateOptionsTrueCounter(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt((ts12TsdbQueryMemStartTime + 240), 10) + `,
+		"end": ` + strconv.FormatInt((ts12TsdbQueryMemStartTime+240), 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -1696,7 +1660,7 @@ func TestTsdbQueryMemFilterRateTrueRateOptionsTrueCounterMax(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime + 300, 10) + `,
+		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime+300, 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -1746,7 +1710,7 @@ func TestTsdbQueryMemFilterRateTrueRateOptionsTrueResetValue(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime + 300, 10) + `,
+		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime+300, 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -1794,7 +1758,7 @@ func TestTsdbQueryMemFilterRateTrueRateOptionsTrueCounterMaxAndResetValue(t *tes
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime + 720, 10) + `,
+		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime+720, 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -1881,7 +1845,7 @@ func TestTsdbQueryMemFilterRateTrueNoPoints(t *testing.T) {
 	    }]
 	}`, hashMapStartTime["ts1TsdbQueryMem"])
 
-	code, response, _ := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, _ := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	assert.Equal(t, 200, code)
 	assert.Equal(t, "[]", string(response))
@@ -2117,7 +2081,7 @@ func TestTsdbQueryMemMergeDateLimit(t *testing.T) {
 
 	for _, key := range keys {
 
-		assert.Exactly(t, i + i, float32(payloadPoints[0].Dps[key].(float64)))
+		assert.Exactly(t, i+i, float32(payloadPoints[0].Dps[key].(float64)))
 		i++
 
 		assert.Exactly(t, strconv.FormatInt(dateStart, 10), key)
@@ -2178,7 +2142,7 @@ func TestTsdbQueryMemMergePtsSameDate(t *testing.T) {
 
 	for _, key := range keys {
 
-		assert.Exactly(t, i * 2, float32(payloadPoints[0].Dps[key].(float64)))
+		assert.Exactly(t, i*2, float32(payloadPoints[0].Dps[key].(float64)))
 		i++
 
 		assert.Exactly(t, strconv.FormatInt(dateStart, 10), key)
@@ -2252,7 +2216,7 @@ func TestTsdbQueryMemMergeMax(t *testing.T) {
     	}]
 	}`, hashMapStartTime["ts7TsdbQueryMem"])
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -2380,7 +2344,7 @@ func TestTsdbQueryMemMergeSumDownAvgMinute(t *testing.T) {
 
 	for _, key := range keys {
 
-		sum := ((i + i + 1 + i + 2) / 3 + (j + j + 5 + j + 10) / 3)
+		sum := ((i+i+1+i+2)/3 + (j+j+5+j+10)/3)
 		assert.Exactly(t, sum, float32(payloadPoints[0].Dps[key].(float64)))
 		i += 3
 		j += 15
@@ -2428,7 +2392,7 @@ func TestTsdbQueryMemMergeTimeDiff(t *testing.T) {
     		"metric": "ts01_2tsdbmem",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts1_2TsdbQueryMem"] - 30, hashMapStartTime["ts1_2TsdbQueryMem"] + 6000 - 30)
+	}`, hashMapStartTime["ts1_2TsdbQueryMem"]-30, hashMapStartTime["ts1_2TsdbQueryMem"]+6000-30)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts01_2tsdbmem", 1, 200, 0, 1, 2, hashMapMem["ts1_2TsdbQueryMem"], hashMapMem["ts1_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -2463,7 +2427,7 @@ func TestTsdbQueryMemMergeTimeDiffDownsampleExactBeginAndEnd(t *testing.T) {
     		"downsample": "3m-min",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts1_2TsdbQueryMem"] - 30, hashMapStartTime["ts1_2TsdbQueryMem"] + 6000)
+	}`, hashMapStartTime["ts1_2TsdbQueryMem"]-30, hashMapStartTime["ts1_2TsdbQueryMem"]+6000)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts01_2tsdbmem", 1, 34, 0, 1, 2, hashMapMem["ts1_2TsdbQueryMem"], hashMapMem["ts1_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -2472,7 +2436,7 @@ func TestTsdbQueryMemMergeTimeDiffDownsampleExactBeginAndEnd(t *testing.T) {
 	dateStart := hashMapStartTime["ts1_2TsdbQueryMem"] - 30
 	for _, key := range keys {
 
-		assert.Exactly(t, i + i, float32(payloadPoints[0].Dps[key].(float64)))
+		assert.Exactly(t, i+i, float32(payloadPoints[0].Dps[key].(float64)))
 		i += 3
 
 		assert.Exactly(t, strconv.FormatInt(dateStart, 10), key)
@@ -2490,7 +2454,7 @@ func TestTsdbQueryMemNullValuesDownsample(t *testing.T) {
     		"downsample": "3m-sum",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts09tsdbmem", 1, 10, 1, 0, 1)
 	assert.Equal(t, hashMapMem["ts9TsdbQueryMem"], payloadPoints[0].Tsuuids[0])
@@ -2530,7 +2494,7 @@ func TestTsdbQueryMemNullValuesDownsampleNone(t *testing.T) {
     		"downsample": "3m-sum-none",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts09tsdbmem", 1, 10, 1, 0, 1)
 	assert.Equal(t, hashMapMem["ts9TsdbQueryMem"], payloadPoints[0].Tsuuids[0])
@@ -2570,7 +2534,7 @@ func TestTsdbQueryMemNullValuesDownsampleNull(t *testing.T) {
     		"downsample": "3m-sum-null",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts09tsdbmem", 1, 30, 1, 0, 1)
 	assert.Equal(t, hashMapMem["ts9TsdbQueryMem"], payloadPoints[0].Tsuuids[0])
@@ -2608,9 +2572,9 @@ func TestTsdbQueryMemNullValuesDownsampleNan(t *testing.T) {
     		"downsample": "3m-sum-nan",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"]+5350)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -2675,9 +2639,9 @@ func TestTsdbQueryMemNullValuesDownsampleZero(t *testing.T) {
     		"downsample": "3m-sum-zero",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9TsdbQueryMem"], hashMapStartTime["ts9TsdbQueryMem"]+5350)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -2741,7 +2705,7 @@ func TestTsdbQueryMemNullValueMerge(t *testing.T) {
     		"metric": "ts07_1tsdbmem",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_1tsdbmem", 1, 90, 0, 1, 2, hashMapMem["ts7_1TsdbQueryMem"], hashMapMem["ts7_1TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -2776,7 +2740,7 @@ func TestTsdbQueryMemBothValuesNullMerge(t *testing.T) {
     		"metric": "ts09_1tsdbmem",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts09_1tsdbmem", 1, 30, 0, 1, 2, hashMapMem["ts9_1TsdbQueryMem2"], hashMapMem["ts9_1TsdbQueryMem4"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -2819,7 +2783,7 @@ func TestTsdbQueryMemBothValuesNullMergeAndDownsample(t *testing.T) {
     		"downsample": "3m-max",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts09_1tsdbmem", 1, 10, 0, 1, 2, hashMapMem["ts9_1TsdbQueryMem2"], hashMapMem["ts9_1TsdbQueryMem4"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -2862,7 +2826,7 @@ func TestTsdbQueryMemBothValuesNullMergeAndDownsampleNone(t *testing.T) {
     		"downsample": "3m-max-none",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts09_1tsdbmem", 1, 10, 0, 1, 2, hashMapMem["ts9_1TsdbQueryMem2"], hashMapMem["ts9_1TsdbQueryMem4"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -2905,9 +2869,9 @@ func TestTsdbQueryMemBothValuesNullMergeAndDownsampleNull(t *testing.T) {
     		"downsample": "3m-max-null",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -2981,9 +2945,9 @@ func TestTsdbQueryMemBothValuesNullMergeAndDownsampleNan(t *testing.T) {
     		"downsample": "3m-max-nan",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -3057,7 +3021,7 @@ func TestTsdbQueryMemBothValuesNullMergeAndDownsampleZero(t *testing.T) {
     		"downsample": "3m-max-zero",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts09_1tsdbmem", 1, 30, 0, 1, 2, hashMapMem["ts9_1TsdbQueryMem2"], hashMapMem["ts9_1TsdbQueryMem4"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3094,7 +3058,7 @@ func TestTsdbQueryMemNullValueMergeAndDownsample(t *testing.T) {
     		"downsample": "3m-sum",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_1tsdbmem", 1, 30, 0, 1, 2, hashMapMem["ts7_1TsdbQueryMem"], hashMapMem["ts7_1TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3131,7 +3095,7 @@ func TestTsdbQueryMemNullValueMergeAndDownsampleNone(t *testing.T) {
     		"downsample": "3m-sum-none",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_1tsdbmem", 1, 30, 0, 1, 2, hashMapMem["ts7_1TsdbQueryMem"], hashMapMem["ts7_1TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3168,7 +3132,7 @@ func TestTsdbQueryMemNullValueMergeAndDownsampleNull(t *testing.T) {
     		"downsample": "3m-sum-null",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_1tsdbmem", 1, 30, 0, 1, 2, hashMapMem["ts7_1TsdbQueryMem"], hashMapMem["ts7_1TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3205,7 +3169,7 @@ func TestTsdbQueryMemNullValueMergeAndDownsampleNan(t *testing.T) {
     		"downsample": "3m-sum-nan",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_1tsdbmem", 1, 30, 0, 1, 2, hashMapMem["ts7_1TsdbQueryMem"], hashMapMem["ts7_1TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3242,7 +3206,7 @@ func TestTsdbQueryMemNullValueMergeAndDownsampleZero(t *testing.T) {
     		"downsample": "3m-sum-zero",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_1tsdbmem", 1, 30, 0, 1, 2, hashMapMem["ts7_1TsdbQueryMem"], hashMapMem["ts7_1TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3283,7 +3247,7 @@ func TestTsdbQueryMemTwoTSMerge(t *testing.T) {
     		"downsample": "3m-sum",
     		"aggregator": "avg"
     	}]
-	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_1TsdbQueryMem"], hashMapStartTime["ts7_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_1tsdbmem", 2, 30, 0, 1, 2, hashMapMem["ts7_1TsdbQueryMem"], hashMapMem["ts7_1TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3643,7 +3607,7 @@ func TestTsdbQueryMemFilterValuesGreaterThan(t *testing.T) {
     		"filterValue": "> 49",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts1_2TsdbQueryMem"] - 30)
+	}`, hashMapStartTime["ts1_2TsdbQueryMem"]-30)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts01_2tsdbmem", 1, 100, 0, 1, 2, hashMapMem["ts1_2TsdbQueryMem"], hashMapMem["ts1_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3677,7 +3641,7 @@ func TestTsdbQueryMemFilterValuesGreaterThanEqualTo(t *testing.T) {
     		"filterValue": "> = 49",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts1_2TsdbQueryMem"] - 30)
+	}`, hashMapStartTime["ts1_2TsdbQueryMem"]-30)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts01_2tsdbmem", 1, 102, 0, 1, 2, hashMapMem["ts1_2TsdbQueryMem"], hashMapMem["ts1_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3711,7 +3675,7 @@ func TestTsdbQueryMemFilterValuesLessThan(t *testing.T) {
     		"filterValue": "<50",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts1_2TsdbQueryMem"] - 30)
+	}`, hashMapStartTime["ts1_2TsdbQueryMem"]-30)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts01_2tsdbmem", 1, 100, 0, 1, 2, hashMapMem["ts1_2TsdbQueryMem"], hashMapMem["ts1_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3745,7 +3709,7 @@ func TestTsdbQueryMemFilterValuesLessThanEqualTo(t *testing.T) {
     		"filterValue": "<=50",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts1_2TsdbQueryMem"] - 30)
+	}`, hashMapStartTime["ts1_2TsdbQueryMem"]-30)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts01_2tsdbmem", 1, 102, 0, 1, 2, hashMapMem["ts1_2TsdbQueryMem"], hashMapMem["ts1_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3779,7 +3743,7 @@ func TestTsdbQueryMemFilterValuesEqualTo(t *testing.T) {
     		"filterValue": "==50",
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts1_2TsdbQueryMem"] - 30)
+	}`, hashMapStartTime["ts1_2TsdbQueryMem"]-30)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts01_2tsdbmem", 1, 2, 0, 1, 2, hashMapMem["ts1_2TsdbQueryMem"], hashMapMem["ts1_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3887,10 +3851,10 @@ func TestTsdbQueryMemRateTrueDownsampleAndMergeRateOptionsFalse(t *testing.T) {
 	for _, key := range keys {
 
 		// Rate: (v2 - v1) / (t2 - t1)
-		calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 +
-			((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) -
-			((i + i + 1 + i + 2) / 3 +
-				(j + j + 5 + j + 10) / 3)) /
+		calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 +
+			((j+15)+(j+15)+5+(j+15)+10)/3) -
+			((i+i+1+i+2)/3 +
+				(j+j+5+j+10)/3)) /
 			(float32((dateStart + 180) - dateStart))
 		assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 		i += 3
@@ -3917,7 +3881,7 @@ func TestTsdbQueryMemRateFillNone(t *testing.T) {
 			},
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts09_1tsdbmem", 1, 9, 0, 1, 2, hashMapMem["ts9_1TsdbQueryMem2"], hashMapMem["ts9_1TsdbQueryMem4"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3929,7 +3893,7 @@ func TestTsdbQueryMemRateFillNone(t *testing.T) {
 		if i < 12 || i > 15 {
 			//sum := i + 2 + j + 2
 			//assert.Exactly(t, sum, float32(payloadPoints[0].Dps[key].(float64)))
-			calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / (float32((dateStart + 180) - dateStart)))
+			calc := (((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / (float32((dateStart + 180) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 			assert.Exactly(t, strconv.FormatInt(dateStart, 10), key)
@@ -3940,7 +3904,7 @@ func TestTsdbQueryMemRateFillNone(t *testing.T) {
 			j = 75
 			//sum := i + 2 + j + 2
 			//assert.Exactly(t, sum, float32(payloadPoints[0].Dps[key].(float64)))
-			calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / (float32((dateStart + 180) - dateStart)))
+			calc := (((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / (float32((dateStart + 180) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 			dateStart = hashMapStartTime["ts9_1TsdbQueryMem"] + (60 * 75)
@@ -3968,7 +3932,7 @@ func TestTsdbQueryMemRateFillZero(t *testing.T) {
 			},
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts09_1tsdbmem", 1, 29, 0, 1, 2, hashMapMem["ts9_1TsdbQueryMem2"], hashMapMem["ts9_1TsdbQueryMem4"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -3983,15 +3947,15 @@ func TestTsdbQueryMemRateFillZero(t *testing.T) {
 	for _, key := range keys {
 
 		if i < 12 || i >= 75 {
-			calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / (float32((dateStart + 180) - dateStart)))
+			calc := (((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / (float32((dateStart + 180) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 		} else if i == 12 {
-			calc := ((0 - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / (float32((dateStart + 180) - dateStart)))
+			calc := ((0 - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / (float32((dateStart + 180) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 		} else if i == 72 {
-			calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - 0) / (float32((dateStart + 180) - dateStart)))
+			calc := (((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - 0) / (float32((dateStart + 180) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 		} else {
@@ -4020,9 +3984,9 @@ func TestTsdbQueryMemRateFillNull(t *testing.T) {
 			},
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -4074,7 +4038,7 @@ func TestTsdbQueryMemRateFillNull(t *testing.T) {
 	for _, key := range keys {
 
 		if i < 12 || i >= 75 {
-			calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / (float32((dateStart + 180) - dateStart)))
+			calc := (((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / (float32((dateStart + 180) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 		} else {
@@ -4103,9 +4067,9 @@ func TestTsdbQueryMemRateFillNan(t *testing.T) {
 			},
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts9_1TsdbQueryMem"], hashMapStartTime["ts9_1TsdbQueryMem"]+5350)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -4157,7 +4121,7 @@ func TestTsdbQueryMemRateFillNan(t *testing.T) {
 	for _, key := range keys {
 
 		if i < 12 || i >= 75 {
-			calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 3) + (j + 3) + 1 + (j + 3) + 2) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 1 + j + 2) / 3)) / (float32((dateStart + 180) - dateStart)))
+			calc := (((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+3)+(j+3)+1+(j+3)+2)/3) - ((i+i+1+i+2)/3 + (j+j+1+j+2)/3)) / (float32((dateStart + 180) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 		} else {
@@ -4188,7 +4152,7 @@ func TestTsdbQueryMemOrderDownsampleMergeRateAndFilterValues(t *testing.T) {
     		"aggregator": "sum",
     		"order":["filterValue","downsample","aggregation","rate"]
     	}]
-	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_2tsdbmem", 1, 29, 0, 1, 2, hashMapMem["ts7_2TsdbQueryMem"], hashMapMem["ts7_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -4212,11 +4176,11 @@ func TestTsdbQueryMemOrderDownsampleMergeRateAndFilterValues(t *testing.T) {
 			point++
 			//second point
 		} else if point == 2 {
-			calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - ((j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart)))
+			calc := (((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+15)+(j+15)+5+(j+15)+10)/3) - ((j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 			point++
 		} else {
-			calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart)))
+			calc := (((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+15)+(j+15)+5+(j+15)+10)/3) - ((i+i+1+i+2)/3 + (j+j+5+j+10)/3)) / (float32((dateStart + 180) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 		}
@@ -4245,7 +4209,7 @@ func TestTsdbQueryMemOrderDownsampleRateAndMerge(t *testing.T) {
     		"aggregator": "sum",
     		"order":["downsample","rate","aggregation"]
     	}]
-	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_2tsdbmem", 1, 29, 0, 1, 2, hashMapMem["ts7_2TsdbQueryMem"], hashMapMem["ts7_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -4260,8 +4224,8 @@ func TestTsdbQueryMemOrderDownsampleRateAndMerge(t *testing.T) {
 		// Rate: (v2 - v1) / (t2 - t1)
 		// Downsample: 3min
 		// DefaultOrder:	Downsample - Rate - Merge
-		calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3) - (i + i + 1 + i + 2) / 3) / (float32((dateStart + 180) - dateStart))) +
-			(((((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - (j + j + 5 + j + 10) / 3) / (float32((dateStart + 180) - dateStart)))
+		calc := (((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3) - (i+i+1+i+2)/3) / (float32((dateStart + 180) - dateStart))) +
+			(((((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - (j+j+5+j+10)/3) / (float32((dateStart + 180) - dateStart)))
 		assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 		i += 3
 		j += 15
@@ -4288,7 +4252,7 @@ func TestTsdbQueryMemOrderMergeDownsampleAndRate(t *testing.T) {
     		"aggregator": "sum",
     		"order":["aggregation","downsample","rate"]
     	}]
-	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_2tsdbmem", 1, 29, 0, 1, 2, hashMapMem["ts7_2TsdbQueryMem"], hashMapMem["ts7_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -4303,7 +4267,7 @@ func TestTsdbQueryMemOrderMergeDownsampleAndRate(t *testing.T) {
 		// Rate: (v2 - v1) / (t2 - t1)
 		// Downsample: 3min
 		// DefaultOrder: Merge - Downsample - Rate
-		calc := ((((i + 3 + j + 15) + (i + 3 + 1 + j + 15 + 5) + (i + 3 + 2 + j + 15 + 10)) / 6 - ((i + j) + (i + 1 + j + 5) + (i + 2 + j + 10)) / 6) / (float32((dateStart + 180) - dateStart)))
+		calc := ((((i+3+j+15)+(i+3+1+j+15+5)+(i+3+2+j+15+10))/6 - ((i+j)+(i+1+j+5)+(i+2+j+10))/6) / (float32((dateStart + 180) - dateStart)))
 		assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 		i += 3
 		j += 15
@@ -4330,7 +4294,7 @@ func TestTsdbQueryMemOrderMergeRateAndDownsample(t *testing.T) {
     		"aggregator": "sum",
     		"order":["aggregation","rate","downsample"]
     	}]
-	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_2tsdbmem", 1, 30, 0, 1, 2, hashMapMem["ts7_2TsdbQueryMem"], hashMapMem["ts7_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -4367,7 +4331,7 @@ func TestTsdbQueryMemOrderMergeRateAndDownsample(t *testing.T) {
 				(((i + 2) - (j + 5)) / 59) +
 				(((j + 10) - (i + 2)) / 1) +
 				(((i + 3) - (j + 10)) / 59) +
-				((j + 15) - (i + 3) / 1)) / 6
+				((j + 15) - (i+3)/1)) / 6
 
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 			i += 3
@@ -4560,7 +4524,7 @@ func TestTsdbQueryMemDefaultOrder(t *testing.T) {
 			},
     		"aggregator": "sum"
     	}]
-	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_2tsdbmem", 1, 29, 0, 1, 2, hashMapMem["ts7_2TsdbQueryMem"], hashMapMem["ts7_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -4584,11 +4548,11 @@ func TestTsdbQueryMemDefaultOrder(t *testing.T) {
 			point++
 			//second point
 		} else if point == 2 {
-			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - ((j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart))
+			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+15)+(j+15)+5+(j+15)+10)/3) - ((j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 			point++
 		} else {
-			calc := ((((i + 3) + (i + 3) + 1 + (i + 3) + 2) / 3 + ((j + 15) + (j + 15) + 5 + (j + 15) + 10) / 3) - ((i + i + 1 + i + 2) / 3 + (j + j + 5 + j + 10) / 3)) / (float32((dateStart + 180) - dateStart))
+			calc := ((((i+3)+(i+3)+1+(i+3)+2)/3 + ((j+15)+(j+15)+5+(j+15)+10)/3) - ((i+i+1+i+2)/3 + (j+j+5+j+10)/3)) / (float32((dateStart + 180) - dateStart))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 		}
@@ -4617,7 +4581,7 @@ func TestTsdbQueryMemOrderFunctionNotUsed(t *testing.T) {
     		"aggregator": "sum",
     		"order":["aggregation","rate","filterValue","downsample"]
     	}]
-	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"] + 5350)
+	}`, hashMapStartTime["ts7_2TsdbQueryMem"], hashMapStartTime["ts7_2TsdbQueryMem"]+5350)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts07_2tsdbmem", 1, 30, 0, 1, 2, hashMapMem["ts7_2TsdbQueryMem"], hashMapMem["ts7_2TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -4654,7 +4618,7 @@ func TestTsdbQueryMemOrderFunctionNotUsed(t *testing.T) {
 				(((i + 2) - (j + 5)) / 59) +
 				(((j + 10) - (i + 2)) / 1) +
 				(((i + 3) - (j + 10)) / 59) +
-				((j + 15) - (i + 3) / 1)) / 6
+				((j + 15) - (i+3)/1)) / 6
 
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 			i += 3
@@ -4678,7 +4642,7 @@ func TestTsdbQueryMemConcurrentPoints(t *testing.T) {
     		"metric": "ts16tsdbmem",
     		"aggregator": "sum"
     	}]
-	}`, dateStart, dateStart + 1560)
+	}`, dateStart, dateStart+1560)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts16tsdbmem", 1, 27, 1, 0, 1, hashMapMem["ts16TsdbQueryMem"])
 
@@ -4702,7 +4666,7 @@ func TestTsdbQueryMemGetBeforePosting(t *testing.T) {
     		"metric": "ts17tsdbmem",
     		"aggregator": "sum"
     	}]
-	}`, dateStart, dateStart + 7320)
+	}`, dateStart, dateStart+7320)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts17tsdbmem", 1, 3, 1, 0, 1, hashMapMem["ts17TsdbQueryMem"])
 
@@ -4732,7 +4696,7 @@ func TestTsdbQueryMemRateTrueRateOptionsTrueCounter(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime + 240, 10) + `,
+		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime+240, 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -4767,7 +4731,7 @@ func TestTsdbQueryMemRateTrueRateOptionsTrueCounterMax(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime + 300, 10) + `,
+		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime+300, 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -4790,7 +4754,7 @@ func TestTsdbQueryMemRateTrueRateOptionsTrueCounterMax(t *testing.T) {
 	var countermax float32 = 15000.0
 	for _, key := range keys {
 
-		if dateStart < ts12TsdbQueryMemStartTime + (60 * 4) {
+		if dateStart < ts12TsdbQueryMemStartTime+(60*4) {
 
 			calc := ((i * 10.0) - i) / (float32(dateStart + 60 - dateStart))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
@@ -4813,7 +4777,7 @@ func TestTsdbQueryMemRateTrueRateOptionsTrueResetValue(t *testing.T) {
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime + 300, 10) + `,
+		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime+300, 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -4835,7 +4799,7 @@ func TestTsdbQueryMemRateTrueRateOptionsTrueResetValue(t *testing.T) {
 	dateStart := ts12TsdbQueryMemStartTime
 	for _, key := range keys {
 
-		if dateStart < ts12TsdbQueryMemStartTime + (60 * 4) {
+		if dateStart < ts12TsdbQueryMemStartTime+(60*4) {
 
 			calc := (((i * 10.0) - i) / (float32((dateStart + 60) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
@@ -4858,7 +4822,7 @@ func TestTsdbQueryMemRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testing.T
 
 	payload := `{
 		"start": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime, 10) + `,
-		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime + 660, 10) + `,
+		"end": ` + strconv.FormatInt(ts12TsdbQueryMemStartTime+660, 10) + `,
 		"showTSUIDs": true,
 		"queries": [{
     		"metric": "ts12-_/.%&#;tsdb",
@@ -4882,7 +4846,7 @@ func TestTsdbQueryMemRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testing.T
 	var countermax float32 = 15000.0
 	for _, key := range keys {
 
-		if dateStart < ts12TsdbQueryMemStartTime + (60 * 4) {
+		if dateStart < ts12TsdbQueryMemStartTime+(60*4) {
 
 			calc := (((i * 10.0) - i) / (float32((dateStart + 60) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
@@ -4891,14 +4855,14 @@ func TestTsdbQueryMemRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testing.T
 			assert.Exactly(t, strconv.FormatInt(dateStart, 10), key)
 
 			i = i * 10.0
-		} else if dateStart < ts12TsdbQueryMemStartTime + (60 * 5) {
+		} else if dateStart < ts12TsdbQueryMemStartTime+(60*5) {
 			calc := ((countermax - i + 1000) / (float32((dateStart + 60) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
 			dateStart += 60
 			assert.Exactly(t, strconv.FormatInt(dateStart, 10), key)
 
-		} else if dateStart < ts12TsdbQueryMemStartTime + (60 * 6) {
+		} else if dateStart < ts12TsdbQueryMemStartTime+(60*6) {
 			var calc float32
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
@@ -4906,7 +4870,7 @@ func TestTsdbQueryMemRateTrueRateOptionsTrueCounterMaxAndResetValue(t *testing.T
 			assert.Exactly(t, strconv.FormatInt(dateStart, 10), key)
 			i = 1.0
 
-		} else if dateStart < ts12TsdbQueryMemStartTime + (60 * 10) {
+		} else if dateStart < ts12TsdbQueryMemStartTime+(60*10) {
 			calc := (((i * 10.0) - i) / (float32((dateStart + 60) - dateStart)))
 			assert.Exactly(t, calc, float32(payloadPoints[0].Dps[key].(float64)))
 
@@ -4938,9 +4902,9 @@ func TestTsdbQueryMemRateTrueNoPoints(t *testing.T) {
       			"host": "test"
 			}
 		}]
-	}`, hashMapStartTime["ts1TsdbQueryMem"] - 2, hashMapStartTime["ts1TsdbQueryMem"] - 1)
+	}`, hashMapStartTime["ts1TsdbQueryMem"]-2, hashMapStartTime["ts1TsdbQueryMem"]-1)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -4967,9 +4931,9 @@ func TestTsdbQueryMemFilterGroupByWildcard(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5136,9 +5100,9 @@ func TestTsdbQueryMemFilterGroupByWildcardPartialName(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5305,7 +5269,7 @@ func TestTsdbQueryMemFilterGroupByWildcardTagWithDot(t *testing.T) {
         		"groupBy": false
 	      	}]
 	    }]
-	}`, hashMapStartTime["ts1_3TsdbQueryMem"] - 30)
+	}`, hashMapStartTime["ts1_3TsdbQueryMem"]-30)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts01_3tsdbmem", 1, 34, 0, 1, 2, hashMapMem["ts1_3TsdbQueryMem"], hashMapMem["ts1_3TsdbQueryMem2"])
 	assert.Equal(t, "host", payloadPoints[0].AggTags[0])
@@ -5314,7 +5278,7 @@ func TestTsdbQueryMemFilterGroupByWildcardTagWithDot(t *testing.T) {
 	dateStart := hashMapStartTime["ts1_3TsdbQueryMem"] - 30 - 20
 	for _, key := range keys {
 
-		assert.Exactly(t, i + i, float32(payloadPoints[0].Dps[key].(float64)))
+		assert.Exactly(t, i+i, float32(payloadPoints[0].Dps[key].(float64)))
 		i += 3
 
 		assert.Exactly(t, strconv.FormatInt(dateStart, 10), key)
@@ -5339,7 +5303,7 @@ func TestTsdbQueryMemFilterGroupByWildcardTagWithDotPartialName(t *testing.T) {
         		"groupBy": false
 	      	}]
 	    }]
-	}`, hashMapStartTime["ts1_3TsdbQueryMem"] - 30)
+	}`, hashMapStartTime["ts1_3TsdbQueryMem"]-30)
 
 	keys, payloadPoints := postAPIQueryAndCheckMem(t, payload, "ts01_3tsdbmem", 1, 34, 1, 0, 1, hashMapMem["ts1_3TsdbQueryMem2"])
 	assert.Equal(t, "test.2", payloadPoints[0].Tags["host"])
@@ -5375,7 +5339,7 @@ func TestTsdbQueryMemFilterGroupByWildcardTagWithoutDot(t *testing.T) {
 	    }]
 	}`, hashMapStartTime["ts1_2TsdbQueryMem"])
 
-	code, response, _ := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, _ := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	assert.Equal(t, 200, code)
 	assert.Equal(t, "[]", string(response))
@@ -5398,9 +5362,9 @@ func TestTsdbQueryMemFilterGroupByLiteralOr(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5522,9 +5486,9 @@ func TestTsdbQueryMemFilterGroupByNotLiteralOr(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5594,9 +5558,9 @@ func TestTsdbQueryMemFilterGroupByRegexp(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5755,9 +5719,9 @@ func TestTsdbQueryMemFilterGroupByRegexpNumbers(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -5916,9 +5880,9 @@ func TestTsdbQueryMemFilterGroupByILiteralOr(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6082,9 +6046,9 @@ func TestTsdbQueryMemFilterGroupByAllEspecificTag(t *testing.T) {
         		"groupBy": false
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6231,9 +6195,9 @@ func TestTsdbQueryMemFilterGroupByIsntTheFirstFilter(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6380,9 +6344,9 @@ func TestTsdbQueryMemFilterGroupByLiteralOrEspecificTag(t *testing.T) {
         		"groupBy": false
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6496,9 +6460,9 @@ func TestTsdbQueryMemFilterGroupByWildcardTwoTags(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6715,9 +6679,9 @@ func TestTsdbQueryMemFilterGroupByWildcardTwoTagsFiltersOutOfOrder1(t *testing.T
         		"groupBy": false
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -6867,9 +6831,9 @@ func TestTsdbQueryMemFilterGroupByWildcardTwoTagsFiltersOutOfOrder2(t *testing.T
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7020,9 +6984,9 @@ func TestTsdbQueryMemFilterGroupByWildcardTwoTagsFiltersOutOfOrder3(t *testing.T
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7168,9 +7132,9 @@ func TestTsdbQueryMemFilterGroupBySameTagk(t *testing.T) {
         		"groupBy": true
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7247,9 +7211,9 @@ func TestTsdbQueryMemFilterSameTagkOnGroupByAndTags(t *testing.T) {
         		"groupBy": false
 	      	}]
 	    }]
-	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime + 1140)
+	}`, ts13TsdbQueryMemStartTime, ts13TsdbQueryMemStartTime+1140)
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7322,7 +7286,7 @@ func TestTsdbQueryMemFilterGroupByNoPoints(t *testing.T) {
 	      	}]
 	    }]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7356,7 +7320,7 @@ func TestTsdbQueryMemFilterGroupByTagNotFound(t *testing.T) {
 	      	}]
 	    }]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7393,7 +7357,7 @@ func TestTsdbQueryMemTagsInvalidTagKey(t *testing.T) {
 			}
 		}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -7428,7 +7392,7 @@ func TestTsdbQueryMemTagsInvalidTagValue(t *testing.T) {
 			}
 		}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -7463,7 +7427,7 @@ func TestTsdbQueryMemTagsInvalidMetric(t *testing.T) {
 			}
 		}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -7496,7 +7460,7 @@ func TestTsdbQueryMemInvalidOrderOperation(t *testing.T) {
     		"order":["downsample","aggregation","rate","test"]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7533,7 +7497,7 @@ func TestTsdbQueryMemInvalidOrderDownsampleMissing(t *testing.T) {
     		"order":["aggregation","rate"]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7570,7 +7534,7 @@ func TestTsdbQueryMemInvalidOrderMergeMissing(t *testing.T) {
     		"order":["downsample","rate"]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7607,7 +7571,7 @@ func TestTsdbQueryMemInvalidOrderRateMissing(t *testing.T) {
     		"order":["downsample","aggregation"]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7641,7 +7605,7 @@ func TestTsdbQueryMemInvalidOrderFilterValueMissing(t *testing.T) {
     		"order":["downsample","aggregation"]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7678,7 +7642,7 @@ func TestTsdbQueryMemInvalidOrderDuplicatedDownsample(t *testing.T) {
     		"order":["aggregation","downsample","downsample","rate"]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7716,7 +7680,7 @@ func TestTsdbQueryMemInvalidOrderDuplicatedFilterValue(t *testing.T) {
     		"order":["aggregation","downsample","filterValue","filterValue","rate"]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7753,7 +7717,7 @@ func TestTsdbQueryMemInvalidOrderDuplicatedMerge(t *testing.T) {
     		"order":["aggregation","aggregation","downsample","rate"]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7790,7 +7754,7 @@ func TestTsdbQueryMemInvalidOrderDuplicatedRate(t *testing.T) {
     		"order":["downsample","aggregation","rate","rate"]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7827,7 +7791,7 @@ func TestTsdbQueryMemEmptyOrderOption(t *testing.T) {
     		"order":[""]
     	}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -7864,7 +7828,7 @@ func TestTsdbQueryMemInvalidRate(t *testing.T) {
 			}
 		}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -7899,7 +7863,7 @@ func TestTsdbQueryMemInvalidRateOptionCounter(t *testing.T) {
 			}
 		}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -7934,7 +7898,7 @@ func TestTsdbQueryMemInvalidRateOptionCounterMax(t *testing.T) {
 			}
 		}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -7969,7 +7933,7 @@ func TestTsdbQueryMemInvalidRateOptionCounterMaxNegative(t *testing.T) {
 			}
 		}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -8004,7 +7968,7 @@ func TestTsdbQueryMemInvalidRateOptionResetValue(t *testing.T) {
 			}
 		}]
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -8038,7 +8002,7 @@ func TestTsdbQueryMemInvalidFilterWildcard2(t *testing.T) {
 	    }]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -8072,7 +8036,7 @@ func TestTsdbQueryMemInvalidFilterLiteralOr1(t *testing.T) {
 	    }]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 
@@ -8106,7 +8070,7 @@ func TestTsdbQueryMemInvalidFilterNotLiteralOr1(t *testing.T) {
 	    }]
 	}`
 
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/api/query", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/api/query", []byte(payload))
 
 	payloadError := tools.Error{}
 

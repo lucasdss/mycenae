@@ -64,11 +64,11 @@ type PayloadSlice struct {
 }
 
 type MsgV2 struct {
-	Value     float32          `json:"value,omitempty"`
-	Text      string           `json:"text,omitempty"`
-	Metric    string           `json:"metric,omitempty"`
+	Value     float32           `json:"value,omitempty"`
+	Text      string            `json:"text,omitempty"`
+	Metric    string            `json:"metric,omitempty"`
 	Tags      map[string]string `json:"tags,omitempty"`
-	Timestamp int64            `json:"timestamp,omitempty"`
+	Timestamp int64             `json:"timestamp,omitempty"`
 }
 
 type RestErrors struct {
@@ -86,6 +86,20 @@ type Error struct {
 	Error   string `json:"error,omitempty"`
 	Message string `json:"message,omitempty"`
 	//RequestID string `json:"requestID,omitempty"`
+}
+
+type Point struct {
+	Value     float32           `json:"value"`
+	Metric    string            `json:"metric"`
+	Tags      map[string]string `json:"tags"`
+	Timestamp int64             `json:"timestamp"`
+}
+
+type TextPoint struct {
+	Text      string            `json:"text"`
+	Metric    string            `json:"metric"`
+	Tags      map[string]string `json:"tags"`
+	Timestamp int64             `json:"timestamp"`
 }
 
 type ResponseMeta struct {
