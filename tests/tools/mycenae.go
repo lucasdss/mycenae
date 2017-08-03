@@ -13,16 +13,22 @@ type mycenaeTool struct {
 }
 
 type Keyspace struct {
-	Name               string `json:"name,omitempty"`
-	Datacenter         string `json:"datacenter,omitempty"`
-	ReplicationFactor  int    `json:"replicationFactor,omitempty"`
-	Contact            string `json:"contact,omitempty"`
-	TTL                int    `json:"ttl,omitempty"`
-	Keyspace           string
+	ID                string `json:"key,omitempty"`
+	Name              string `json:"name,omitempty"`
+	Datacenter        string `json:"datacenter,omitempty"`
+	ReplicationFactor int    `json:"replicationFactor,omitempty"`
+	Contact           string `json:"contact,omitempty"`
+	TTL               int    `json:"ttl,omitempty"`
+	TUUID             bool   `json:"tuuid,omitempty"`
 }
 
 type KeyspaceResp struct {
 	KSID string `json:"ksid"`
+}
+
+type KeyspaceEdit struct {
+	Name    string
+	Contact string
 }
 
 type MycenaePoints struct {

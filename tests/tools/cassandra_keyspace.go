@@ -74,6 +74,28 @@ func (ks *keyspaceCassandra) CountTsKeyspaces() (count int) {
 	return
 }
 
+func (ks *keyspaceCassandra) CountKeyspacesNoWarning() (int) {
+	var count1, count2 int
+	if err := ks.session.Query(`SELECT count(*) FROM system_schema.keyspaces WHERE token(keyspace_name) < 0;`).Scan(&count1); err != nil {
+		log.Println(err)
+	}
+	if err := ks.session.Query(`SELECT count(*) FROM system_schema.keyspaces WHERE token(keyspace_name) >= 0;`).Scan(&count2); err != nil {
+		log.Println(err)
+	}
+	return count1 + count2
+}
+
+func (ks *keyspaceCassandra) CountTsKeyspacesNoWarning() (int) {
+	var count1, count2 int
+	if err := ks.session.Query(`SELECT count(*) FROM mycenae.ts_keyspace WHERE token(key) < 0;`).Scan(&count1); err != nil {
+		log.Println(err)
+	}
+	if err := ks.session.Query(`SELECT count(*) FROM mycenae.ts_keyspace WHERE token(key) >= 0;`).Scan(&count2); err != nil {
+		log.Println(err)
+	}
+	return count1 + count2
+}
+
 func (ks *keyspaceCassandra) KeyspaceTables(keyspace string) (tables []string) {
 	iter := ks.session.Query(
 		cqlKeyspaceTables,
