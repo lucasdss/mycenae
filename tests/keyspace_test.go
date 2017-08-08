@@ -19,6 +19,7 @@ var errKsDCNil = "Datacenter can not be empty or nil"
 var errKsDC = "Cannot create because datacenter \"dc_error\" not exists"
 var errKsContact = "Contact field should be a valid email address"
 var errKsTTL = "TTL can not be less or equal to zero"
+var errKsTTLMax = "Max TTL allowed is 90"
 
 func getKeyspace() tools.Keyspace {
 
@@ -68,7 +69,7 @@ func testKeyspaceCreation(data *tools.Keyspace, t *testing.T) {
 	assert.True(t, mycenaeTools.Cassandra.Timeseries.ExistsInformation(data.ID, data.Name, data.ReplicationFactor, data.Datacenter, data.TTL, false, data.Contact), "Keyspace information was not stored")
 }
 
-func testKeyspaceCreationFail(data []byte, keyName string, response tools.Error, t *testing.T) {
+func testKeyspaceCreationFail(data []byte, keyName string, response tools.Error, test string, t *testing.T) {
 
 	path := fmt.Sprintf("keyspaces/%s", keyName)
 	code, resp, err := mycenaeTools.HTTP.POST(path, data)
@@ -84,9 +85,9 @@ func testKeyspaceCreationFail(data []byte, keyName string, response tools.Error,
 		t.SkipNow()
 	}
 
-	assert.Equal(t, 400, code)
-	assert.Equal(t, response, respErr)
-	assert.Equal(t, 0, mycenaeTools.Cassandra.Timeseries.CountTsKeyspaceByName(keyName))
+	assert.Equal(t, 400, code, test)
+	assert.Equal(t, response, respErr, test)
+	assert.Equal(t, 0, mycenaeTools.Cassandra.Timeseries.CountTsKeyspaceByName(keyName), test)
 }
 
 func testKeyspaceEdition(id string, data tools.KeyspaceEdit, t *testing.T) {
@@ -141,7 +142,7 @@ func testKeyspaceEditionConcurrently(id string, data1 tools.KeyspaceEdit, data2 
 	wg.Done()
 }
 
-func testKeyspaceEditionFail(id string, data []byte, status int, response tools.Error, t *testing.T) {
+func testKeyspaceEditionFail(id string, data []byte, status int, response tools.Error, test string, t *testing.T) {
 
 	ksBefore := mycenaeTools.Cassandra.Timeseries.KsAttributes(id)
 
@@ -161,9 +162,9 @@ func testKeyspaceEditionFail(id string, data []byte, status int, response tools.
 
 	ksAfter := mycenaeTools.Cassandra.Timeseries.KsAttributes(id)
 
-	assert.Equal(t, status, code)
-	assert.Equal(t, response, respErr)
-	assert.True(t, ksBefore == ksAfter)
+	assert.Equal(t, status, code, test)
+	assert.Equal(t, response, respErr, test)
+	assert.True(t, ksBefore == ksAfter, test)
 }
 
 func checkTables(data tools.Keyspace, t *testing.T) {
@@ -220,43 +221,143 @@ func checkTables(data tools.Keyspace, t *testing.T) {
 
 // CREATE
 
-func TestKeyspaceCreateFail(t *testing.T) {
+func TestKeyspaceCreateFailDCError(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
 	var (
-		dc      = "datacenter1"
 		rf      = 1
 		ttl     = 90
 		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
 	)
 
-	cases := map[tools.Error]tools.Keyspace{
-		{Error: errKsDCNil, Message: errKsDCNil}:     {ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: getRandName()},
-		{Error: errKsRF, Message: errKsRF}:           {Datacenter: dc, TTL: ttl, Contact: contact, Name: getRandName()},
-		{Error: errKsTTL, Message: errKsTTL}:         {Datacenter: dc, ReplicationFactor: rf, Contact: contact, Name: getRandName()},
-		{Error: errKsContact, Message: errKsContact}: {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Name: getRandName()},
-		{Error: errKsName, Message: errKsName}:       {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: "test_*123"},
-		{Error: errKsName, Message: errKsName}:       {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: "_test123"},
-		{Error: errKsRF, Message: errKsRF}:           {Datacenter: dc, ReplicationFactor: 4, TTL: ttl, Contact: contact, Name: getRandName()},
-		{Error: errKsRF, Message: errKsRF}:           {Datacenter: dc, ReplicationFactor: -1, TTL: ttl, Contact: contact, Name: getRandName()},
-		{Error: errKsRF, Message: errKsRF}:           {Datacenter: dc, ReplicationFactor: 0, TTL: ttl, Contact: contact, Name: getRandName()},
-		{Error: errKsDCNil, Message: errKsDCNil}:     {Datacenter: "", ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: getRandName()},
-		{Error: errKsDC, Message: errKsDC}:           {Datacenter: "dc_error", ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: getRandName()},
-		{Error: errKsTTL, Message: errKsTTL}:         {Datacenter: dc, ReplicationFactor: rf, TTL: 91, Contact: contact, Name: getRandName()},
-		{Error: errKsTTL, Message: errKsTTL}:         {Datacenter: dc, ReplicationFactor: rf, TTL: -10, Contact: contact, Name: getRandName()},
-		{Error: errKsTTL, Message: errKsTTL}:         {Datacenter: dc, ReplicationFactor: rf, TTL: 0, Contact: contact, Name: getRandName()},
-		{Error: errKsContact, Message: errKsContact}: {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@test@test.com", Name: getRandName()},
-		{Error: errKsContact, Message: errKsContact}: {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@testcom", Name: getRandName()},
-		{Error: errKsContact, Message: errKsContact}: {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "testtest.com", Name: getRandName()},
-		{Error: errKsContact, Message: errKsContact}: {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "@test.com", Name: getRandName()},
-		{Error: errKsContact, Message: errKsContact}: {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@", Name: getRandName()},
-		{Error: errKsContact, Message: errKsContact}: {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@t est.com", Name: getRandName()},
+	cases := map[string]tools.Keyspace{
+		"DCNil":      {Datacenter: "", ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: getRandName()},
+		"EmptyDC":    {ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: getRandName()},
+		"DCNotExist": {Datacenter: "dc_error", ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: getRandName()},
 	}
 
-	for err, ks := range cases {
-		testKeyspaceCreationFail(ks.Marshal(), ks.Name, err, t)
+	errNil := tools.Error{Error: errKsDCNil, Message: errKsDCNil}
+	errNotExist := tools.Error{Error: errKsDC, Message: errKsDC}
+
+	for test, ks := range cases {
+
+		if test == "DCNotExist" {
+
+			testKeyspaceCreationFail(ks.Marshal(), ks.Name, errNotExist, test, t)
+		} else {
+
+			testKeyspaceCreationFail(ks.Marshal(), ks.Name, errNil, test, t)
+		}
+	}
+}
+
+func TestKeyspaceCreateFailNameError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	var (
+		rf      = 1
+		ttl     = 90
+		dc      = "datacenter1"
+		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
+	)
+
+	cases := map[string]tools.Keyspace{
+		"BadName*": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: "test_*123"},
+		"_BadName": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: contact, Name: "_test123"},
+	}
+
+	err := tools.Error{Error: errKsName, Message: errKsName}
+
+	for test, ks := range cases {
+		testKeyspaceCreationFail(ks.Marshal(), ks.Name, err, test, t)
+	}
+}
+
+func TestKeyspaceCreateFailRFError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	var (
+		ttl     = 90
+		dc      = "datacenter1"
+		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
+	)
+
+	cases := map[string]tools.Keyspace{
+		"RF0":        {Datacenter: dc, ReplicationFactor: 0, TTL: ttl, Contact: contact, Name: getRandName()},
+		"RF4":        {Datacenter: dc, ReplicationFactor: 4, TTL: ttl, Contact: contact, Name: getRandName()},
+		"RFNil":      {Datacenter: dc, TTL: ttl, Contact: contact, Name: getRandName()},
+		"NegativeRF": {Datacenter: dc, ReplicationFactor: -1, TTL: ttl, Contact: contact, Name: getRandName()},
+	}
+
+	err := tools.Error{Error: errKsRF, Message: errKsRF}
+
+	for test, ks := range cases {
+		testKeyspaceCreationFail(ks.Marshal(), ks.Name, err, test, t)
+	}
+}
+
+func TestKeyspaceCreateFailTTLError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	var (
+		rf      = 1
+		dc      = "datacenter1"
+		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
+	)
+
+	cases := map[string]tools.Keyspace{
+		"TTL0":         {Datacenter: dc, ReplicationFactor: rf, TTL: 0, Contact: contact, Name: getRandName()},
+		"TTLNil":         {Datacenter: dc, ReplicationFactor: rf, Contact: contact, Name: getRandName()},
+		"TTLAboveMax":         {Datacenter: dc, ReplicationFactor: rf, TTL: 91, Contact: contact, Name: getRandName()},
+		"NegativeTTL":         {Datacenter: dc, ReplicationFactor: rf, TTL: -10, Contact: contact, Name: getRandName()},
+	}
+
+	errTTL := tools.Error{Error: errKsTTL, Message: errKsTTL}
+	errTTLMax := tools.Error{Error: errKsTTLMax, Message: errKsTTLMax}
+
+	for test, ks := range cases {
+
+		if test == "TTLAboveMax" {
+			testKeyspaceCreationFail(ks.Marshal(), ks.Name, errTTLMax, test, t)
+		} else {
+			testKeyspaceCreationFail(ks.Marshal(), ks.Name, errTTL, test, t)
+		}
+	}
+}
+
+func TestKeyspaceCreateFailContactError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	var (
+		rf      = 1
+		ttl     = 90
+		dc      = "datacenter1"
+	)
+
+	cases := map[string]tools.Keyspace{
+		"ContactNil": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Name: getRandName()},
+		"InvalidContact1": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@test@test.com", Name: getRandName()},
+		"InvalidContact2": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@testcom", Name: getRandName()},
+		"InvalidContact3": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "testtest.com", Name: getRandName()},
+		"InvalidContact4": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "@test.com", Name: getRandName()},
+		"InvalidContact5": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@", Name: getRandName()},
+		"InvalidContact6": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@t est.com", Name: getRandName()},
+	}
+
+	err := tools.Error{Error: errKsContact, Message: errKsContact}
+
+	for test, ks := range cases {
+		testKeyspaceCreationFail(ks.Marshal(), ks.Name, err, test, t)
 	}
 }
 
@@ -348,7 +449,7 @@ func TestKeyspaceCreateInvalidRFString(t *testing.T) {
 		Message: "Wrong JSON format",
 	}
 
-	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, t)
+	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, "", t)
 }
 
 func TestKeyspaceCreateInvalidRFFloat(t *testing.T) {
@@ -370,7 +471,7 @@ func TestKeyspaceCreateInvalidRFFloat(t *testing.T) {
 		Message: "Wrong JSON format",
 	}
 
-	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, t)
+	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, "", t)
 }
 
 func TestKeyspaceCreateInvalidTTLString(t *testing.T) {
@@ -391,7 +492,7 @@ func TestKeyspaceCreateInvalidTTLString(t *testing.T) {
 		Message: "Wrong JSON format",
 	}
 
-	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, t)
+	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, "", t)
 }
 
 func TestKeyspaceCreateInvalidTTLFloat(t *testing.T) {
@@ -413,7 +514,7 @@ func TestKeyspaceCreateInvalidTTLFloat(t *testing.T) {
 		Message: "Wrong JSON format",
 	}
 
-	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, t)
+	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, "", t)
 }
 
 func TestKeyspaceCreateNilPayload(t *testing.T) {
@@ -426,7 +527,7 @@ func TestKeyspaceCreateNilPayload(t *testing.T) {
 		Message: "Wrong JSON format",
 	}
 
-	testKeyspaceCreationFail(nil, getRandName(), respErr, t)
+	testKeyspaceCreationFail(nil, getRandName(), respErr, "", t)
 }
 
 func TestKeyspaceCreateInvalidPayload(t *testing.T) {
@@ -446,7 +547,7 @@ func TestKeyspaceCreateInvalidPayload(t *testing.T) {
 		Message: "Wrong JSON format",
 	}
 
-	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, t)
+	testKeyspaceCreationFail([]byte(data), getRandName(), respErr, "", t)
 }
 
 // EDIT
@@ -550,7 +651,7 @@ func TestKeyspaceEditConflictName(t *testing.T) {
 		Message: "Cannot update because keyspace \"" + data.Name + "\" already exists",
 	}
 
-	testKeyspaceEditionFail(data2.ID, dataEdit.Marshal(), 409, respErr, t)
+	testKeyspaceEditionFail(data2.ID, dataEdit.Marshal(), 409, respErr, "", t)
 }
 
 func TestKeyspaceEditNotExist(t *testing.T) {
@@ -584,16 +685,9 @@ func TestKeyspaceEditEmptyPayload(t *testing.T) {
 	data := getKeyspace()
 	testKeyspaceCreation(&data, t)
 
-	keyspaceBefore := mycenaeTools.Cassandra.Timeseries.CountKeyspacesNoCassWarning()
-	keyspaceTsBefore := mycenaeTools.Cassandra.Timeseries.CountTsKeyspacesNoCassWarning()
+	err := tools.Error{Error:"EOF", Message:"Wrong JSON format"}
 
-	path := fmt.Sprintf("keyspaces/%s", data.ID)
-	code, _, err := mycenaeTools.HTTP.PUT(path, nil)
-	assert.NoError(t, err, "There was an error with request to edit keyspace #%v", data.ID)
-	assert.Equal(t, 400, code, "The request to edit keyspace #%v did not return the expected http code", data.ID)
-
-	assert.Equal(t, keyspaceBefore, mycenaeTools.Cassandra.Timeseries.CountKeyspacesNoCassWarning())
-	assert.Equal(t, keyspaceTsBefore, mycenaeTools.Cassandra.Timeseries.CountTsKeyspacesNoCassWarning())
+	testKeyspaceEditionFail(data.ID, nil, 400, err, "", t)
 }
 
 func TestKeyspaceEditInvalidNameType(t *testing.T) {
@@ -611,10 +705,10 @@ func TestKeyspaceEditInvalidNameType(t *testing.T) {
 		Message: "Wrong JSON format",
 	}
 
-	testKeyspaceEditionFail(data.ID, []byte(data2), 400, respErr, t)
+	testKeyspaceEditionFail(data.ID, []byte(data2), 400, respErr, "", t)
 }
 
-func TestKeyspaceEditInvalidContactOrName(t *testing.T) {
+func TestKeyspaceEditInvalidContact(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -622,24 +716,25 @@ func TestKeyspaceEditInvalidContactOrName(t *testing.T) {
 	data := getKeyspace()
 	testKeyspaceCreation(&data, t)
 
-	cases := map[tools.Error]tools.KeyspaceEdit{
-		{Error: errKsContact, Message: errKsContact}: {Name: data.Name, Contact: "test@test@test.com"},
-		{Error: errKsContact, Message: errKsContact}: {Name: data.Name, Contact: "test@testcom"},
-		{Error: errKsContact, Message: errKsContact}: {Name: data.Name, Contact: "testtest.com"},
-		{Error: errKsContact, Message: errKsContact}: {Name: data.Name, Contact: "@test.com"},
-		{Error: errKsContact, Message: errKsContact}: {Name: data.Name, Contact: "test@"},
-		{Error: errKsContact, Message: errKsContact}: {Name: data.Name, Contact: "test@t est.com"},
-		{Error: errKsContact, Message: errKsContact}: {Name: data.Name, Contact: ""},
-		{Error: errKsName, Message: errKsName}:       {Name: "test_*123", Contact: data.Contact},
-		{Error: errKsName, Message: errKsName}:       {Name: "_test", Contact: data.Contact},
+	cases := map[string]tools.KeyspaceEdit{
+		"InvalidContact1": {Name: data.Name, Contact: "test@test@test.com"},
+		"InvalidContact2": {Name: data.Name, Contact: "test@testcom"},
+		"InvalidContact3": {Name: data.Name, Contact: "testtest.com"},
+		"InvalidContact4": {Name: data.Name, Contact: "@test.com"},
+		"InvalidContact5": {Name: data.Name, Contact: "test@"},
+		"InvalidContact6": {Name: data.Name, Contact: "test@t est.com"},
+		"InvalidContact7": {Name: data.Name, Contact: ""},
+		"InvalidContact8": {Name: data.Name},
 	}
 
-	for err, data2 := range cases {
-		testKeyspaceEditionFail(data.ID, data2.Marshal(), 400, err, t)
+	err := tools.Error{Error: errKsContact, Message: errKsContact}
+
+	for test, data2 := range cases {
+		testKeyspaceEditionFail(data.ID, data2.Marshal(), 400, err, test, t)
 	}
 }
 
-func TestKeyspaceEditMissingField(t *testing.T) {
+func TestKeyspaceEditInvalidName(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -647,15 +742,18 @@ func TestKeyspaceEditMissingField(t *testing.T) {
 	data := getKeyspace()
 	testKeyspaceCreation(&data, t)
 
-	cases := map[tools.Error]string{
-		{Error: errKsName, Message: errKsName}:       `{"contact":"` + fmt.Sprintf("test-%d@domain.com", time.Now().Unix()) + `"}`,
-		{Error: errKsName, Message: errKsName}:       `{"name":"", "contact":"` + fmt.Sprintf("test-%d@domain.com", time.Now().Unix()) + `"}`,
-		{Error: errKsContact, Message: errKsContact}: `{"name":"` + getRandName() + `"}`,
-		{Error: errKsContact, Message: errKsContact}: `{"name":"` + getRandName() + `", "contact":""}`,
+	cases := map[string]tools.KeyspaceEdit{
+		"InvalidName1":       {Name: "test_*123", Contact: data.Contact},
+		"InvalidName2":       {Name: "_test", Contact: data.Contact},
+		"InvalidName3":       {Name: "", Contact: data.Contact},
+		"InvalidName4":       {Contact: data.Contact},
+
 	}
 
-	for err, dataEdit := range cases {
-		testKeyspaceEditionFail(data.ID, []byte(dataEdit), 400, err, t)
+	err := tools.Error{Error: errKsName, Message: errKsName}
+
+	for test, data2 := range cases {
+		testKeyspaceEditionFail(data.ID, data2.Marshal(), 400, err, test, t)
 	}
 }
 
