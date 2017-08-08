@@ -243,7 +243,7 @@ func TestPointsV2TextLimitTrue(t *testing.T) {
 		count++
 
 		assert.Exactly(t, dateStart, value[0])
-		dateStart = dateStart + time.Minute.Seconds() * 1000
+		dateStart = dateStart + time.Minute.Seconds()*1000
 	}
 }
 
@@ -268,7 +268,7 @@ func TestPointsV2TextLimitFalse(t *testing.T) {
 		count++
 
 		assert.Exactly(t, dateStart, value[0])
-		dateStart = dateStart + time.Minute.Seconds() * 1000
+		dateStart = dateStart + time.Minute.Seconds()*1000
 	}
 }
 
@@ -290,7 +290,7 @@ func TestPointsV2TextWithoutDownsample(t *testing.T) {
 		count++
 
 		assert.Exactly(t, dateStart, value[0])
-		dateStart = dateStart + time.Minute.Seconds() * 1000
+		dateStart = dateStart + time.Minute.Seconds()*1000
 	}
 }
 
@@ -316,7 +316,7 @@ func TestPointsV2TextDateLimit(t *testing.T) {
 		count++
 
 		assert.Exactly(t, dateStart, value[0])
-		dateStart = dateStart + time.Minute.Seconds() * 1000
+		dateStart = dateStart + time.Minute.Seconds()*1000
 	}
 }
 
@@ -341,7 +341,7 @@ func TestPointsV2TextFirstPointsNull(t *testing.T) {
 		count++
 
 		assert.Exactly(t, dateStart, value[0])
-		dateStart = dateStart + time.Minute.Seconds() * 1000
+		dateStart = dateStart + time.Minute.Seconds()*1000
 	}
 }
 
@@ -366,7 +366,7 @@ func TestPointsV2TextLastPointsNull(t *testing.T) {
 		count++
 
 		assert.Exactly(t, dateStart, value[0])
-		dateStart = dateStart + time.Minute.Seconds() * 1000
+		dateStart = dateStart + time.Minute.Seconds()*1000
 	}
 }
 
@@ -378,7 +378,7 @@ func TestPointsV2TextNoPointsUpper(t *testing.T) {
 		"start": 1448458741000,
 		"end": 1448558740000
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/points", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/points", []byte(payload))
 
 	if err != nil {
 		t.Error(err)
@@ -397,7 +397,7 @@ func TestPointsV2TextNoPointsBelow(t *testing.T) {
 		"start": 1438458741000,
 		"end": 1448452700000
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/points", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/points", []byte(payload))
 
 	if err != nil {
 		t.Error(err)
@@ -429,7 +429,7 @@ func TestPointsV2TextMoreThanOneTS(t *testing.T) {
 		count++
 
 		assert.Exactly(t, dateStart, value[0])
-		dateStart = dateStart + time.Minute.Seconds() * 1000
+		dateStart = dateStart + time.Minute.Seconds()*1000
 	}
 
 	assert.Equal(t, 25, payloadPoints.Payload[hashMapPV2T["tsText2"]].Points.Count)
@@ -518,7 +518,7 @@ func TestPointsV2TextTSWithNumbersAndText(t *testing.T) {
 		count++
 
 		assert.Exactly(t, dateStart, value[0])
-		dateStart = dateStart + time.Minute.Seconds() * 1000
+		dateStart = dateStart + time.Minute.Seconds()*1000
 	}
 
 }
@@ -538,7 +538,7 @@ func TestPointsV2TextMergeText(t *testing.T) {
 		"start": 1148452800000,
   		"end": 1848458770000
 	}`
-	code, response, err := mycenaeTools.HTTP.POST("keyspaces/" + ksMycenae + "/points", []byte(payload))
+	code, response, err := mycenaeTools.HTTP.POST("keyspaces/"+ksMycenae+"/points", []byte(payload))
 	if err != nil {
 		t.Error(err)
 		t.SkipNow()
@@ -554,14 +554,14 @@ func TestPointsV2TextMergeText(t *testing.T) {
 		t.SkipNow()
 	}
 
-	assert.Equal(t, 200, payloadPoints.Payload[ksMycenae + "|merged:[" + nameTS + "]"].Points.Count)
-	assert.Equal(t, 200, payloadPoints.Payload[ksMycenae + "|merged:[" + nameTS + "]"].Points.Total)
-	assert.Equal(t, 200, len(payloadPoints.Payload[ksMycenae + "|merged:[" + nameTS + "]"].Points.Ts))
+	assert.Equal(t, 200, payloadPoints.Payload[ksMycenae+"|merged:["+nameTS+"]"].Points.Count)
+	assert.Equal(t, 200, payloadPoints.Payload[ksMycenae+"|merged:["+nameTS+"]"].Points.Total)
+	assert.Equal(t, 200, len(payloadPoints.Payload[ksMycenae+"|merged:["+nameTS+"]"].Points.Ts))
 
 	dateStart := 1448452800000.0
 	count := 0
 	i := 1.0
-	for _, value := range payloadPoints.Payload[ksMycenae + "|merged:[" + nameTS + "]"].Points.Ts {
+	for _, value := range payloadPoints.Payload[ksMycenae+"|merged:["+nameTS+"]"].Points.Ts {
 
 		if count == 0 {
 			assert.Exactly(t, fmt.Sprintf("%v%.1f", "test", i), value[1].(string))

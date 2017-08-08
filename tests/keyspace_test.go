@@ -221,7 +221,7 @@ func checkTables(data tools.Keyspace, t *testing.T) {
 // CREATE
 
 func TestKeyspaceCreateFail(t *testing.T) {
-	if testing.Short() { 		
+	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 

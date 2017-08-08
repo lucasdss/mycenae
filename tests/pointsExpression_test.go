@@ -353,7 +353,7 @@ func TestTsdbExpressionFilterDownsampleAvg(t *testing.T) {
 	offset := "90m"
 	// if the test is run during a minute change,
 	// increment a minute in the relative time (offset) to get the first point
-	if int(time.Now().Truncate(time.Minute).Unix() - 5400) - startTime == 60 {
+	if int(time.Now().Truncate(time.Minute).Unix()-5400)-startTime == 60 {
 		offset = "91m"
 	}
 
@@ -389,7 +389,7 @@ func TestTsdbExpressionFilterDownsampleMin(t *testing.T) {
 	offset := "90m"
 	// if the test is run during a minute change,
 	// increment a minute in the relative time (offset) to get the first point
-	if int(time.Now().Truncate(time.Minute).Unix() - 5400) - startTime == 60 {
+	if int(time.Now().Truncate(time.Minute).Unix()-5400)-startTime == 60 {
 		offset = "91m"
 	}
 
@@ -423,7 +423,7 @@ func TestTsdbExpressionFilterDownsampleMax(t *testing.T) {
 	offset := "90m"
 	// if the test is run during a minute change,
 	// increment a minute in the relative time (offset) to get the first point
-	if int(time.Now().Truncate(time.Minute).Unix() - 5400) - startTime == 60 {
+	if int(time.Now().Truncate(time.Minute).Unix()-5400)-startTime == 60 {
 		offset = "91m"
 	}
 
@@ -454,7 +454,7 @@ func TestTsdbExpressionFilterDownsampleSum(t *testing.T) {
 	offset := "90m"
 	// if the test is run during a minute change,
 	// increment a minute in the relative time (offset) to get the first point
-	if int(time.Now().Truncate(time.Minute).Unix() - 5400) - startTime == 60 {
+	if int(time.Now().Truncate(time.Minute).Unix()-5400)-startTime == 60 {
 		offset = "91m"
 	}
 
@@ -505,7 +505,7 @@ func TestTsdbExpressionFilterDownsampleMaxHour(t *testing.T) {
 
 func TestTsdbExpressionFilterDownsampleMaxDay(t *testing.T) {
 	t.Parallel()
-	startTime := int(time.Now().Truncate(time.Hour * 24).Unix()) - 864000
+	startTime := int(time.Now().Truncate(time.Hour*24).Unix()) - 864000
 
 	metric, tsid := ts3TsdbExpression(startTime)
 
@@ -532,7 +532,7 @@ func TestTsdbExpressionFilterDownsampleMaxDay(t *testing.T) {
 
 func TestTsdbExpressionFilterDownsampleMaxWeek(t *testing.T) {
 	t.Parallel()
-	startTime := int(time.Now().Truncate(time.Hour * 24 * 7).Unix()) - 125193600
+	startTime := int(time.Now().Truncate(time.Hour*24*7).Unix()) - 125193600
 
 	metric, tsid := ts4TsdbExpression(startTime)
 
@@ -591,7 +591,7 @@ func TestTsdbExpressionMergeDateLimit(t *testing.T) {
 
 	for _, key := range keys {
 
-		assert.Exactly(t, i + i, queryPoints[0].Dps[key])
+		assert.Exactly(t, i+i, queryPoints[0].Dps[key])
 		assert.Exactly(t, strconv.Itoa(startTime), key)
 		startTime += 60
 		i++

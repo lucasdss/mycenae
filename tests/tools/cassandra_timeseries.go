@@ -221,7 +221,7 @@ func (ts *cassTs) CountTsKeyspaces() (count int) {
 	return
 }
 
-func (ts *cassTs) CountTsKeyspaceByName(name string) (int) {
+func (ts *cassTs) CountTsKeyspaceByName(name string) int {
 	var count1, count2 int
 	if err := ts.cql.Query(`SELECT count(*) FROM mycenae.ts_keyspace WHERE name = ? AND token(key) < 0;`, name).Scan(&count1); err != nil {
 		log.Println(err)
@@ -393,4 +393,3 @@ func (ts *cassTs) KeyspaceProperties(keyspace string) KeyspaceProperties {
 		Durable_writes: durable_writes,
 	}
 }
-
