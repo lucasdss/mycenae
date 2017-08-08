@@ -54,7 +54,7 @@ func (c *ConfigUpdate) Validate() gobol.Error {
 	if !validKey.MatchString(c.Name) {
 		return errValidationS(
 			"CreateKeyspace",
-			`Wrong Format: Field "keyspaceName" is not well formed. NO information will be saved`,
+			`Wrong Format: Field "name" is not well formed. NO information will be saved`,
 		)
 	}
 

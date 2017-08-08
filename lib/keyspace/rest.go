@@ -20,7 +20,7 @@ func (kspace *Keyspace) Create(w http.ResponseWriter, r *http.Request, ps httpro
 		rip.AddStatsMap(r, map[string]string{"path": "/keyspaces/#keyspace"})
 		rip.Fail(w, errValidationS(
 			"CreateKeyspace",
-			`Wrong Format: Field "keyspaceName" is not well formed. NO information will be saved`,
+			`Wrong Format: Field "name" is not well formed. NO information will be saved`,
 		))
 		return
 	}
