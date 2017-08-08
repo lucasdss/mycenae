@@ -308,3 +308,23 @@ func (p Payload) StringArray() string {
 
 	return fmt.Sprintf(`[%s]`, str)
 }
+
+func (k Keyspace) Marshal() []byte {
+
+	body, err := json.Marshal(k)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	return body
+}
+
+func (ke KeyspaceEdit) Marshal() []byte {
+
+	body, err := json.Marshal(ke)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	return body
+}

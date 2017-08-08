@@ -9,7 +9,6 @@ import (
 
 type cassTool struct {
 	Timeseries *cassTs
-	Keyspace   *keyspaceCassandra
 }
 
 func (cass *cassTool) init(set CassandraSettings) {
@@ -56,9 +55,6 @@ func (cass *cassTool) init(set CassandraSettings) {
 	ts := new(cassTs)
 	ts.init(cc)
 	cass.Timeseries = ts
-
-	cass.Keyspace = new(keyspaceCassandra)
-	cass.Keyspace.init(cc)
 
 	return
 }
