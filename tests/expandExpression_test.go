@@ -643,7 +643,7 @@ func TestExpandValidQueryGroupbyExpandDontMatch(t *testing.T) {
 	assert.Equal(t, []byte{}, resp)
 }
 
-func TestQueryExpressionNotSent(t *testing.T) {
+func TestExpandQueryExpressionNotSent(t *testing.T) {
 
 	statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`keyspaces/%s/expression/expand`, ksMycenae))
 

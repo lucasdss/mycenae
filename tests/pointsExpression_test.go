@@ -599,6 +599,7 @@ func TestTsdbExpressionMergeDateLimit(t *testing.T) {
 }
 
 func TestTsdbExpressionError(t *testing.T) {
+	t.Parallel()
 
 	cases := map[string]struct {
 		query    string

@@ -9,7 +9,7 @@ import (
 	"github.com/uol/mycenae/tests/tools"
 )
 
-func TestValidExpressionCompile(t *testing.T) {
+func TestCompileValidExpression(t *testing.T) {
 	cases := map[string]struct {
 		payload    string
 		expression string
@@ -890,7 +890,7 @@ func TestValidExpressionCompile(t *testing.T) {
 
 }
 
-func TestValidExpressionCompile2Expressions(t *testing.T) {
+func TestCompileValidExpression2(t *testing.T) {
 	cases := map[string]struct {
 		payload     string
 		expression  string
@@ -1047,7 +1047,7 @@ func TestValidExpressionCompile2Expressions(t *testing.T) {
 	}
 }
 
-func TestInvalidExpressionCompile(t *testing.T) {
+func TestCompileInvalidExpression(t *testing.T) {
 	cases := map[string]struct {
 		payload string
 		err     string

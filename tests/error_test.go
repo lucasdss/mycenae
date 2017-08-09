@@ -209,6 +209,7 @@ func TestGetTimeseriesV2SameError(t *testing.T) {
 }
 
 func TestGetTimeseriesV2Errors(t *testing.T) {
+	t.Parallel()
 
 	cases := map[string]struct {
 		hashID string
@@ -292,8 +293,8 @@ func TestListTimeseriesV2ErrorIdsMultipleTags(t *testing.T) {
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
 	data := tools.TsErrorV2{
-		metric,
-		[]tools.TsTagV2{{tk1, tv1}, {tk2, tv2}},
+		Metric: metric,
+		Tags: []tools.TsTagV2{{TagKey: tk1, TagValue: tv1}, {TagKey: tk2, TagValue: tv2}},
 	}
 
 	postAndCheckError("", path, data, 200, t)
@@ -457,6 +458,7 @@ func TestListTimeseriesV2ErrorIds(t *testing.T) {
 }
 
 func TestGetTimeseriesV2MultipleErrorIdsKeyspaceNotExists(t *testing.T) {
+	t.Parallel()
 
 	data := tools.TsErrorV2{
 		Metric: "metric.*",
@@ -467,6 +469,7 @@ func TestGetTimeseriesV2MultipleErrorIdsKeyspaceNotExists(t *testing.T) {
 }
 
 func TestGetTimeseriesV2MultipleErrorIdsParamsSizeAndFrom(t *testing.T) {
+	t.Parallel()
 
 	cases := map[string]string{
 		"SizeString":   "size=a",
@@ -488,6 +491,7 @@ func TestGetTimeseriesV2MultipleErrorIdsParamsSizeAndFrom(t *testing.T) {
 }
 
 func TestGetTimeseriesV2MalformedPayload(t *testing.T) {
+	t.Parallel()
 
 	type tsErrorV2 struct {
 		Metric int
@@ -504,6 +508,7 @@ func TestGetTimeseriesV2MalformedPayload(t *testing.T) {
 }
 
 func TestGetTimeseriesV2FieldNotExists(t *testing.T) {
+	t.Parallel()
 
 	type tsErrorV2_1 struct {
 		Test string `json:"metric1"`
@@ -524,11 +529,12 @@ func TestGetTimeseriesV2FieldNotExists(t *testing.T) {
 }
 
 func TestGetTimeseriesV2MethodNotAllowed(t *testing.T) {
+	t.Parallel()
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
 	data := tools.TsErrorV2{
-		"metric",
-		[]tools.TsTagV2{{"tagKey", "tagValue"}},
+		Metric: "metric",
+		Tags: []tools.TsTagV2{{TagKey: "tagKey", TagValue: "tagValue"}},
 	}
 
 	body, _ := json.Marshal(data)

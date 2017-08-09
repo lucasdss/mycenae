@@ -290,6 +290,8 @@ func TestPointsV2LimitTrueBiggerLimitUpper(t *testing.T) {
 }
 
 func TestPointsV2LimitTrueNoPoints(t *testing.T) {
+	t.Parallel()
+
 	payload := `{
 		"keys": [{
 			"tsid":"` + hashMapPV2["ts1"] + `"
@@ -659,6 +661,8 @@ func TestPointsV2LimitTrueAproxMaxDay(t *testing.T) {
 }
 
 func TestPointsV2LimitTrueAproxMaxWeek(t *testing.T) {
+	t.Parallel()
+
 	payload := `{
 		"downsample": {
 			"enabled": true,
@@ -697,6 +701,8 @@ func TestPointsV2LimitTrueAproxMaxWeek(t *testing.T) {
 }
 
 func TestPointsV2LimitTrueAproxMaxMonth(t *testing.T) {
+	t.Parallel()
+
 	payload := `{
 		"downsample": {
 			"enabled": true,
@@ -773,6 +779,8 @@ func TestPointsV2LimitTrueAproxMaxMonth(t *testing.T) {
 }
 
 func TestPointsV2LimitTrueAproxMaxYear(t *testing.T) {
+	t.Parallel()
+
 	payload := `{
 		"downsample": {
 			"enabled": true,
@@ -2085,6 +2093,8 @@ func TestPointsV22Merge(t *testing.T) {
 }
 
 func TestPointsV2MoreThanOneTS(t *testing.T) {
+	t.Parallel()
+	
 	payload := `{
 		"keys": [{"tsid":"` + hashMapPV2["ts1"] + `"},{"tsid":"` + ts10ID + `"}
 		],
