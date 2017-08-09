@@ -314,10 +314,10 @@ func TestKeyspaceCreateFailTTLError(t *testing.T) {
 	)
 
 	cases := map[string]tools.Keyspace{
-		"TTL0":         {Datacenter: dc, ReplicationFactor: rf, TTL: 0, Contact: contact, Name: getRandName()},
-		"TTLNil":         {Datacenter: dc, ReplicationFactor: rf, Contact: contact, Name: getRandName()},
-		"TTLAboveMax":         {Datacenter: dc, ReplicationFactor: rf, TTL: 91, Contact: contact, Name: getRandName()},
-		"NegativeTTL":         {Datacenter: dc, ReplicationFactor: rf, TTL: -10, Contact: contact, Name: getRandName()},
+		"TTL0":        {Datacenter: dc, ReplicationFactor: rf, TTL: 0, Contact: contact, Name: getRandName()},
+		"TTLNil":      {Datacenter: dc, ReplicationFactor: rf, Contact: contact, Name: getRandName()},
+		"TTLAboveMax": {Datacenter: dc, ReplicationFactor: rf, TTL: 91, Contact: contact, Name: getRandName()},
+		"NegativeTTL": {Datacenter: dc, ReplicationFactor: rf, TTL: -10, Contact: contact, Name: getRandName()},
 	}
 
 	errTTL := tools.Error{Error: errKsTTL, Message: errKsTTL}
@@ -339,13 +339,13 @@ func TestKeyspaceCreateFailContactError(t *testing.T) {
 	}
 
 	var (
-		rf      = 1
-		ttl     = 90
-		dc      = "datacenter1"
+		rf  = 1
+		ttl = 90
+		dc  = "datacenter1"
 	)
 
 	cases := map[string]tools.Keyspace{
-		"ContactNil": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Name: getRandName()},
+		"ContactNil":      {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Name: getRandName()},
 		"InvalidContact1": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@test@test.com", Name: getRandName()},
 		"InvalidContact2": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@testcom", Name: getRandName()},
 		"InvalidContact3": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "testtest.com", Name: getRandName()},
@@ -685,7 +685,7 @@ func TestKeyspaceEditEmptyPayload(t *testing.T) {
 	data := getKeyspace()
 	testKeyspaceCreation(&data, t)
 
-	err := tools.Error{Error:"EOF", Message:"Wrong JSON format"}
+	err := tools.Error{Error: "EOF", Message: "Wrong JSON format"}
 
 	testKeyspaceEditionFail(data.ID, nil, 400, err, "", t)
 }
@@ -743,11 +743,10 @@ func TestKeyspaceEditInvalidName(t *testing.T) {
 	testKeyspaceCreation(&data, t)
 
 	cases := map[string]tools.KeyspaceEdit{
-		"InvalidName1":       {Name: "test_*123", Contact: data.Contact},
-		"InvalidName2":       {Name: "_test", Contact: data.Contact},
-		"InvalidName3":       {Name: "", Contact: data.Contact},
-		"InvalidName4":       {Contact: data.Contact},
-
+		"InvalidName1": {Name: "test_*123", Contact: data.Contact},
+		"InvalidName2": {Name: "_test", Contact: data.Contact},
+		"InvalidName3": {Name: "", Contact: data.Contact},
+		"InvalidName4": {Contact: data.Contact},
 	}
 
 	err := tools.Error{Error: errKsName, Message: errKsName}
