@@ -11,8 +11,6 @@ import (
 	"github.com/uol/mycenae/tests/tools"
 )
 
-var waitUDP = 2 * time.Second
-
 func TestUDPv2PayloadWithAllFields(t *testing.T) {
 	t.Parallel()
 
@@ -30,7 +28,7 @@ func TestUDPv2PayloadWithNoTimestamp(t *testing.T) {
 
 	dateBefore := time.Now().Unix()
 
-	sendUDPPayloadAndAssertPoint(t, p, dateBefore, time.Now().Add(waitUDP).Unix())
+	sendUDPPayloadAndAssertPoint(t, p, dateBefore, time.Now().Add(tools.Sleep2).Unix())
 }
 
 func TestUDPv2PayloadWithMoreThanOneTag(t *testing.T) {
@@ -74,7 +72,7 @@ func TestUDPv2MultiplePointsSameIDAndTimestampsGreaterThanDay(t *testing.T) {
 
 	hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(p.Metric, p.Tags)
 
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	for i := 0; i < 5; i++ {
 		assertMycenae(t, ksMycenae, timestamps[i], timestamps[i], values[i], hashID)
@@ -98,7 +96,7 @@ func TestUDPv2MultiplePointsSameIDAndNoTimestamp(t *testing.T) {
 		*p.Value = float32(i)
 		mycenaeTools.UDP.Send(p.Marshal())
 
-		time.Sleep(waitUDP)
+		time.Sleep(tools.Sleep2)
 
 		dateAfter := time.Now()
 		assertMycenae(t, ksMycenae, dateBefore.Unix(), dateAfter.Unix(), *p.Value, hashID)
@@ -121,7 +119,7 @@ func TestUDPv2CheckLocalElasticCache(t *testing.T) {
 		*p.Timestamp = time.Now().Unix()
 		mycenaeTools.UDP.Send(p.Marshal())
 
-		time.Sleep(waitUDP)
+		time.Sleep(tools.Sleep2)
 
 		assertMycenae(t, ksMycenae, *p.Timestamp, *p.Timestamp, *p.Value, hashID)
 	}
@@ -136,7 +134,7 @@ func TestUDPv2CheckLocalElasticCache(t *testing.T) {
 	*p.Value = 2
 	*p.Timestamp = time.Now().Unix()
 	mycenaeTools.UDP.Send(p.Marshal())
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	assertMycenae(t, ksMycenae, *p.Timestamp, *p.Timestamp, *p.Value, hashID)
 
@@ -195,7 +193,7 @@ func TestUDPv2PayloadWithSpecialChars(t *testing.T) {
 			mycenaeTools.UDP.Send(p.Marshal())
 
 			// special chars take longer to be saved
-			time.Sleep(waitUDP * 2)
+			time.Sleep(tools.Sleep2 * 2)
 
 			hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(p.Metric, p.Tags)
 
@@ -281,7 +279,7 @@ func TestUDPv2PayloadsWithSameMetricTagsTimestamp(t *testing.T) {
 	p := mycenaeTools.Mycenae.GetPayload(ksMycenae)
 
 	mycenaeTools.UDP.Send(p.Marshal())
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(p.Metric, p.Tags)
 
@@ -332,9 +330,9 @@ func TestUDPv2PayloadsWithSameMetricTagsTimestampTwoEqualTags(t *testing.T) {
 	hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(metric, tags)
 
 	mycenaeTools.UDP.SendString(payload1)
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 	mycenaeTools.UDP.SendString(payload2)
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	assertMycenae(t, ksMycenae, timestamp, timestamp, float32(value2), hashID)
 
@@ -483,7 +481,7 @@ func TestUDPv2PayloadWithEmptyValues(t *testing.T) {
 		)
 		tags := map[string]string{"ksid": ksMycenae, tagKey: tagValue}
 
-		sendUDPPayloadStringAndAssertEmpty(t, payload, metric, tags, timestamp, time.Now().Add(waitUDP).Unix())
+		sendUDPPayloadStringAndAssertEmpty(t, payload, metric, tags, timestamp, time.Now().Add(tools.Sleep2).Unix())
 		wg.Done()
 	}()
 	wg.Wait()
@@ -635,7 +633,7 @@ func TestUDPv2PayloadValuesWithOnlySpace(t *testing.T) {
 		)
 		tags := map[string]string{"ksid": ksMycenae, tagKey: tagValue}
 
-		sendUDPPayloadStringAndAssertEmpty(t, payload, metric, tags, timestamp, time.Now().Add(waitUDP).Unix())
+		sendUDPPayloadStringAndAssertEmpty(t, payload, metric, tags, timestamp, time.Now().Add(tools.Sleep2).Unix())
 		wg.Done()
 	}()
 	wg.Wait()
@@ -688,7 +686,7 @@ func TestUDPv2PayloadWithInvalidTimestamp(t *testing.T) {
 		timestamp,
 	)
 
-	sendUDPPayloadStringAndAssertEmpty(t, payload, metric, map[string]string{tagKey: tagValue}, dateBefore, time.Now().Add(waitUDP).Unix())
+	sendUDPPayloadStringAndAssertEmpty(t, payload, metric, map[string]string{tagKey: tagValue}, dateBefore, time.Now().Add(tools.Sleep2).Unix())
 }
 
 func TestUDPv2PayloadWithStringTimestamp(t *testing.T) {
@@ -707,7 +705,7 @@ func TestUDPv2PayloadWithStringTimestamp(t *testing.T) {
 		timestamp,
 	)
 
-	sendUDPPayloadStringAndAssertEmpty(t, payload, metric, map[string]string{tagKey: tagValue}, timestamp, time.Now().Add(waitUDP).Unix())
+	sendUDPPayloadStringAndAssertEmpty(t, payload, metric, map[string]string{tagKey: tagValue}, timestamp, time.Now().Add(tools.Sleep2).Unix())
 }
 
 func TestUDPv2PayloadWithBadFormattedJson(t *testing.T) {
@@ -753,7 +751,7 @@ func TestUDPv2BucketLimits(t *testing.T) {
 		mycenaeTools.UDP.Send(p.Marshal())
 	}
 
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	for i := 0; i < 6; i++ {
 
@@ -799,7 +797,7 @@ func TestUDPv2Bucket53WeeksYear(t *testing.T) {
 		mycenaeTools.UDP.Send(p.Marshal())
 	}
 
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	for i := 0; i < 6; i++ {
 
@@ -839,7 +837,7 @@ func TestUDPv2Bucket52WeeksYear(t *testing.T) {
 		mycenaeTools.UDP.Send(p.Marshal())
 	}
 
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	for i := 0; i < 6; i++ {
 
@@ -879,7 +877,7 @@ func TestUDPv2BucketFullYear(t *testing.T) {
 		day = day.AddDate(0, 0, 7)
 	}
 
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	for i := 0; i < 52; i++ {
 
@@ -907,7 +905,7 @@ func TestUDPv2BucketFuturePoints(t *testing.T) {
 
 		mycenaeTools.UDP.Send(p.Marshal())
 
-		time.Sleep(waitUDP)
+		time.Sleep(tools.Sleep2)
 
 		assertMycenae(t, ksMycenae, *p.Timestamp, *p.Timestamp, *p.Value, hashID)
 
@@ -933,7 +931,7 @@ func TestUDPv2BucketFuturePoints(t *testing.T) {
 func sendUDPPayloadAndAssertPoint(t *testing.T, payload *tools.Payload, start, end int64) {
 
 	mycenaeTools.UDP.Send(payload.Marshal())
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(payload.Metric, payload.Tags)
 
@@ -945,7 +943,7 @@ func sendUDPPayloadAndAssertPoint(t *testing.T, payload *tools.Payload, start, e
 func sendUDPPayloadStringAndAssertEmpty(t *testing.T, payload, metric string, tags map[string]string, start, end int64) {
 
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(waitUDP)
+	time.Sleep(tools.Sleep2)
 
 	hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(metric, tags)
 

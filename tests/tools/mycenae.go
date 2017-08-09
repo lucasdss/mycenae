@@ -92,7 +92,6 @@ type RestError struct {
 type Error struct {
 	Error   string `json:"error,omitempty"`
 	Message string `json:"message,omitempty"`
-	//RequestID string `json:"requestID,omitempty"`
 }
 
 type Point struct {
@@ -129,13 +128,63 @@ type ResponseQuery struct {
 }
 
 type ResponseMetricTags struct {
-	TotalRec int      `json:"totalRecords,omitempty"`
-	Payload  []string `json:"payload,omitempty"`
+	TotalRecords int      `json:"totalRecords,omitempty"`
+	Payload      []string `json:"payload,omitempty"`
+}
+
+type TsError struct {
+	ID      string
+	Error   string
+	Message string
+	Date    time.Time
+}
+
+type TsErrorV2 struct {
+	Metric string
+	Tags   []TsTagV2 `json:"tagsError"`
+}
+
+type TsTagV2 struct {
+	TagKey   string
+	TagValue string
+}
+
+type TSDBqueryPayload struct {
+	Relative string      `json:"relative"`
+	Queries  []TSDBquery `json:"queries"`
+}
+
+type TSDBquery struct {
+	Aggregator  string            `json:"aggregator"`
+	Downsample  string            `json:"downsample"`
+	Metric      string            `json:"metric"`
+	Tags        map[string]string `json:"tags"`
+	Rate        bool              `json:"rate"`
+	RateOptions TSDBrateOptions   `json:"rateOptions"`
+	Order       []string          `json:"order"`
+	FilterValue string            `json:"filterValue"`
+	Filters     []TSDBfilter      `json:"filters"`
+}
+
+type TSDBrateOptions struct {
+	Counter    bool   `json:"counter"`
+	CounterMax *int64 `json:"counterMax"`
+	ResetValue int64  `json:"resetValue"`
+}
+
+type TSDBfilter struct {
+	Ftype   string `json:"type"`
+	Tagk    string `json:"tagk"`
+	Filter  string `json:"filter"`
+	GroupBy bool   `json:"groupBy"`
 }
 
 const MetricForm string = "testMetric-"
 const TagKeyForm string = "testTagKey-"
 const TagValueForm string = "testTagValue-"
+
+var Sleep2 = 2 * time.Second
+var Sleep3 = 3 * time.Second
 
 func (m *mycenaeTool) Init(set MycenaeSettings) {
 	ht := new(httpTool)

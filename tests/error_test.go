@@ -8,31 +8,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uol/mycenae/tests/tools"
 )
-
-type tsError struct {
-	ID      string
-	Error   string
-	Message string
-	Date    time.Time
-}
-
-type tsErrorV2 struct {
-	Metric string
-	Tags   []tsTagV2 `json:"tagsError"`
-}
-
-type tsTagV2 struct {
-	TagKey   string
-	TagValue string
-}
-
-type tsErrorTags struct {
-	TotalRecords int
-	Payload      []string
-}
-
-var delay time.Duration = 2 * time.Second
 
 func postAndCheckError(test, path string, data interface{}, status int, t *testing.T) {
 
@@ -42,7 +19,7 @@ func postAndCheckError(test, path string, data interface{}, status int, t *testi
 	assert.Equal(t, status, code, fmt.Sprintf("The request to get error list on keyspace %v did not return the expected http code", ksMycenae), test)
 
 	if status == 200 {
-		var records tsErrorTags
+		var records tools.ResponseMetricTags
 
 		err = json.Unmarshal(content, &records)
 		assert.Equal(t, 1, records.TotalRecords, fmt.Sprintf("The request to get error list on keyspace %v did not return the array expected", ksMycenae), test)
@@ -86,7 +63,7 @@ func TestGetTimeseriesV2Error(t *testing.T) {
 
 	payload, tk, tv := getErrorPayload(metric)
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(metric, map[string]string{tk: tv})
 	bucket := fmt.Sprintf("%v%v", hashID, ksMycenae)
@@ -96,7 +73,7 @@ func TestGetTimeseriesV2Error(t *testing.T) {
 	assert.NoError(t, err, fmt.Sprintf("There was an error with request to get error %v on keyspace %v", hashID, ksMycenae))
 	assert.Equal(t, 200, code, fmt.Sprintf("The request to get error %v on keyspace %v did not return the expected http code", hashID, ksMycenae))
 
-	data := []tsError{}
+	data := []tools.TsError{}
 	err = json.Unmarshal(content, &data)
 	assert.NoError(t, err, fmt.Sprintf("It was not possible to unmarshal the response for request to get error %v on keyspace %v", hashID, ksMycenae))
 
@@ -124,7 +101,7 @@ func TestGetTimeseriesV2MultipleError(t *testing.T) {
 	)
 
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 	timestamp2 := time.Now().Unix()
 
 	payload = fmt.Sprintf(
@@ -137,7 +114,7 @@ func TestGetTimeseriesV2MultipleError(t *testing.T) {
 	)
 
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(metric, map[string]string{tagKey: tagValue})
 	bucket := fmt.Sprintf("%v%v", hashID, ksMycenae)
@@ -149,7 +126,7 @@ func TestGetTimeseriesV2MultipleError(t *testing.T) {
 	assert.NoError(t, err, fmt.Sprintf("There was an error with request to get error %v on keyspace %v", hashID, ksMycenae))
 	assert.Equal(t, 200, code, fmt.Sprintf("The request to get error %v on keyspace %v did not return the expected http code", hashID, ksMycenae))
 
-	data := []tsError{}
+	data := []tools.TsError{}
 
 	err = json.Unmarshal(content, &data)
 	assert.NoError(t, err, fmt.Sprintf("It was not possible to unmarshal the response for request to get error %v on keyspace %v", hashID, ksMycenae))
@@ -187,7 +164,7 @@ func TestGetTimeseriesV2SameError(t *testing.T) {
 	)
 
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 	timestamp2 := time.Now().Unix()
 
 	payload = fmt.Sprintf(
@@ -200,7 +177,7 @@ func TestGetTimeseriesV2SameError(t *testing.T) {
 	)
 
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(metric, map[string]string{tagKey: tagValue})
 	bucket := fmt.Sprintf("%v%v", hashID, ksMycenae)
@@ -212,7 +189,7 @@ func TestGetTimeseriesV2SameError(t *testing.T) {
 	assert.NoError(t, err, fmt.Sprintf("There was an error with request to get error %v on keyspace %v", hashID, ksMycenae))
 	assert.Equal(t, 200, code, fmt.Sprintf("The request to get error %v on keyspace %v did not return the expected http code", hashID, ksMycenae))
 
-	data := []tsError{}
+	data := []tools.TsError{}
 
 	err = json.Unmarshal(content, &data)
 
@@ -291,7 +268,7 @@ func TestGetTimeseriesV2ErrorPost(t *testing.T) {
 	)
 
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	hashID := mycenaeTools.Cassandra.Timeseries.GetHashFromMetricAndTags(metric, map[string]string{tagKey: tagValue})
 
@@ -311,12 +288,12 @@ func TestListTimeseriesV2ErrorIdsMultipleTags(t *testing.T) {
 
 	payload, tk1, tv1, tk2, tv2 := getErrorPayload2Tags(metric)
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
-	data := tsErrorV2{
+	data := tools.TsErrorV2{
 		metric,
-		[]tsTagV2{{tk1, tv1}, {tk2, tv2}},
+		[]tools.TsTagV2{{tk1, tv1}, {tk2, tv2}},
 	}
 
 	postAndCheckError("", path, data, 200, t)
@@ -324,19 +301,16 @@ func TestListTimeseriesV2ErrorIdsMultipleTags(t *testing.T) {
 
 func TestListTimeseriesV2ErrorIdsMetric(t *testing.T) {
 	t.Parallel()
-	type tsErrorV2 struct {
-		Metric string
-	}
 
 	metric := fmt.Sprint("TestListTimeseriesV2ErrorIdsMetric-", time.Now().Unix())
 
 	payload, _, _, _, _ := getErrorPayload2Tags(metric)
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
-	data := tsErrorV2{
-		metric,
+	data := tools.TsErrorV2{
+		Metric: metric,
 	}
 
 	postAndCheckError("", path, data, 200, t)
@@ -345,21 +319,13 @@ func TestListTimeseriesV2ErrorIdsMetric(t *testing.T) {
 func TestListTimeseriesV2ErrorIdsTagKey(t *testing.T) {
 	t.Parallel()
 
-	type tsTagV2 struct {
-		TagKey string
-	}
-
-	type tsErrorV2 struct {
-		Tags []tsTagV2 `json:"tagsError"`
-	}
-
 	payload, tk1, _, _, _ := getErrorPayload2Tags("TestListTimeseriesV2ErrorIdsTagKey")
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
-	data := tsErrorV2{
-		[]tsTagV2{{tk1}},
+	data := tools.TsErrorV2{
+		Tags: []tools.TsTagV2{{TagKey: tk1}},
 	}
 
 	postAndCheckError("", path, data, 200, t)
@@ -368,21 +334,13 @@ func TestListTimeseriesV2ErrorIdsTagKey(t *testing.T) {
 func TestListTimeseriesV2ErrorIdsTagValue(t *testing.T) {
 	t.Parallel()
 
-	type tsTagV2 struct {
-		TagValue string
-	}
-
-	type tsErrorV2 struct {
-		Tags []tsTagV2 `json:"tagsError"`
-	}
-
 	payload, _, tv1, _, _ := getErrorPayload2Tags("TestListTimeseriesV2ErrorIdsTagValue")
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
-	data := tsErrorV2{
-		[]tsTagV2{{tv1}},
+	data := tools.TsErrorV2{
+		Tags: []tools.TsTagV2{{TagValue: tv1}},
 	}
 
 	postAndCheckError("", path, data, 200, t)
@@ -391,22 +349,13 @@ func TestListTimeseriesV2ErrorIdsTagValue(t *testing.T) {
 func TestListTimeseriesV2ErrorIdsTagKeyAndTagValue(t *testing.T) {
 	t.Parallel()
 
-	type tsTagV2 struct {
-		TagKey   string
-		TagValue string
-	}
-
-	type tsErrorV2 struct {
-		Tags []tsTagV2 `json:"tagsError"`
-	}
-
 	payload, tk1, tv1, _, _ := getErrorPayload2Tags("TestListTimeseriesV2ErrorIdsTagKeyAndTagValue")
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
-	data := tsErrorV2{
-		[]tsTagV2{{tk1, tv1}},
+	data := tools.TsErrorV2{
+		Tags: []tools.TsTagV2{{TagKey: tk1, TagValue: tv1}},
 	}
 
 	postAndCheckError("", path, data, 200, t)
@@ -415,25 +364,16 @@ func TestListTimeseriesV2ErrorIdsTagKeyAndTagValue(t *testing.T) {
 func TestListTimeseriesV2ErrorIdsTagKeyAndMetric(t *testing.T) {
 	t.Parallel()
 
-	type tsTagV2 struct {
-		TagKey string
-	}
-
-	type tsErrorV2 struct {
-		Metric string
-		Tags   []tsTagV2 `json:"tagsError"`
-	}
-
 	metric := "TestListTimeseriesV2ErrorIdsTagKeyAndMetric"
 
 	payload, tk1, _, _, _ := getErrorPayload2Tags(metric)
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
-	data := tsErrorV2{
-		metric,
-		[]tsTagV2{{tk1}},
+	data := tools.TsErrorV2{
+		Metric: metric,
+		Tags:   []tools.TsTagV2{{TagKey: tk1}},
 	}
 
 	postAndCheckError("", path, data, 200, t)
@@ -442,25 +382,16 @@ func TestListTimeseriesV2ErrorIdsTagKeyAndMetric(t *testing.T) {
 func TestListTimeseriesV2ErrorIdsTagValueAndMetric(t *testing.T) {
 	t.Parallel()
 
-	type tsTagV2 struct {
-		TagValue string
-	}
-
-	type tsErrorV2 struct {
-		Metric string
-		Tags   []tsTagV2 `json:"tagsError"`
-	}
-
 	metric := "TestListTimeseriesV2ErrorIdsTagValueAndMetric"
 
 	payload, _, tv1, _, _ := getErrorPayload2Tags(metric)
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
-	data := tsErrorV2{
-		metric,
-		[]tsTagV2{{tv1}},
+	data := tools.TsErrorV2{
+		Metric: metric,
+		Tags:   []tools.TsTagV2{{TagValue: tv1}},
 	}
 
 	postAndCheckError("", path, data, 200, t)
@@ -472,9 +403,9 @@ func TestListTimeseriesV2ErrorIdsNoResults(t *testing.T) {
 	_, tk, tv := getErrorPayload("")
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
-	data := tsErrorV2{
-		"metric.*",
-		[]tsTagV2{{tk, tv}},
+	data := tools.TsErrorV2{
+		Metric: "metric.*",
+		Tags:   []tools.TsTagV2{{TagKey: tk, TagValue: tv}},
 	}
 
 	postAndCheckError("", path, data, 204, t)
@@ -487,34 +418,34 @@ func TestListTimeseriesV2ErrorIds(t *testing.T) {
 
 	payload, tk, tv := getErrorPayload(metric)
 	mycenaeTools.UDP.SendString(payload)
-	time.Sleep(delay)
+	time.Sleep(tools.Sleep2)
 
 	cases := map[string]struct {
-		body   tsErrorV2
+		body   tools.TsErrorV2
 		status int
 	}{
 		"MetricRegexp": {
-			tsErrorV2{
-				"metric.*",
-				[]tsTagV2{{tk, tv}},
+			tools.TsErrorV2{
+				Metric: "metric.*",
+				Tags:   []tools.TsTagV2{{TagKey: tk, TagValue: tv}},
 			}, 200,
 		},
 		"WrongTagValue": {
-			tsErrorV2{
-				metric,
-				[]tsTagV2{{tk, fmt.Sprint(tv, "1")}},
+			tools.TsErrorV2{
+				Metric: metric,
+				Tags:   []tools.TsTagV2{{TagKey: tk, TagValue: fmt.Sprint(tv, "1")}},
 			}, 204,
 		},
 		"WrongTagKey": {
-			tsErrorV2{
-				metric,
-				[]tsTagV2{{fmt.Sprint(tk, "1"), tv}},
+			tools.TsErrorV2{
+				Metric: metric,
+				Tags:   []tools.TsTagV2{{TagKey: fmt.Sprint(tk, "1"), TagValue: tv}},
 			}, 204,
 		},
 		"WrongMetric": {
-			tsErrorV2{
-				fmt.Sprint(metric, "1"),
-				[]tsTagV2{{tk, tv}},
+			tools.TsErrorV2{
+				Metric: fmt.Sprint(metric, "1"),
+				Tags:   []tools.TsTagV2{{TagKey: tk, TagValue: tv}},
 			}, 204,
 		},
 	}
@@ -527,9 +458,9 @@ func TestListTimeseriesV2ErrorIds(t *testing.T) {
 
 func TestGetTimeseriesV2MultipleErrorIdsKeyspaceNotExists(t *testing.T) {
 
-	data := tsErrorV2{
-		"metric.*",
-		[]tsTagV2{{}},
+	data := tools.TsErrorV2{
+		Metric: "metric.*",
+		Tags:   []tools.TsTagV2{{}},
 	}
 
 	postAndCheckError("", "keyspaces/notExists/errortags", data, 404, t)
@@ -547,9 +478,9 @@ func TestGetTimeseriesV2MultipleErrorIdsParamsSizeAndFrom(t *testing.T) {
 	for test, param := range cases {
 
 		path := fmt.Sprintf("keyspaces/%s/errortags?%s", ksMycenae, param)
-		data := tsErrorV2{
-			"metric.*",
-			[]tsTagV2{{}},
+		data := tools.TsErrorV2{
+			Metric: "metric.*",
+			Tags:   []tools.TsTagV2{{}},
 		}
 
 		postAndCheckError(test, path, data, 400, t)
@@ -560,13 +491,13 @@ func TestGetTimeseriesV2MalformedPayload(t *testing.T) {
 
 	type tsErrorV2 struct {
 		Metric int
-		Tags   []tsTagV2 `json:"tagsError"`
+		Tags   []tools.TsTagV2 `json:"tagsError"`
 	}
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
 	data := tsErrorV2{
 		1,
-		[]tsTagV2{{"tagKey", "tagValue"}},
+		[]tools.TsTagV2{{TagKey: "tagKey", TagValue: "tagValue"}},
 	}
 
 	postAndCheckError("", path, data, 400, t)
@@ -595,9 +526,9 @@ func TestGetTimeseriesV2FieldNotExists(t *testing.T) {
 func TestGetTimeseriesV2MethodNotAllowed(t *testing.T) {
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
-	data := tsErrorV2{
+	data := tools.TsErrorV2{
 		"metric",
-		[]tsTagV2{{"tagKey", "tagValue"}},
+		[]tools.TsTagV2{{"tagKey", "tagValue"}},
 	}
 
 	body, _ := json.Marshal(data)

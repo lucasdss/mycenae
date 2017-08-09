@@ -15,8 +15,8 @@ import (
 
 var errKsName = "Wrong Format: Field \"name\" is not well formed. NO information will be saved"
 var errKsRF = "Replication factor can not be less than or equal to 0 or greater than 3"
-var errKsDCNil = "Datacenter can not be empty or nil"
 var errKsDC = "Cannot create because datacenter \"dc_error\" not exists"
+var errKsDCNil = "Datacenter can not be empty or nil"
 var errKsContact = "Contact field should be a valid email address"
 var errKsTTL = "TTL can not be less or equal to zero"
 var errKsTTLMax = "Max TTL allowed is 90"
