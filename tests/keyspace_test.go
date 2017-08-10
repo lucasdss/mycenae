@@ -167,7 +167,7 @@ func testKeyspaceEditionFail(id string, data []byte, status int, response tools.
 	assert.True(t, ksBefore == ksAfter, test)
 }
 
-func checkTables(data tools.Keyspace, t *testing.T) {
+func checkKeyspacePropertiesAndIndex(data tools.Keyspace, t *testing.T) {
 
 	var tables = []string{"timeseries", "ts_text_stamp"}
 	var elasticSearchIndexMeta = "\"meta\":{\"properties\":{\"tagsNested\":{\"type\":\"nested\",\"properties\":{\"tagKey\":{\"type\":\"string\"},\"tagValue\":{\"type\":\"string\"}}}}}"
@@ -188,8 +188,14 @@ func checkTables(data tools.Keyspace, t *testing.T) {
 		"chunk_length_in_kb": "64",
 	}
 
+	var replication = map[string]string{
+		"class":              "org.apache.cassandra.locator.NetworkTopologyStrategy",
+		"datacenter1": fmt.Sprintf("%v", data.ReplicationFactor),
+	}
+
 	esIndexResponse := mycenaeTools.ElasticSearch.Keyspace.GetIndex(data.ID)
 	tableProperties := mycenaeTools.Cassandra.Timeseries.TableProperties(data.ID, "timeseries")
+	ksProperties := mycenaeTools.Cassandra.Timeseries.KeyspaceProperties(data.ID)
 
 	for _, table := range tables {
 		tableProperties = mycenaeTools.Cassandra.Timeseries.TableProperties(data.ID, table)
@@ -199,7 +205,7 @@ func checkTables(data tools.Keyspace, t *testing.T) {
 		assert.Exactly(t, compaction, tableProperties.Compaction)
 		assert.Exactly(t, compression, tableProperties.Compression)
 		assert.Exactly(t, 0.0, tableProperties.Dclocal_read_repair_chance)
-		assert.Exactly(t, data.TTL*86400, tableProperties.Default_time_to_live)
+		assert.Exactly(t, data.TTL * 86400, tableProperties.Default_time_to_live)
 		assert.Exactly(t, 0, tableProperties.Gc_grace_seconds)
 		assert.Exactly(t, 2048, tableProperties.Max_index_interval)
 		assert.Exactly(t, 0, tableProperties.Memtable_flush_period_in_ms)
@@ -208,6 +214,7 @@ func checkTables(data tools.Keyspace, t *testing.T) {
 		assert.Exactly(t, "99PERCENTILE", tableProperties.Speculative_retry)
 	}
 
+	assert.Exactly(t, replication, ksProperties.Replication)
 	assert.Contains(t, data.ID, "ts_", "We received a weird keyspace name for request")
 	assert.True(t, mycenaeTools.Cassandra.Timeseries.Exists(data.ID), "Keyspace was not created")
 
@@ -221,14 +228,47 @@ func checkTables(data tools.Keyspace, t *testing.T) {
 
 // CREATE
 
+func TestKeyspaceCreateSuccessRF1(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	data := getKeyspace()
+	data.ReplicationFactor = 1
+	testKeyspaceCreation(&data, t)
+	checkKeyspacePropertiesAndIndex(data, t)
+}
+
+func TestKeyspaceCreateSuccessRF2(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	data := getKeyspace()
+	data.ReplicationFactor = 2
+	testKeyspaceCreation(&data, t)
+	checkKeyspacePropertiesAndIndex(data, t)
+}
+
+func TestKeyspaceCreateSuccessRF3(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	data := getKeyspace()
+	data.ReplicationFactor = 3
+	testKeyspaceCreation(&data, t)
+	checkKeyspacePropertiesAndIndex(data, t)
+}
+
 func TestKeyspaceCreateFailDCError(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
 	var (
-		rf      = 1
-		ttl     = 90
+		rf = 1
+		ttl = 90
 		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
 	)
 
@@ -259,9 +299,9 @@ func TestKeyspaceCreateFailNameError(t *testing.T) {
 	}
 
 	var (
-		rf      = 1
-		ttl     = 90
-		dc      = "datacenter1"
+		rf = 1
+		ttl = 90
+		dc = "datacenter1"
 		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
 	)
 
@@ -283,8 +323,8 @@ func TestKeyspaceCreateFailRFError(t *testing.T) {
 	}
 
 	var (
-		ttl     = 90
-		dc      = "datacenter1"
+		ttl = 90
+		dc = "datacenter1"
 		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
 	)
 
@@ -308,16 +348,16 @@ func TestKeyspaceCreateFailTTLError(t *testing.T) {
 	}
 
 	var (
-		rf      = 1
-		dc      = "datacenter1"
+		rf = 1
+		dc = "datacenter1"
 		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
 	)
 
 	cases := map[string]tools.Keyspace{
-		"TTL0":        {Datacenter: dc, ReplicationFactor: rf, TTL: 0, Contact: contact, Name: getRandName()},
-		"TTLNil":      {Datacenter: dc, ReplicationFactor: rf, Contact: contact, Name: getRandName()},
-		"TTLAboveMax": {Datacenter: dc, ReplicationFactor: rf, TTL: 91, Contact: contact, Name: getRandName()},
-		"NegativeTTL": {Datacenter: dc, ReplicationFactor: rf, TTL: -10, Contact: contact, Name: getRandName()},
+		"TTL0":         {Datacenter: dc, ReplicationFactor: rf, TTL: 0, Contact: contact, Name: getRandName()},
+		"TTLNil":         {Datacenter: dc, ReplicationFactor: rf, Contact: contact, Name: getRandName()},
+		"TTLAboveMax":         {Datacenter: dc, ReplicationFactor: rf, TTL: 91, Contact: contact, Name: getRandName()},
+		"NegativeTTL":         {Datacenter: dc, ReplicationFactor: rf, TTL: -10, Contact: contact, Name: getRandName()},
 	}
 
 	errTTL := tools.Error{Error: errKsTTL, Message: errKsTTL}
@@ -339,13 +379,13 @@ func TestKeyspaceCreateFailContactError(t *testing.T) {
 	}
 
 	var (
-		rf  = 1
+		rf = 1
 		ttl = 90
-		dc  = "datacenter1"
+		dc = "datacenter1"
 	)
 
 	cases := map[string]tools.Keyspace{
-		"ContactNil":      {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Name: getRandName()},
+		"ContactNil": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Name: getRandName()},
 		"InvalidContact1": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@test@test.com", Name: getRandName()},
 		"InvalidContact2": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@testcom", Name: getRandName()},
 		"InvalidContact3": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "testtest.com", Name: getRandName()},
@@ -359,39 +399,6 @@ func TestKeyspaceCreateFailContactError(t *testing.T) {
 	for test, ks := range cases {
 		testKeyspaceCreationFail(ks.Marshal(), ks.Name, err, test, t)
 	}
-}
-
-func TestKeyspaceCreateNewTimeseriesNewSuccessRF1(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	data := getKeyspace()
-	data.ReplicationFactor = 1
-	testKeyspaceCreation(&data, t)
-	checkTables(data, t)
-}
-
-func TestKeyspaceCreateNewTimeseriesNewSuccessRF2(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	data := getKeyspace()
-	data.ReplicationFactor = 2
-	testKeyspaceCreation(&data, t)
-	checkTables(data, t)
-}
-
-func TestKeyspaceCreateNewTimeseriesNewSuccessRF3(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	data := getKeyspace()
-	data.ReplicationFactor = 3
-	testKeyspaceCreation(&data, t)
-	checkTables(data, t)
 }
 
 func TestKeyspaceCreateWithConflict(t *testing.T) {
@@ -685,7 +692,7 @@ func TestKeyspaceEditEmptyPayload(t *testing.T) {
 	data := getKeyspace()
 	testKeyspaceCreation(&data, t)
 
-	err := tools.Error{Error: "EOF", Message: "Wrong JSON format"}
+	err := tools.Error{Error:"EOF", Message:"Wrong JSON format"}
 
 	testKeyspaceEditionFail(data.ID, nil, 400, err, "", t)
 }
@@ -743,10 +750,11 @@ func TestKeyspaceEditInvalidName(t *testing.T) {
 	testKeyspaceCreation(&data, t)
 
 	cases := map[string]tools.KeyspaceEdit{
-		"InvalidName1": {Name: "test_*123", Contact: data.Contact},
-		"InvalidName2": {Name: "_test", Contact: data.Contact},
-		"InvalidName3": {Name: "", Contact: data.Contact},
-		"InvalidName4": {Contact: data.Contact},
+		"InvalidName1":       {Name: "test_*123", Contact: data.Contact},
+		"InvalidName2":       {Name: "_test", Contact: data.Contact},
+		"InvalidName3":       {Name: "", Contact: data.Contact},
+		"InvalidName4":       {Contact: data.Contact},
+
 	}
 
 	err := tools.Error{Error: errKsName, Message: errKsName}

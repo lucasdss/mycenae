@@ -1,9 +1,6 @@
 #!/bin/bash
 
 docker rm -f cassandra1 cassandra2 cassandra3 consulCassandra1 consulCassandra2 consulCassandra3 consulServer elastic grafana_mycenae
-rm -f /tmp/mycenae/cache.db
-
-mkdir -p /tmp/mycenae
 
 checkCassandraUpNodes () {
     upnodes=$(docker exec -it cassandra1 sh -c "nodetool status" | grep UN | wc -l)

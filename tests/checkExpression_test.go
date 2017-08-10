@@ -10,7 +10,7 @@ import (
 	"github.com/uol/mycenae/tests/tools"
 )
 
-func TestCheckValidQuery(t *testing.T) {
+func TestCheckExpressionValidQuery(t *testing.T) {
 	cases := map[string]string{
 		"MetricAndTagsWithSpecialChar":        `merge(sum,downsample(30s,min,none,query(os-%&#;_/.cpu,{ap-%&#;_/.p=tes-%&#;_/.t},5m)))`,
 		"DownsampleSec":                       `merge(sum,downsample(30s,min,none,query(os.cpu,{app=test},5m)))`,
@@ -72,7 +72,7 @@ func TestCheckValidQuery(t *testing.T) {
 	}
 }
 
-func TestCheckInvalidQuery(t *testing.T) {
+func TestCheckExpressionInvalidQuery(t *testing.T) {
 	cases := map[string]struct {
 		expression string
 		msg        string
@@ -360,7 +360,7 @@ func TestCheckInvalidQuery(t *testing.T) {
 	}
 }
 
-func TestCheckQueryExpressionNotSent(t *testing.T) {
+func TestCheckExpressionQueryExpressionNotSent(t *testing.T) {
 
 	statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`keyspaces/%v/expression/expand`, ksMycenae))
 	assert.Equal(t, 400, statusCode)
@@ -377,20 +377,20 @@ func TestCheckQueryExpressionNotSent(t *testing.T) {
 	assert.Equal(t, "no expression found", compare.Message)
 }
 
-func TestCheckInvalidQueryGroupByKeyspaceNotFound(t *testing.T) {
+func TestCheckExpressionInvalidQueryGroupByKeyspaceNotFound(t *testing.T) {
 
-	expression := url.QueryEscape(fmt.Sprintf(
-		`groupBy({host=*})|rate(true, null, 0, merge(sum, downsample(1m, min, none,query(os.cpu, {app=test}, 5m))))`))
+	expression := url.QueryEscape(
+		`groupBy({host=*})|rate(true, null, 0, merge(sum, downsample(1m, min, none,query(os.cpu, {app=test}, 5m))))`)
 
 	statusCode, resp, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`keyspaces/aaa/expression/expand?exp=%v`, expression))
 	assert.Equal(t, 404, statusCode)
 	assert.Equal(t, 0, len(resp))
 }
 
-func TestCheckInvalidQueryGroupByKeyspaceNotSent(t *testing.T) {
+func TestCheckExpressionInvalidQueryGroupByKeyspaceNotSent(t *testing.T) {
 
-	expression := url.QueryEscape(fmt.Sprintf(
-		`groupBy({host=*})|rate(true, null, 0, merge(sum, downsample(1m, min,none, query(os.cpu, {app=test}, 5m))))`))
+	expression := url.QueryEscape(
+		`groupBy({host=*})|rate(true, null, 0, merge(sum, downsample(1m, min,none, query(os.cpu, {app=test}, 5m))))`)
 
 	statusCode, _, _ := mycenaeTools.HTTP.GET(fmt.Sprintf(`keyspaces/expression/expand?exp=%v`, expression))
 	assert.Equal(t, 404, statusCode)

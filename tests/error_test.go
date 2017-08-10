@@ -41,7 +41,7 @@ func getErrorPayload(metric string) (string, string, string) {
 		tagValue
 }
 
-func getErrorPayload2Tags(metric string) (string, string, string, string, string) {
+func getErrorPayloadTwoTags(metric string) (string, string, string, string, string) {
 
 	random := rand.Int()
 	tagKey := fmt.Sprint("testTagKey-", random)
@@ -57,7 +57,7 @@ func getErrorPayload2Tags(metric string) (string, string, string, string, string
 		fmt.Sprint(tagValue, "1")
 }
 
-func TestGetTimeseriesV2Error(t *testing.T) {
+func TestGetErrorTimeseries(t *testing.T) {
 	t.Parallel()
 	metric := "TestGetTimeseriesV2Error"
 
@@ -83,7 +83,7 @@ func TestGetTimeseriesV2Error(t *testing.T) {
 	assert.Equal(t, payload, data[0].Message)
 }
 
-func TestGetTimeseriesV2MultipleError(t *testing.T) {
+func TestGetErrorTimeseriesMultiple(t *testing.T) {
 	t.Parallel()
 
 	metric := "metric"
@@ -146,7 +146,7 @@ func TestGetTimeseriesV2MultipleError(t *testing.T) {
 
 }
 
-func TestGetTimeseriesV2SameError(t *testing.T) {
+func TestGetErrorTimeseriesSame(t *testing.T) {
 	t.Parallel()
 
 	metric := "metric"
@@ -208,7 +208,7 @@ func TestGetTimeseriesV2SameError(t *testing.T) {
 
 }
 
-func TestGetTimeseriesV2Errors(t *testing.T) {
+func TestGetErrorsTimeseries(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]struct {
@@ -248,7 +248,7 @@ func TestGetTimeseriesV2Errors(t *testing.T) {
 	}
 }
 
-func TestGetTimeseriesV2ErrorPost(t *testing.T) {
+func TestGetErrorPostTimeseries(t *testing.T) {
 	t.Parallel()
 
 	random := rand.Int()
@@ -282,12 +282,12 @@ func TestGetTimeseriesV2ErrorPost(t *testing.T) {
 
 }
 
-func TestListTimeseriesV2ErrorIdsMultipleTags(t *testing.T) {
+func TestListErrorTimeseriesIdsMultipleTags(t *testing.T) {
 	t.Parallel()
 
 	metric := "TestListTimeseriesV2ErrorIdsMultipleTags"
 
-	payload, tk1, tv1, tk2, tv2 := getErrorPayload2Tags(metric)
+	payload, tk1, tv1, tk2, tv2 := getErrorPayloadTwoTags(metric)
 	mycenaeTools.UDP.SendString(payload)
 	time.Sleep(tools.Sleep2)
 
@@ -300,12 +300,12 @@ func TestListTimeseriesV2ErrorIdsMultipleTags(t *testing.T) {
 	postAndCheckError("", path, data, 200, t)
 }
 
-func TestListTimeseriesV2ErrorIdsMetric(t *testing.T) {
+func TestListErrorTimeseriesIdsMetric(t *testing.T) {
 	t.Parallel()
 
 	metric := fmt.Sprint("TestListTimeseriesV2ErrorIdsMetric-", time.Now().Unix())
 
-	payload, _, _, _, _ := getErrorPayload2Tags(metric)
+	payload, _, _, _, _ := getErrorPayloadTwoTags(metric)
 	mycenaeTools.UDP.SendString(payload)
 	time.Sleep(tools.Sleep2)
 
@@ -317,10 +317,10 @@ func TestListTimeseriesV2ErrorIdsMetric(t *testing.T) {
 	postAndCheckError("", path, data, 200, t)
 }
 
-func TestListTimeseriesV2ErrorIdsTagKey(t *testing.T) {
+func TestListErrorTimeseriesIdsTagKey(t *testing.T) {
 	t.Parallel()
 
-	payload, tk1, _, _, _ := getErrorPayload2Tags("TestListTimeseriesV2ErrorIdsTagKey")
+	payload, tk1, _, _, _ := getErrorPayloadTwoTags("TestListTimeseriesV2ErrorIdsTagKey")
 	mycenaeTools.UDP.SendString(payload)
 	time.Sleep(tools.Sleep2)
 
@@ -332,10 +332,10 @@ func TestListTimeseriesV2ErrorIdsTagKey(t *testing.T) {
 	postAndCheckError("", path, data, 200, t)
 }
 
-func TestListTimeseriesV2ErrorIdsTagValue(t *testing.T) {
+func TestListErrorTimeseriesIdsTagValue(t *testing.T) {
 	t.Parallel()
 
-	payload, _, tv1, _, _ := getErrorPayload2Tags("TestListTimeseriesV2ErrorIdsTagValue")
+	payload, _, tv1, _, _ := getErrorPayloadTwoTags("TestListTimeseriesV2ErrorIdsTagValue")
 	mycenaeTools.UDP.SendString(payload)
 	time.Sleep(tools.Sleep2)
 
@@ -347,10 +347,10 @@ func TestListTimeseriesV2ErrorIdsTagValue(t *testing.T) {
 	postAndCheckError("", path, data, 200, t)
 }
 
-func TestListTimeseriesV2ErrorIdsTagKeyAndTagValue(t *testing.T) {
+func TestListErrorTimeseriesIdsTagKeyAndTagValue(t *testing.T) {
 	t.Parallel()
 
-	payload, tk1, tv1, _, _ := getErrorPayload2Tags("TestListTimeseriesV2ErrorIdsTagKeyAndTagValue")
+	payload, tk1, tv1, _, _ := getErrorPayloadTwoTags("TestListTimeseriesV2ErrorIdsTagKeyAndTagValue")
 	mycenaeTools.UDP.SendString(payload)
 	time.Sleep(tools.Sleep2)
 
@@ -362,12 +362,12 @@ func TestListTimeseriesV2ErrorIdsTagKeyAndTagValue(t *testing.T) {
 	postAndCheckError("", path, data, 200, t)
 }
 
-func TestListTimeseriesV2ErrorIdsTagKeyAndMetric(t *testing.T) {
+func TestListErrorTimeseriesIdsTagKeyAndMetric(t *testing.T) {
 	t.Parallel()
 
 	metric := "TestListTimeseriesV2ErrorIdsTagKeyAndMetric"
 
-	payload, tk1, _, _, _ := getErrorPayload2Tags(metric)
+	payload, tk1, _, _, _ := getErrorPayloadTwoTags(metric)
 	mycenaeTools.UDP.SendString(payload)
 	time.Sleep(tools.Sleep2)
 
@@ -380,12 +380,12 @@ func TestListTimeseriesV2ErrorIdsTagKeyAndMetric(t *testing.T) {
 	postAndCheckError("", path, data, 200, t)
 }
 
-func TestListTimeseriesV2ErrorIdsTagValueAndMetric(t *testing.T) {
+func TestListErrorTimeseriesIdsTagValueAndMetric(t *testing.T) {
 	t.Parallel()
 
 	metric := "TestListTimeseriesV2ErrorIdsTagValueAndMetric"
 
-	payload, _, tv1, _, _ := getErrorPayload2Tags(metric)
+	payload, _, tv1, _, _ := getErrorPayloadTwoTags(metric)
 	mycenaeTools.UDP.SendString(payload)
 	time.Sleep(tools.Sleep2)
 
@@ -398,7 +398,7 @@ func TestListTimeseriesV2ErrorIdsTagValueAndMetric(t *testing.T) {
 	postAndCheckError("", path, data, 200, t)
 }
 
-func TestListTimeseriesV2ErrorIdsNoResults(t *testing.T) {
+func TestListErrorTimeseriesIdsNoResults(t *testing.T) {
 	t.Parallel()
 
 	_, tk, tv := getErrorPayload("")
@@ -412,7 +412,7 @@ func TestListTimeseriesV2ErrorIdsNoResults(t *testing.T) {
 	postAndCheckError("", path, data, 204, t)
 }
 
-func TestListTimeseriesV2ErrorIds(t *testing.T) {
+func TestListErrorTimeseriesIds(t *testing.T) {
 	t.Parallel()
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
 	metric := "metricTest"
@@ -457,7 +457,7 @@ func TestListTimeseriesV2ErrorIds(t *testing.T) {
 	}
 }
 
-func TestGetTimeseriesV2MultipleErrorIdsKeyspaceNotExists(t *testing.T) {
+func TestGetErrorTimeseriesMultipleIdsKeyspaceNotFound(t *testing.T) {
 	t.Parallel()
 
 	data := tools.TsErrorV2{
@@ -468,7 +468,7 @@ func TestGetTimeseriesV2MultipleErrorIdsKeyspaceNotExists(t *testing.T) {
 	postAndCheckError("", "keyspaces/notExists/errortags", data, 404, t)
 }
 
-func TestGetTimeseriesV2MultipleErrorIdsParamsSizeAndFrom(t *testing.T) {
+func TestGetErrorTimeseriesMultipleIdsParamsSizeAndFrom(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
@@ -490,7 +490,7 @@ func TestGetTimeseriesV2MultipleErrorIdsParamsSizeAndFrom(t *testing.T) {
 	}
 }
 
-func TestGetTimeseriesV2MalformedPayload(t *testing.T) {
+func TestGetErrorTimeseriesMalformedPayload(t *testing.T) {
 	t.Parallel()
 
 	type tsErrorV2 struct {
@@ -507,7 +507,7 @@ func TestGetTimeseriesV2MalformedPayload(t *testing.T) {
 	postAndCheckError("", path, data, 400, t)
 }
 
-func TestGetTimeseriesV2FieldNotExists(t *testing.T) {
+func TestGetErrorTimeseriesFieldNotExists(t *testing.T) {
 	t.Parallel()
 
 	type tsErrorV2_1 struct {
@@ -528,7 +528,7 @@ func TestGetTimeseriesV2FieldNotExists(t *testing.T) {
 
 }
 
-func TestGetTimeseriesV2MethodNotAllowed(t *testing.T) {
+func TestGetErrorTimeseriesMethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
