@@ -2102,7 +2102,7 @@ func TestTsdbQueryAproxMaxWeek(t *testing.T) {
 }
 
 func TestTsdbQueryAproxMaxMonth(t *testing.T) {
-	//t.Parallel()
+	t.Parallel()
 
 	payload := `{
 		"start": 1448452740000,
