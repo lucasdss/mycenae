@@ -189,7 +189,7 @@ func checkKeyspacePropertiesAndIndex(data tools.Keyspace, t *testing.T) {
 	}
 
 	var replication = map[string]string{
-		"class":              "org.apache.cassandra.locator.NetworkTopologyStrategy",
+		"class":       "org.apache.cassandra.locator.NetworkTopologyStrategy",
 		"datacenter1": fmt.Sprintf("%v", data.ReplicationFactor),
 	}
 
@@ -205,7 +205,7 @@ func checkKeyspacePropertiesAndIndex(data tools.Keyspace, t *testing.T) {
 		assert.Exactly(t, compaction, tableProperties.Compaction)
 		assert.Exactly(t, compression, tableProperties.Compression)
 		assert.Exactly(t, 0.0, tableProperties.Dclocal_read_repair_chance)
-		assert.Exactly(t, data.TTL * 86400, tableProperties.Default_time_to_live)
+		assert.Exactly(t, data.TTL*86400, tableProperties.Default_time_to_live)
 		assert.Exactly(t, 0, tableProperties.Gc_grace_seconds)
 		assert.Exactly(t, 2048, tableProperties.Max_index_interval)
 		assert.Exactly(t, 0, tableProperties.Memtable_flush_period_in_ms)
@@ -262,13 +262,14 @@ func TestKeyspaceCreateSuccessRF3(t *testing.T) {
 }
 
 func TestKeyspaceCreateFailDCError(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
 	var (
-		rf = 1
-		ttl = 90
+		rf      = 1
+		ttl     = 90
 		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
 	)
 
@@ -294,14 +295,15 @@ func TestKeyspaceCreateFailDCError(t *testing.T) {
 }
 
 func TestKeyspaceCreateFailNameError(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
 	var (
-		rf = 1
-		ttl = 90
-		dc = "datacenter1"
+		rf      = 1
+		ttl     = 90
+		dc      = "datacenter1"
 		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
 	)
 
@@ -318,13 +320,14 @@ func TestKeyspaceCreateFailNameError(t *testing.T) {
 }
 
 func TestKeyspaceCreateFailRFError(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
 	var (
-		ttl = 90
-		dc = "datacenter1"
+		ttl     = 90
+		dc      = "datacenter1"
 		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
 	)
 
@@ -343,21 +346,22 @@ func TestKeyspaceCreateFailRFError(t *testing.T) {
 }
 
 func TestKeyspaceCreateFailTTLError(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
 	var (
-		rf = 1
-		dc = "datacenter1"
+		rf      = 1
+		dc      = "datacenter1"
 		contact = fmt.Sprintf("test-%v@domain.com", time.Now().Unix())
 	)
 
 	cases := map[string]tools.Keyspace{
-		"TTL0":         {Datacenter: dc, ReplicationFactor: rf, TTL: 0, Contact: contact, Name: getRandName()},
-		"TTLNil":         {Datacenter: dc, ReplicationFactor: rf, Contact: contact, Name: getRandName()},
-		"TTLAboveMax":         {Datacenter: dc, ReplicationFactor: rf, TTL: 91, Contact: contact, Name: getRandName()},
-		"NegativeTTL":         {Datacenter: dc, ReplicationFactor: rf, TTL: -10, Contact: contact, Name: getRandName()},
+		"TTL0":        {Datacenter: dc, ReplicationFactor: rf, TTL: 0, Contact: contact, Name: getRandName()},
+		"TTLNil":      {Datacenter: dc, ReplicationFactor: rf, Contact: contact, Name: getRandName()},
+		"TTLAboveMax": {Datacenter: dc, ReplicationFactor: rf, TTL: 91, Contact: contact, Name: getRandName()},
+		"NegativeTTL": {Datacenter: dc, ReplicationFactor: rf, TTL: -10, Contact: contact, Name: getRandName()},
 	}
 
 	errTTL := tools.Error{Error: errKsTTL, Message: errKsTTL}
@@ -374,18 +378,19 @@ func TestKeyspaceCreateFailTTLError(t *testing.T) {
 }
 
 func TestKeyspaceCreateFailContactError(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
 	var (
-		rf = 1
+		rf  = 1
 		ttl = 90
-		dc = "datacenter1"
+		dc  = "datacenter1"
 	)
 
 	cases := map[string]tools.Keyspace{
-		"ContactNil": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Name: getRandName()},
+		"ContactNil":      {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Name: getRandName()},
 		"InvalidContact1": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@test@test.com", Name: getRandName()},
 		"InvalidContact2": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "test@testcom", Name: getRandName()},
 		"InvalidContact3": {Datacenter: dc, ReplicationFactor: rf, TTL: ttl, Contact: "testtest.com", Name: getRandName()},
@@ -439,6 +444,7 @@ func TestKeyspaceCreateWithConflict(t *testing.T) {
 }
 
 func TestKeyspaceCreateInvalidRFString(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -460,6 +466,7 @@ func TestKeyspaceCreateInvalidRFString(t *testing.T) {
 }
 
 func TestKeyspaceCreateInvalidRFFloat(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -482,6 +489,7 @@ func TestKeyspaceCreateInvalidRFFloat(t *testing.T) {
 }
 
 func TestKeyspaceCreateInvalidTTLString(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -503,6 +511,7 @@ func TestKeyspaceCreateInvalidTTLString(t *testing.T) {
 }
 
 func TestKeyspaceCreateInvalidTTLFloat(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -525,6 +534,7 @@ func TestKeyspaceCreateInvalidTTLFloat(t *testing.T) {
 }
 
 func TestKeyspaceCreateNilPayload(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -538,6 +548,7 @@ func TestKeyspaceCreateNilPayload(t *testing.T) {
 }
 
 func TestKeyspaceCreateInvalidPayload(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -559,55 +570,29 @@ func TestKeyspaceCreateInvalidPayload(t *testing.T) {
 
 // EDIT
 
-func TestKeyspaceEditName(t *testing.T) {
+func TestKeyspaceEditSuccess(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
 	data := getKeyspace()
 	testKeyspaceCreation(&data, t)
+
+	// name
 
 	dataEdit := tools.KeyspaceEdit{
 		Name:    "edit_" + data.Name,
 		Contact: data.Contact,
 	}
 	testKeyspaceEdition(data.ID, dataEdit, t)
-}
 
-func TestKeyspaceEditTimeseriesNewContactSuccess(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
+	// contact
 
-	data := getKeyspace()
-	testKeyspaceCreation(&data, t)
-
-	dataEdit := tools.KeyspaceEdit{
+	dataEdit = tools.KeyspaceEdit{
 		Name:    data.Name,
 		Contact: "test2edit@domain.com",
 	}
 	testKeyspaceEdition(data.ID, dataEdit, t)
-}
-
-func TestKeyspaceEdit2Times(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	data := getKeyspace()
-	testKeyspaceCreation(&data, t)
-
-	dataEdit2 := tools.KeyspaceEdit{
-		Name:    "edit_" + getRandName(),
-		Contact: "test2edit@domain.com",
-	}
-	testKeyspaceEdition(data.ID, dataEdit2, t)
-
-	dataEdit3 := tools.KeyspaceEdit{
-		Name:    "edit2_" + getRandName(),
-		Contact: data.Contact,
-	}
-	testKeyspaceEdition(data.ID, dataEdit3, t)
 }
 
 func TestKeyspaceEditConcurrently(t *testing.T) {
@@ -637,7 +622,7 @@ func TestKeyspaceEditConcurrently(t *testing.T) {
 	wg.Wait()
 }
 
-func TestKeyspaceEditConflictName(t *testing.T) {
+func TestKeyspaceEditFail(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -645,23 +630,62 @@ func TestKeyspaceEditConflictName(t *testing.T) {
 	data := getKeyspace()
 	testKeyspaceCreation(&data, t)
 
+	// conflict name
 	data2 := getKeyspace()
 	testKeyspaceCreation(&data2, t)
 
 	dataEdit := tools.KeyspaceEdit{
-		Name:    data.Name,
-		Contact: data2.Contact,
+		Name:    data2.Name,
+		Contact: data.Contact,
 	}
 
-	respErr := tools.Error{
-		Error:   "Cannot update because keyspace \"" + data.Name + "\" already exists",
-		Message: "Cannot update because keyspace \"" + data.Name + "\" already exists",
+	err := tools.Error{
+		Error:   "Cannot update because keyspace \"" + data2.Name + "\" already exists",
+		Message: "Cannot update because keyspace \"" + data2.Name + "\" already exists",
 	}
 
-	testKeyspaceEditionFail(data2.ID, dataEdit.Marshal(), 409, respErr, "", t)
+	testKeyspaceEditionFail(data.ID, dataEdit.Marshal(), 409, err, "", t)
+
+	// empty payload
+	err = tools.Error{Error: "EOF", Message: "Wrong JSON format"}
+
+	testKeyspaceEditionFail(data.ID, nil, 400, err, "", t)
+
+	// invalid contact
+	casesContact := map[string]tools.KeyspaceEdit{
+		"InvalidContact1": {Name: data.Name, Contact: "test@test@test.com"},
+		"InvalidContact2": {Name: data.Name, Contact: "test@testcom"},
+		"InvalidContact3": {Name: data.Name, Contact: "testtest.com"},
+		"InvalidContact4": {Name: data.Name, Contact: "@test.com"},
+		"InvalidContact5": {Name: data.Name, Contact: "test@"},
+		"InvalidContact6": {Name: data.Name, Contact: "test@t est.com"},
+		"InvalidContact7": {Name: data.Name, Contact: ""},
+		"InvalidContact8": {Name: data.Name},
+	}
+
+	err = tools.Error{Error: errKsContact, Message: errKsContact}
+
+	for test, dataCase := range casesContact {
+		testKeyspaceEditionFail(data.ID, dataCase.Marshal(), 400, err, test, t)
+	}
+
+	// invalid name
+	casesName := map[string]tools.KeyspaceEdit{
+		"InvalidName1": {Name: "test_*123", Contact: data.Contact},
+		"InvalidName2": {Name: "_test", Contact: data.Contact},
+		"InvalidName3": {Name: "", Contact: data.Contact},
+		"InvalidName4": {Contact: data.Contact},
+	}
+
+	err = tools.Error{Error: errKsName, Message: errKsName}
+
+	for test, dataCase := range casesName {
+		testKeyspaceEditionFail(data.ID, dataCase.Marshal(), 400, err, test, t)
+	}
 }
 
 func TestKeyspaceEditNotExist(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -684,95 +708,13 @@ func TestKeyspaceEditNotExist(t *testing.T) {
 	assert.Empty(t, resp)
 }
 
-func TestKeyspaceEditEmptyPayload(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	data := getKeyspace()
-	testKeyspaceCreation(&data, t)
-
-	err := tools.Error{Error:"EOF", Message:"Wrong JSON format"}
-
-	testKeyspaceEditionFail(data.ID, nil, 400, err, "", t)
-}
-
-func TestKeyspaceEditInvalidNameType(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	data := getKeyspace()
-	testKeyspaceCreation(&data, t)
-
-	data2 := `{"name":2, "contact":` + fmt.Sprintf("test-%d@domain.com", time.Now().Unix()) + `}`
-
-	respErr := tools.Error{
-		Error:   "invalid character 'e' in literal true (expecting 'r')",
-		Message: "Wrong JSON format",
-	}
-
-	testKeyspaceEditionFail(data.ID, []byte(data2), 400, respErr, "", t)
-}
-
-func TestKeyspaceEditInvalidContact(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	data := getKeyspace()
-	testKeyspaceCreation(&data, t)
-
-	cases := map[string]tools.KeyspaceEdit{
-		"InvalidContact1": {Name: data.Name, Contact: "test@test@test.com"},
-		"InvalidContact2": {Name: data.Name, Contact: "test@testcom"},
-		"InvalidContact3": {Name: data.Name, Contact: "testtest.com"},
-		"InvalidContact4": {Name: data.Name, Contact: "@test.com"},
-		"InvalidContact5": {Name: data.Name, Contact: "test@"},
-		"InvalidContact6": {Name: data.Name, Contact: "test@t est.com"},
-		"InvalidContact7": {Name: data.Name, Contact: ""},
-		"InvalidContact8": {Name: data.Name},
-	}
-
-	err := tools.Error{Error: errKsContact, Message: errKsContact}
-
-	for test, data2 := range cases {
-		testKeyspaceEditionFail(data.ID, data2.Marshal(), 400, err, test, t)
-	}
-}
-
-func TestKeyspaceEditInvalidName(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
-	data := getKeyspace()
-	testKeyspaceCreation(&data, t)
-
-	cases := map[string]tools.KeyspaceEdit{
-		"InvalidName1":       {Name: "test_*123", Contact: data.Contact},
-		"InvalidName2":       {Name: "_test", Contact: data.Contact},
-		"InvalidName3":       {Name: "", Contact: data.Contact},
-		"InvalidName4":       {Contact: data.Contact},
-
-	}
-
-	err := tools.Error{Error: errKsName, Message: errKsName}
-
-	for test, data2 := range cases {
-		testKeyspaceEditionFail(data.ID, data2.Marshal(), 400, err, test, t)
-	}
-}
-
 // LIST
 
 func TestKeyspaceList(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-
-	data := getKeyspace()
-	testKeyspaceCreation(&data, t)
 
 	path := fmt.Sprintf("keyspaces")
 	code, content, err := mycenaeTools.HTTP.GET(path)
@@ -782,5 +724,5 @@ func TestKeyspaceList(t *testing.T) {
 	}
 
 	assert.Equal(t, 200, code)
-	assert.NotContains(t, string(content), "\"key\":\"macs\"", "The request to list keyspaces should not contains the keyspace macs")
+	assert.NotContains(t, string(content), `"key":"mycenae"`)
 }
