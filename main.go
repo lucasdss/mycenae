@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/gocql/gocql"
 	"go.uber.org/zap"
@@ -133,7 +134,30 @@ func main() {
 	if err != nil {
 		tsLogger.Fatal("", zap.Error(err))
 	}
+	go func() {
 
+		tsLogger := tsLogger.With(
+			zap.String("func", "main"),
+			zap.String("package", "main"),
+		)
+
+		for pts := range wal.Load() {
+			for _, p := range pts {
+				err := cluster.WAL(&p)
+				if err != nil {
+					tsLogger.Error(
+						"failure loading point from write-ahead-log (wal)",
+						zap.Error(err),
+					)
+				}
+			}
+		}
+
+		tsLogger.Debug("finished loading points")
+
+	}()
+
+	time.Sleep(30 * time.Second)
 	limiter, err := limiter.New(settings.MaxRateLimit, settings.Burst, tsLogger)
 	if err != nil {
 		tsLogger.Fatal(err.Error())
@@ -198,28 +222,9 @@ func main() {
 
 	tsLogger.Info("Mycenae started successfully")
 
-	go func() {
+	/*
 
-		tsLogger := tsLogger.With(
-			zap.String("func", "main"),
-			zap.String("package", "main"),
-		)
-
-		for pts := range wal.Load() {
-			for _, p := range pts {
-				err := cluster.WAL(&p)
-				if err != nil {
-					tsLogger.Error(
-						"failure loading point from write-ahead-log (wal)",
-						zap.Error(err),
-					)
-				}
-			}
-		}
-
-		tsLogger.Debug("finished loading points")
-
-	}()
+	 */
 
 	for {
 		sig := <-signalChannel

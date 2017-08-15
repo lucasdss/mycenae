@@ -71,6 +71,10 @@ Burst = 10000
   port = 6969
   checkInterval = "1s"
   applyWait = 10
+  grpcTimeout = "15s"
+  grpcMaxServerConn = 3000
+  grpcBurstServerConn = 3000
+  MaxListenerConn = 10240
   [cluster.consul]
     address = "localhost"
     protocol = "http"

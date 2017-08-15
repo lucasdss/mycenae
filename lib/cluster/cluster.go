@@ -25,6 +25,12 @@ type Config struct {
 	CheckInterval string
 	//Time, in seconds, to wait before applying cluster changes to consistency hashing
 	ApplyWait int64
+
+	GrpcTimeout         string
+	gRPCtimeout         time.Duration
+	GrpcMaxServerConn   int64
+	GrpcBurstServerConn int
+	MaxListenerConn     int
 }
 
 type state struct {
@@ -43,6 +49,14 @@ func New(log *zap.Logger, sto *gorilla.Storage, m *meta.Meta, conf Config) (*Clu
 		log.Error("", zap.Error(err))
 		return nil, errInit("New", err)
 	}
+
+	gRPCtimeout, err := time.ParseDuration(conf.GrpcTimeout)
+	if err != nil {
+		log.Error("", zap.Error(err))
+		return nil, errInit("New", err)
+	}
+
+	conf.gRPCtimeout = gRPCtimeout
 
 	c, gerr := newConsul(conf.Consul)
 	if gerr != nil {
@@ -190,27 +204,38 @@ func (c *Cluster) Write(pts []*pb.TSPoint) gobol.Error {
 			node := c.nodes[nodeID]
 			c.nMutex.RUnlock()
 
-			logger.Debug(
-				"forwarding point",
-				zap.String("package", "cluster"),
-				zap.String("func", "Write"),
-				zap.String("addr", node.address),
-				zap.Int("port", node.port),
-			)
-
 			go func(p *pb.TSPoint) {
 				// Add WAL for future replay
-				err := node.write(p)
-				if err != nil {
-					logger.Error(
-						"remote write",
+				var err error
+				attempts := 1
+				for {
+					if err = node.write(p); err != nil {
+						time.Sleep(time.Duration(attempts) * time.Millisecond)
+						if attempts >= 5 {
+							break
+						}
+						attempts++
+						continue
+					}
+					logger.Debug(
+						"sucessfully writen remotely",
 						zap.String("package", "cluster"),
 						zap.String("func", "Write"),
 						zap.String("addr", node.address),
 						zap.Int("port", node.port),
-						zap.Error(err),
+						zap.Int("attemps", attempts),
 					)
+					return
 				}
+				logger.Error(
+					"fail to write remotely",
+					zap.String("package", "cluster"),
+					zap.String("func", "Write"),
+					zap.String("addr", node.address),
+					zap.Int("port", node.port),
+					zap.Int("attemps", attempts),
+					zap.Error(err),
+				)
 			}(p)
 		}
 

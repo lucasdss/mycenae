@@ -1,9 +1,9 @@
 package tsstats
 
 import (
+	"github.com/robfig/cron"
 	"github.com/uol/gobol/snitch"
 	"go.uber.org/zap"
-	"gopkg.in/robfig/cron.v2"
 )
 
 func New(gbl *zap.Logger, gbs *snitch.Stats, intvl string) (*StatsTS, error) {

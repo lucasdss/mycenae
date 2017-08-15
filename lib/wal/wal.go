@@ -511,7 +511,7 @@ func (wal *WAL) listFiles() ([]string, error) {
 }
 func (wal *WAL) Load() <-chan []pb.TSPoint {
 
-	ptsChan := make(chan []pb.TSPoint)
+	ptsChan := make(chan []pb.TSPoint, wal.settings.MaxConcWrite)
 
 	go func() {
 		defer close(ptsChan)
@@ -545,15 +545,12 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 			)
 		}
 
-		fCount := len(names) - 1
-		if fCount < 1 {
+		if len(names)-1 < 1 {
 			log.Debug("no wal to load")
 			return
 		}
 
 		log.Debug("files to load", zap.Strings("list", names))
-
-		time.Sleep(15 * time.Second)
 
 		rp := make([]pb.TSPoint, wal.settings.MaxBufferSize)
 
@@ -561,14 +558,9 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 			wal.settings.PathWAL,
 			fmt.Sprintf("%05d-%s", wal.id, fileSuffixName),
 		)
-		for {
+		for _, filepath := range names {
 
-			filepath := names[fCount]
 			if filepath == currentLog {
-				fCount--
-				if fCount < 0 {
-					break
-				}
 				continue
 			}
 
@@ -587,15 +579,15 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 			}
 
 			for {
+				if len(fileData) <= offset {
+					log.Error("unable to read data from file, sizes don't match")
+					break
+				}
+
 				fileData = fileData[8:]
 				typeSize := fileData[:offset]
 				length := binary.BigEndian.Uint32(typeSize[1:])
 				fileData = fileData[offset:]
-
-				if len(fileData) < int(length) {
-					log.Error("unable to read data from file, sizes don't match")
-					break
-				}
 
 				decLen, err := snappy.DecodedLen(fileData[:length])
 				if err != nil {
@@ -661,16 +653,6 @@ func (wal *WAL) Load() <-chan []pb.TSPoint {
 					zap.Int("data_lenght", len(fileData)),
 				)
 
-				if len(fileData) < offset {
-					break
-				}
-
-			}
-
-			fCount--
-			if fCount < 0 {
-				log.Debug("no more wal files to load")
-				break
 			}
 
 		}
