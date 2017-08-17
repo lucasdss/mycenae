@@ -22,6 +22,15 @@ WriteConsisteny = [
   "one"
 ]
 
+# MaxKeyspaceWriteRequests is the max number of concurrent 
+# timeseries being processed for each keyspace
+MaxKeyspaceWriteRequests  = 5
+
+# BurstKeyspaceWriteRequests is the max number of waitting 
+# timeseries to be processed for each keyspace.
+# Every request above this number will receive a http code 429.
+BurstKeyspaceWriteRequests = 20
+
 # MaxConcurrentTimeseries CANNOT BE BIGGER THAN MaxConcurrentReads
 # Max number of concurrent timeseries being processed
 MaxConcurrentTimeseries = 50

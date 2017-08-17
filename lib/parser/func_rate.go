@@ -26,7 +26,7 @@ func parseRate(exp string, tsdb *structs.TSDBquery) (string, gobol.Error) {
 		return "", errRateCounter(err)
 	}
 
-	tsdb.RateOptions.Counter = b
+	tsdb.RateOptions = &structs.TSDBrateOptions{Counter: b}
 
 	if params[1] != "null" {
 		counterMax, err := strconv.ParseInt(params[1], 10, 64)
@@ -54,15 +54,21 @@ func parseRate(exp string, tsdb *structs.TSDBquery) (string, gobol.Error) {
 	return params[3], nil
 }
 
-func writeRate(exp string, rate bool, rateOptions structs.TSDBrateOptions) string {
+func writeRate(exp string, rate bool, rateOptions *structs.TSDBrateOptions) string {
+
 	if rate {
 		cm := "null"
 
-		if rateOptions.CounterMax != nil {
+		if rateOptions != nil && rateOptions.CounterMax != nil {
 			cm = fmt.Sprintf("%d", *rateOptions.CounterMax)
+		}
+
+		if rateOptions == nil {
+			rateOptions = &structs.TSDBrateOptions{}
 		}
 
 		exp = fmt.Sprintf("rate(%t,%s,%d,%s)", rateOptions.Counter, cm, rateOptions.ResetValue, exp)
 	}
+
 	return exp
 }

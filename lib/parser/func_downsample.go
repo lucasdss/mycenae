@@ -21,7 +21,8 @@ func parseDownsample(exp string, tsdb *structs.TSDBquery) (string, gobol.Error) 
 		)
 	}
 
-	tsdb.Downsample = fmt.Sprintf("%s-%s-%s", params[0], params[1], params[2])
+	ds := fmt.Sprintf("%s-%s-%s", params[0], params[1], params[2])
+	tsdb.Downsample = &ds
 
 	for _, oper := range tsdb.Order {
 		if oper == "downsample" {
@@ -34,9 +35,9 @@ func parseDownsample(exp string, tsdb *structs.TSDBquery) (string, gobol.Error) 
 	return params[3], nil
 }
 
-func writeDownsample(exp, dsInfo string) string {
-	if dsInfo != "" {
-		info := strings.Split(dsInfo, "-")
+func writeDownsample(exp string, dsInfo *string) string {
+	if dsInfo != nil && *dsInfo != "" {
+		info := strings.Split(*dsInfo, "-")
 		if len(info) == 2 {
 			info = append(info, "none")
 		}

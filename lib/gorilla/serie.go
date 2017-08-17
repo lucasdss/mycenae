@@ -85,7 +85,7 @@ func (t *serie) init() {
 
 }
 
-func (t *serie) addPoint(p *pb.TSPoint) gobol.Error {
+func (t *serie) addPoint(p *pb.Point) gobol.Error {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
 	now := time.Now().Unix()
@@ -244,7 +244,7 @@ func (t *serie) stop() (int64, gobol.Error) {
 	return t.blocks[t.index].id, t.store(t.index)
 }
 
-func (t *serie) update(p *pb.TSPoint) gobol.Error {
+func (t *serie) update(p *pb.Point) gobol.Error {
 	t.mtxDepot.Lock()
 	defer t.mtxDepot.Unlock()
 

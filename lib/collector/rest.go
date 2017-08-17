@@ -22,7 +22,11 @@ func (collect *Collector) Scollector(w http.ResponseWriter, r *http.Request, ps 
 		return
 	}
 
-	returnPoints := collect.HandlePoint(points)
+	returnPoints, gerr := collect.HandlePoint(points)
+	if gerr != nil {
+		rip.Fail(w, gerr)
+		return
+	}
 
 	if len(returnPoints.Errors) > 0 {
 

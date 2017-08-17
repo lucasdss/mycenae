@@ -21,25 +21,27 @@ type SettingsUDP struct {
 }
 
 type Settings struct {
-	ReadConsistency         []string
-	WriteConsisteny         []string
-	BoltPath                string
-	WAL                     *wal.Settings
-	MaxTimeseries           int
-	MaxConcurrentTimeseries int
-	MaxConcurrentReads      int
-	MaxConcurrentPoints     int
-	LogQueryTSthreshold     int
-	MaxRateLimit            int
-	Burst                   int
-	CompactionStrategy      string
-	Meta                    *meta.Settings
-	HTTPserver              SettingsHTTP
-	UDPserver               SettingsUDP
-	UDPserverV2             SettingsUDP
-	Depot                   depot.Settings
-	Cluster                 cluster.Config
-	TTL                     struct {
+	ReadConsistency            []string
+	WriteConsisteny            []string
+	BoltPath                   string
+	WAL                        *wal.Settings
+	MaxTimeseries              int
+	MaxConcurrentTimeseries    int
+	MaxKeyspaceWriteRequests   int
+	BurstKeyspaceWriteRequests int
+	MaxConcurrentReads         int
+	MaxConcurrentPoints        int
+	LogQueryTSthreshold        int
+	MaxRateLimit               int
+	Burst                      int
+	CompactionStrategy         string
+	Meta                       *meta.Settings
+	HTTPserver                 SettingsHTTP
+	UDPserver                  SettingsUDP
+	UDPserverV2                SettingsUDP
+	Depot                      depot.Settings
+	Cluster                    cluster.Config
+	TTL                        struct {
 		Max int
 	}
 	Logs struct {

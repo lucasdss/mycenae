@@ -46,7 +46,7 @@ type UDPerror struct {
 
 func (error UDPerror) getErrorInfo(keyspace, key string) ([]ErrorInfo, gobol.Error) {
 
-	_, found, gerr := error.boltc.GetKeyspace(keyspace)
+	found, gerr := error.boltc.GetKeyspace(keyspace)
 	if gerr != nil {
 		return nil, gerr
 	}
@@ -67,7 +67,7 @@ func (error UDPerror) listErrorTags(
 	from int64,
 ) ([]string, int, gobol.Error) {
 
-	_, found, gerr := error.boltc.GetKeyspace(keyspace)
+	found, gerr := error.boltc.GetKeyspace(keyspace)
 	if gerr != nil {
 		return nil, 0, gerr
 	}

@@ -61,7 +61,7 @@ func (bc *Bcache) load() {
 
 //GetKeyspace returns a keyspace key, a boolean that tells whether the key was found or not and an error.
 //If the key isn't in boltdb, GetKeyspace tries to fetch the key from cassandra, and if found, puts it in boltdb.
-func (bc *Bcache) GetKeyspace(key string) (string, bool, gobol.Error) {
+func (bc *Bcache) GetKeyspace(key string) (bool, gobol.Error) {
 
 	bc.ksmtx.Lock()
 	//_, ok := bc.ksmap[key]
@@ -69,42 +69,42 @@ func (bc *Bcache) GetKeyspace(key string) (string, bool, gobol.Error) {
 	bc.ksmtx.Unlock()
 
 	if ok {
-		return string(key), true, nil
+		return true, nil
 	}
 
 	v, gerr := bc.persist.Get([]byte("keyspace"), []byte(key))
 	if gerr != nil {
-		return "", false, gerr
+		return false, gerr
 	}
 	if v != nil {
 		bc.ksmtx.Lock()
 		bc.ksmap.Add(key, nil)
 		bc.ksmtx.Unlock()
 
-		return key, true, nil
+		return true, nil
 	}
 
 	_, found, gerr := bc.kspace.GetKeyspace(key)
 	if gerr != nil {
 		if gerr.StatusCode() == http.StatusNotFound {
-			return "", false, nil
+			return false, nil
 		}
-		return "", false, gerr
+		return false, gerr
 	}
 	if !found {
-		return "", false, nil
+		return false, nil
 	}
 
 	gerr = bc.persist.Put([]byte("keyspace"), []byte(key), []byte("false"))
 	if gerr != nil {
-		return "", false, gerr
+		return false, gerr
 	}
 
 	bc.ksmtx.Lock()
 	bc.ksmap.Add(key, nil)
 	bc.ksmtx.Unlock()
 
-	return key, true, nil
+	return true, nil
 }
 
 func (bc *Bcache) GetTsNumber(key string, CheckTSID func(esType, id string) (bool, gobol.Error)) (bool, gobol.Error) {
@@ -126,16 +126,18 @@ func (bc *Bcache) Get(ksts []byte) bool {
 
 }
 
-func (bc *Bcache) Set(key string) {
+func (bc *Bcache) Set(key string) gobol.Error {
 
 	gerr := bc.persist.Put([]byte("number"), []byte(key), []byte{})
 	if gerr != nil {
-		return
+		return gerr
 	}
 
 	bc.tsmtx.Lock()
 	bc.tsmap.Add(key, nil)
 	bc.tsmtx.Unlock()
+
+	return nil
 
 }
 

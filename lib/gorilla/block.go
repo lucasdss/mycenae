@@ -46,7 +46,7 @@ func (b *block) Reset(id int64) {
 	return
 }
 
-func (b *block) Add(p *pb.TSPoint) {
+func (b *block) Add(p *pb.Point) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
