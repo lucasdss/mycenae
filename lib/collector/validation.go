@@ -11,7 +11,7 @@ import (
 	pb "github.com/uol/mycenae/lib/proto"
 )
 
-func (collector *Collector) makePoint(point *pb.TSPoint, meta *pb.Meta, rcvMsg *gorilla.TSDBpoint) gobol.Error {
+func (collector *Collector) makePoint(point *pb.Point, meta *pb.Meta, rcvMsg *gorilla.TSDBpoint) gobol.Error {
 
 	if rcvMsg.Value == nil {
 		return errValidation(`Wrong Format: Field "value" is required. NO information will be saved`)
@@ -97,7 +97,7 @@ func (collector *Collector) makePoint(point *pb.TSPoint, meta *pb.Meta, rcvMsg *
 	}
 	meta.Tags = tags
 
-	_, found, gerr := collector.boltc.GetKeyspace(ksid)
+	found, gerr := collector.boltc.GetKeyspace(ksid)
 	if !found {
 		return errValidation(`Keyspace not found`)
 	}
@@ -217,7 +217,7 @@ func (collector *Collector) makePacket(packet *gorilla.Point, rcvMsg gorilla.TSD
 		}
 	}
 
-	_, found, gerr := collector.boltc.GetKeyspace(packet.KsID)
+	found, gerr := collector.boltc.GetKeyspace(packet.KsID)
 	if !found {
 		return errValidation(`Keyspace not found`)
 	}

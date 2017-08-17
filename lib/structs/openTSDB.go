@@ -18,18 +18,6 @@ var (
 	validFor    = regexp.MustCompile(`^[0-9A-Za-z-._%&#;\\/|]+$`)
 )
 
-type TSDBquery struct {
-	Aggregator  string            `json:"aggregator"`
-	Downsample  string            `json:"downsample,omitempty"`
-	Metric      string            `json:"metric"`
-	Tags        map[string]string `json:"tags"`
-	Rate        bool              `json:"rate,omitempty"`
-	RateOptions TSDBrateOptions   `json:"rateOptions,omitempty"`
-	Order       []string          `json:"order,omitempty"`
-	FilterValue string            `json:"filterValue,omitempty"`
-	Filters     []TSDBfilter      `json:"filters,omitempty"`
-}
-
 type TSDBqueryPayload struct {
 	Start        int64       `json:"start,omitempty"`
 	End          int64       `json:"end,omitempty"`
@@ -37,6 +25,37 @@ type TSDBqueryPayload struct {
 	Queries      []TSDBquery `json:"queries"`
 	ShowTSUIDs   bool        `json:"showTSUIDs"`
 	MsResolution bool        `json:"msResolution"`
+	ShowQuery    bool        `json:"showQuery"`
+}
+
+type TSDBquery struct {
+	Aggregator   string            `json:"aggregator"`
+	Metric       string            `json:"metric"`
+	TSUIDs       []string          `json:"tsuids"`
+	Downsample   *string           `json:"downsample"`
+	Rate         bool              `json:"rate"`
+	Filters      []TSDBfilter      `json:"filters"`
+	Index        *int              `json:"index,omitempty"`
+	Tags         map[string]string `json:"tags"`
+	FilterTagKs  []string          `json:"filterTagKs"`
+	RateOptions  *TSDBrateOptions  `json:"rateOptions"`
+	Order        []string          `json:"order,omitempty"`
+	FilterValue  string            `json:"filterValue,omitempty"`
+	ExplicitTags bool              `json:"explicitTags"`
+}
+
+type TSDBfilter struct {
+	Tagk        string `json:"tagk"`
+	Filter      string `json:"filter"`
+	GroupBy     bool   `json:"groupBy,omitempty"`
+	GroupByResp bool   `json:"group_by"`
+	Ftype       string `json:"type"`
+}
+
+type TSDBrateOptions struct {
+	Counter    bool   `json:"counter"`
+	CounterMax *int64 `json:"counterMax,omitempty"`
+	ResetValue int64  `json:"resetValue,omitempty"`
 }
 
 func (query TSDBqueryPayload) Validate() gobol.Error {
@@ -61,9 +80,9 @@ func (query TSDBqueryPayload) Validate() gobol.Error {
 			return err
 		}
 
-		if q.Downsample != "" {
+		if q.Downsample != nil && *q.Downsample != "" {
 
-			ds := strings.Split(q.Downsample, "-")
+			ds := strings.Split(*q.Downsample, "-")
 
 			if len(ds) < 2 {
 				return errValidation(errors.New("invalid downsample format"))
@@ -85,8 +104,8 @@ func (query TSDBqueryPayload) Validate() gobol.Error {
 
 		}
 
-		if q.Rate {
-			if err := query.checkRate(q.RateOptions); err != nil {
+		if q.Rate && q.RateOptions != nil {
+			if err := query.checkRate(*q.RateOptions); err != nil {
 				return err
 			}
 		}
@@ -120,7 +139,7 @@ func (query TSDBqueryPayload) Validate() gobol.Error {
 				query.Queries[i].Order = append(query.Queries[i].Order, "filterValue")
 			}
 
-			if q.Downsample != "" {
+			if q.Downsample != nil && *q.Downsample != "" {
 				query.Queries[i].Order = append(query.Queries[i].Order, "downsample")
 			}
 
@@ -197,7 +216,7 @@ func (query TSDBqueryPayload) Validate() gobol.Error {
 
 			}
 
-			if q.Downsample != "" && occur == 0 {
+			if q.Downsample != nil && *q.Downsample != "" && occur == 0 {
 				return errValidation(
 					errors.New(
 						"downsample configured but no downsample found in order array",
@@ -434,17 +453,4 @@ func (query TSDBqueryPayload) checkFilterField(n, tf, f string) gobol.Error {
 	}
 
 	return nil
-}
-
-type TSDBrateOptions struct {
-	Counter    bool   `json:"counter"`
-	CounterMax *int64 `json:"counterMax,omitempty"`
-	ResetValue int64  `json:"resetValue,omitempty"`
-}
-
-type TSDBfilter struct {
-	Ftype   string `json:"type"`
-	Tagk    string `json:"tagk"`
-	Filter  string `json:"filter"`
-	GroupBy bool   `json:"groupBy"`
 }

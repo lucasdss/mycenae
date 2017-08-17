@@ -205,13 +205,13 @@ func (s *Storage) Delete(m Meta) <-chan []*pb.Point {
 }
 
 //Add new point in a timeseries
-func (s *Storage) Write(p *pb.TSPoint) gobol.Error {
+func (s *Storage) Write(p *pb.Point) gobol.Error {
 	s.wal.Add(p)
 
 	return s.getSerie(p.GetKsid(), p.GetTsid()).addPoint(p)
 }
 
-func (s *Storage) WAL(p *pb.TSPoint) gobol.Error {
+func (s *Storage) WAL(p *pb.Point) gobol.Error {
 	return s.getSerie(p.Ksid, p.Tsid).addPoint(p)
 }
 

@@ -50,7 +50,7 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 
 	pts := gorilla.TSDBpoints{rcvMsg}
 
-	rErr := collector.HandlePoint(pts)
+	rErr, gerr := collector.HandlePoint(pts)
 	if len(rErr.Errors) > 0 {
 		gerr = errISE(
 			"HandleUDPpacket",
@@ -66,7 +66,7 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 		esIndex := collector.settings.ElasticSearch.Index
 
 		if msgKs != "" {
-			_, found, gerr := collector.boltc.GetKeyspace(msgKs)
+			found, gerr := collector.boltc.GetKeyspace(msgKs)
 			if found {
 				keyspace = msgKs
 				esIndex = msgKs

@@ -158,7 +158,7 @@ func (plot *Plot) Query(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 
 	rip.AddStatsMap(r, map[string]string{"path": "/keyspaces/#keyspace/api/query", "keyspace": keyspace})
 
-	_, found, gerr := plot.boltc.GetKeyspace(keyspace)
+	found, gerr := plot.boltc.GetKeyspace(keyspace)
 	if gerr != nil {
 		rip.Fail(w, gerr)
 		return
@@ -236,12 +236,13 @@ func (plot *Plot) getTimeseries(
 	}
 
 	oldDs := structs.Downsample{}
+	queryLength := len(query.Queries)
 
-	for _, q := range query.Queries {
+	for i, q := range query.Queries {
 
-		if q.Downsample != "" {
+		if q.Downsample != nil && *q.Downsample != "" {
 
-			ds := strings.Split(q.Downsample, "-")
+			ds := strings.Split(*q.Downsample, "-")
 			var unit string
 			var val int
 
@@ -253,10 +254,10 @@ func (plot *Plot) getTimeseries(
 				val, _ = strconv.Atoi(ds[0][:len(ds[0])-1])
 			}
 
-			apporx := ds[1]
+			approx := ds[1]
 
-			if apporx == "count" {
-				apporx = "pnt"
+			if approx == "count" {
+				approx = "pnt"
 			}
 
 			switch unit {
@@ -284,10 +285,14 @@ func (plot *Plot) getTimeseries(
 				oldDs.Options.Fill = "none"
 			}
 
-			oldDs.Options.Downsample = apporx
+			oldDs.Options.Downsample = approx
 			oldDs.Options.Value = val
 			oldDs.Enabled = true
 
+		}
+
+		if q.Filters == nil {
+			q.Filters = []structs.TSDBfilter{}
 		}
 
 		for k, v := range q.Tags {
@@ -312,6 +317,10 @@ func (plot *Plot) getTimeseries(
 			}
 
 			q.Filters = append(q.Filters, filter)
+		}
+
+		if len(q.Tags) == 0 {
+			q.Tags = map[string]string{}
 		}
 
 		//tagMap := map[string][]string{}
@@ -350,7 +359,24 @@ func (plot *Plot) getTimeseries(
 			continue
 		}
 
-		groups := plot.GetGroups(q.Filters, tsobs)
+		var groups [][]TSDBobj
+
+		if q.ExplicitTags {
+			newTsobs := []TSDBobj{}
+			fl := len(q.Filters)
+			for _, ob := range tsobs {
+				if len(ob.Tags) == fl {
+					newTsobs = append(newTsobs, ob)
+				}
+			}
+			groups = plot.GetGroups(q.Filters, newTsobs)
+		} else {
+			groups = plot.GetGroups(q.Filters, tsobs)
+		}
+
+		for i := range q.Filters {
+			q.Filters[i].GroupByResp = q.Filters[i].GroupBy
+		}
 
 		for _, group := range groups {
 			ids := []string{}
@@ -373,12 +399,6 @@ func (plot *Plot) getTimeseries(
 			}
 
 			aggTags := []string{}
-
-			if q.RateOptions.CounterMax == nil {
-				var maxInt int64
-				maxInt = 1<<63 - 1
-				q.RateOptions.CounterMax = &maxInt
-			}
 
 			filterV := structs.FilterValueOperation{}
 
@@ -408,14 +428,29 @@ func (plot *Plot) getTimeseries(
 			}
 
 			opers := structs.DataOperations{
-				Downsample: oldDs,
-				Merge:      merge,
-				Rate: structs.RateOperation{
-					Enabled: q.Rate,
-					Options: q.RateOptions,
-				},
+				Downsample:  oldDs,
+				Merge:       merge,
 				FilterValue: filterV,
 				Order:       q.Order,
+			}
+
+			if q.Rate {
+
+				opers.Rate = structs.RateOperation{
+					Enabled: q.Rate,
+				}
+
+				if q.RateOptions != nil {
+					opers.Rate.Options = *q.RateOptions
+				} else {
+					opers.Rate.Options = structs.TSDBrateOptions{}
+				}
+
+				if opers.Rate.Options.CounterMax == nil {
+					var maxInt int64
+					maxInt = 1<<63 - 1
+					opers.Rate.Options.CounterMax = &maxInt
+				}
 			}
 
 			keepEmpty := false
@@ -466,10 +501,27 @@ func (plot *Plot) getTimeseries(
 				}
 
 				if query.ShowTSUIDs {
-					resp.Tsuids = ids
+					resp.TSUIDs = ids
 				}
+
+				if query.ShowQuery {
+
+					if queryLength > 0 {
+						index := i
+						q.Index = &index
+					}
+
+					qCopy := q
+					qCopy.Order = []string{}
+					resp.Query = &qCopy
+				}
+
 				resps = append(resps, resp)
 			}
+		}
+
+		for i := range q.Filters {
+			q.Filters[i].GroupBy = false
 		}
 	}
 

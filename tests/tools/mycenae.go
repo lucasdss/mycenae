@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"strconv"
 	"time"
+
+	"github.com/uol/mycenae/lib/structs"
 )
 
 type mycenaeTool struct {
@@ -125,6 +127,7 @@ type ResponseQuery struct {
 	AggTags []string               `json:"aggregateTags"`
 	Tsuuids []string               `json:"tsuids"`
 	Dps     map[string]interface{} `json:"dps"`
+	Query   *structs.TSDBquery     `json:"query,omitempty"`
 }
 
 type ResponseMetricTags struct {

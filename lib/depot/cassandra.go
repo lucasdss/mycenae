@@ -159,12 +159,10 @@ func (cass *Cassandra) Read(ksid, tsid string, blkid int64) ([]byte, gobol.Error
 
 func (cass *Cassandra) processing() {
 	cass.maxConcQueriesChan <- struct{}{}
-	gblog.Sugar().Debug("cassandra processing")
 }
 
 func (cass *Cassandra) done() {
 	<-cass.maxConcQueriesChan
-	gblog.Sugar().Debug("cassandra done")
 }
 
 func (cass *Cassandra) Write(ksid, tsid string, blkid int64, points []byte) gobol.Error {

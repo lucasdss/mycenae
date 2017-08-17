@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 
@@ -21,11 +22,15 @@ type node struct {
 	port    int
 	conf    Config
 	mtx     sync.RWMutex
+	ptsCh   chan []*pb.Point
+	metaCh  chan []*pb.Meta
+	pts     []*pb.Point
 
 	conn     *grpc.ClientConn
 	client   pb.TimeseriesClient
 	wLimiter *rate.Limiter
 	rLimiter *rate.Limiter
+	mLimiter *rate.Limiter
 }
 
 func newNode(address string, port int, conf Config) (*node, gobol.Error) {
@@ -49,32 +54,94 @@ func newNode(address string, port int, conf Config) (*node, gobol.Error) {
 		zap.Int("port", port),
 	)
 
-	return &node{
+	node := &node{
 		address:  address,
 		port:     port,
 		conf:     conf,
 		conn:     conn,
+		ptsCh:    make(chan []*pb.Point, 5),
+		metaCh:   make(chan []*pb.Meta, 5),
 		wLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.9, conf.GrpcBurstServerConn),
 		rLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
+		mLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
 		client:   pb.NewTimeseriesClient(conn),
-	}, nil
+	}
+
+	return node, nil
 }
 
-func (n *node) write(p *pb.TSPoint) gobol.Error {
+func (n *node) write(pts []*pb.Point) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
 	defer cancel()
 
 	if err := n.wLimiter.Wait(ctx); err != nil {
-		return errRequest("node/write", http.StatusInternalServerError, err)
+		logger.Error(
+			"write limit",
+			zap.String("package", "cluster"),
+			zap.String("func", "worker"),
+			zap.Error(err),
+		)
+		return err
 	}
 
-	_, err := n.client.Write(ctx, p)
+	stream, err := n.client.Write(ctx)
 	if err != nil {
-		return errRequest("node/write", http.StatusInternalServerError, err)
+		logger.Error(
+			"failed to get stream from server",
+			zap.String("package", "cluster"),
+			zap.String("func", "worker"),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	for _, p := range pts {
+		var attempts int
+		var err error
+		for {
+			attempts++
+			err = stream.Send(p)
+			if err == io.EOF {
+				return nil
+			}
+			if err == nil {
+				break
+			}
+
+			logger.Error(
+				"retry write stream",
+				zap.String("package", "cluster"),
+				zap.String("func", "write"),
+				zap.Int("attempt", attempts),
+				zap.Error(err),
+			)
+			if attempts >= 5 {
+				break
+			}
+		}
+
+		if err != nil && err != io.EOF {
+			logger.Error(
+				"too many attempts, unable to write to stream",
+				zap.String("package", "cluster"),
+				zap.String("func", "write"),
+				zap.Error(err),
+			)
+		}
+	}
+	_, err = stream.CloseAndRecv()
+	if err != nil && err != io.EOF {
+		logger.Error(
+			"problem writing to stream",
+			zap.String("package", "cluster"),
+			zap.String("func", "write"),
+			zap.Error(err),
+		)
 	}
 
 	return nil
+
 }
 
 func (n *node) read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error) {
@@ -86,23 +153,104 @@ func (n *node) read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Err
 		return []*pb.Point{}, errRequest("node/read", http.StatusInternalServerError, err)
 	}
 
-	resp, err := n.client.Read(ctx, &pb.Query{Ksid: ksid, Tsid: tsid, Start: start, End: end})
+	stream, err := n.client.Read(ctx, &pb.Query{Ksid: ksid, Tsid: tsid, Start: start, End: end})
 	if err != nil {
 		return []*pb.Point{}, errRequest("node/read", http.StatusInternalServerError, err)
 	}
 
-	return resp.GetPts(), nil
+	var pts []*pb.Point
+	for {
+		p, err := stream.Recv()
+		if err == io.EOF {
+			// read done.
+			return pts, nil
+		}
+		if err != nil {
+			return pts, errRequest("node/write", http.StatusInternalServerError, err)
+		}
+
+		pts = append(pts, p)
+	}
 
 }
 
-func (n *node) meta(m *pb.Meta) (bool, gobol.Error) {
-	mf, err := n.client.GetMeta(context.Background(), m)
+func (n *node) meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
 
-	if err != nil {
-		return false, errRequest("node/meta", http.StatusInternalServerError, err)
+	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
+
+	if err := n.mLimiter.Wait(ctx); err != nil {
+		logger.Error(
+			"meta request limit",
+			zap.String("package", "cluster"),
+			zap.String("func", "node/meta"),
+			zap.Error(err),
+		)
+		return nil, err
 	}
 
-	return mf.Ok, nil
+	stream, err := n.client.GetMeta(ctx)
+	if err != nil {
+		logger.Error(
+			"meta gRPC problem",
+			zap.String("package", "cluster"),
+			zap.String("func", "node/meta"),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	go func() {
+		for _, m := range metas {
+			err := stream.Send(m)
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				logger.Error(
+					"meta gRPC send problem",
+					zap.String("package", "cluster"),
+					zap.String("func", "node/meta"),
+					zap.Error(err),
+				)
+			}
+		}
+
+		err := stream.CloseSend()
+		if err != nil {
+			logger.Error(
+				"meta gRPC CloseSend problem",
+				zap.String("package", "cluster"),
+				zap.String("func", "node/meta"),
+				zap.Error(err),
+			)
+		}
+	}()
+
+	c := make(chan *pb.MetaFound, len(metas))
+	go func() {
+		defer close(c)
+		defer cancel()
+		for _ = range metas {
+			mf, err := stream.Recv()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				logger.Error(
+					"meta gRPC receive problem",
+					zap.String("package", "cluster"),
+					zap.String("func", "node/meta"),
+					zap.Error(err),
+				)
+				continue
+			}
+
+			c <- mf
+		}
+	}()
+
+	return c, nil
+
 }
 
 func (n *node) close() {

@@ -8,10 +8,6 @@ import (
 	"github.com/uol/mycenae/lib/gorilla"
 )
 
-func (collector *Collector) saveValue(packet *gorilla.Point) gobol.Error {
-	return collector.persist.InsertPoint(packet)
-}
-
 func (collector *Collector) saveText(packet gorilla.Point) gobol.Error {
 	return collector.persist.InsertText(
 		packet.KsID,

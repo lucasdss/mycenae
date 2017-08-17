@@ -141,25 +141,63 @@ func (c *Cluster) checkCluster(interval time.Duration) {
 
 }
 
-func (c *Cluster) WAL(p *pb.TSPoint) gobol.Error {
+func (c *Cluster) WAL(pts []*pb.Point) error {
 
-	nodeID, err := c.ch.Get([]byte(p.Tsid))
-	if err != nil {
-		return errRequest("Write", http.StatusInternalServerError, err)
+	limiter := make(chan interface{}, 5000)
+	defer close(limiter)
+
+	for _, p := range pts {
+		limiter <- struct{}{}
+		if p == nil {
+			continue
+		}
+		go func(p *pb.Point) {
+			gerr := c.s.WAL(p)
+			if gerr != nil {
+				logger.Error(
+					"unable to write in local node",
+					zap.String("package", "cluster"),
+					zap.String("func", "WAL"),
+					zap.Error(gerr),
+				)
+			}
+			<-limiter
+		}(p)
 	}
 
-	if nodeID == c.self {
-		gerr := c.s.WAL(p)
+	return nil
+
+}
+
+func (c *Cluster) Classifier(tsid []byte) ([]string, gobol.Error) {
+	nodes, err := c.ch.GetN(tsid, 2)
+	if err != nil {
+		logger.Debug("running as single node?", zap.String("consistent hash", err.Error()))
+		node, err := c.ch.Get(tsid)
 		if err != nil {
-			logger.Error(
-				"unable to write in local node",
-				zap.String("package", "cluster"),
-				zap.String("func", "WAL"),
-				zap.String("nodeID", nodeID),
-				zap.Error(gerr),
-			)
-			return gerr
+			return nil, errRequest("Write", http.StatusInternalServerError, err)
 		}
+		return []string{node}, nil
+	}
+	return nodes, nil
+}
+
+func (c *Cluster) Write(nodeID string, pts []*pb.Point) gobol.Error {
+
+	if nodeID == c.self {
+		go func() {
+			for _, p := range pts {
+				gerr := c.s.Write(p)
+				if gerr != nil {
+					logger.Error(
+						"unable to write locally",
+						zap.String("package", "cluster"),
+						zap.String("func", "Write"),
+						zap.Error(gerr),
+					)
+				}
+			}
+		}()
 
 		return nil
 	}
@@ -168,175 +206,158 @@ func (c *Cluster) WAL(p *pb.TSPoint) gobol.Error {
 	node := c.nodes[nodeID]
 	c.nMutex.RUnlock()
 
-	logger.Debug(
-		"forwarding point",
-		zap.String("package", "cluster"),
-		zap.String("func", "WAL"),
-		zap.String("addr", node.address),
-		zap.Int("port", node.port),
-	)
-
-	return node.write(p)
-
-}
-
-func (c *Cluster) Write(pts []*pb.TSPoint) gobol.Error {
-
-	for _, p := range pts {
-
-		if p != nil {
-
-			nodeID, err := c.ch.Get([]byte(p.GetTsid()))
-			if err != nil {
-				return errRequest("Write", http.StatusInternalServerError, err)
-			}
-
-			if nodeID == c.self {
-				gerr := c.s.Write(p)
-				if err != nil {
-					return gerr
-				}
-
-				continue
-			}
-
-			c.nMutex.RLock()
-			node := c.nodes[nodeID]
-			c.nMutex.RUnlock()
-
-			go func(p *pb.TSPoint) {
-				// Add WAL for future replay
-				var err error
-				attempts := 1
-				for {
-					if err = node.write(p); err != nil {
-						time.Sleep(time.Duration(attempts) * time.Millisecond)
-						if attempts >= 5 {
-							break
-						}
-						attempts++
-						continue
-					}
-					logger.Debug(
-						"sucessfully writen remotely",
-						zap.String("package", "cluster"),
-						zap.String("func", "Write"),
-						zap.String("addr", node.address),
-						zap.Int("port", node.port),
-						zap.Int("attemps", attempts),
-					)
-					return
-				}
-				logger.Error(
-					"fail to write remotely",
-					zap.String("package", "cluster"),
-					zap.String("func", "Write"),
-					zap.String("addr", node.address),
-					zap.Int("port", node.port),
-					zap.Int("attemps", attempts),
-					zap.Error(err),
-				)
-			}(p)
+	// Add WAL for future replay
+	if node != nil {
+		err := node.write(pts)
+		if err != nil {
+			logger.Error(
+				"unable to write remotely",
+				zap.String("package", "cluster"),
+				zap.String("func", "Write"),
+				zap.String("node", nodeID),
+				zap.Error(err),
+			)
 		}
-
 	}
+
 	return nil
 }
 
 func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error) {
 
-	ctxt := logger.With(
+	log := logger.With(
 		zap.String("package", "cluster"),
 		zap.String("func", "Read"),
 	)
 
-	nodeID, err := c.ch.Get([]byte(tsid))
+	node, err := c.ch.Get([]byte(tsid))
+	if err != nil {
+		return nil, errRequest("Write", http.StatusInternalServerError, err)
+	}
+	if node == c.self {
+		log.Debug("reading from local node")
+		pts, gerr := c.s.Read(ksid, tsid, start, end)
+		if gerr != nil {
+			log.Error(gerr.Error(), zap.Error(gerr))
+		}
+		return pts, nil
+	}
+
+	c.nMutex.RLock()
+	n := c.nodes[node]
+	c.nMutex.RUnlock()
+
+	log.Debug(
+		"forwarding read",
+		zap.String("addr", n.address),
+		zap.Int("port", n.port),
+	)
+
+	var pts []*pb.Point
+	var gerr gobol.Error
+	pts, gerr = n.read(ksid, tsid, start, end)
+	if gerr != nil {
+		log.Error(gerr.Error(), zap.Error(gerr))
+	} else {
+		return pts, gerr
+	}
+
+	nodes, err := c.Classifier([]byte(tsid))
 	if err != nil {
 		return nil, errRequest("Read", http.StatusInternalServerError, err)
 	}
 
-	if nodeID == c.self {
-		ctxt.Debug("reading from local node")
-		return c.s.Read(ksid, tsid, start, end)
+	for _, node := range nodes {
+		if node == c.self {
+			continue
+		}
+		c.nMutex.RLock()
+		n := c.nodes[node]
+		c.nMutex.RUnlock()
+
+		log.Debug(
+			"forwarding read as fallback",
+			zap.String("addr", n.address),
+			zap.Int("port", n.port),
+		)
+
+		pts, gerr = n.read(ksid, tsid, start, end)
+		if gerr != nil {
+			log.Error(gerr.Error(), zap.Error(gerr))
+			continue
+		}
+
+		break
 	}
+
+	return pts, gerr
+
+}
+
+func (c *Cluster) shard() {
+	/*
+		series := c.s.ListSeries()
+
+		for _, s := range series {
+			n, err := c.ch.Get([]byte(s.TSID))
+			if err != nil {
+
+				logger.Error(
+					err.Error(),
+					zap.String("package", "cluster"),
+					zap.String("func", "shard"),
+				)
+				continue
+			}
+			if len(n) > 0 && n != c.self {
+				c.nMutex.RLock()
+				node := c.nodes[n]
+				c.nMutex.RUnlock()
+
+				ptsC := c.s.Delete(s)
+					for pts := range ptsC {
+						for _, p := range pts {
+							node.write(&pb.TSPoint{
+								Tsid:  s.TSID,
+								Ksid:  s.KSID,
+								Date:  p.Date,
+								Value: p.Value,
+							})
+						}
+					}
+			}
+		}
+	*/
+}
+
+func (c *Cluster) MetaClassifier(ksid []byte) (string, gobol.Error) {
+	nodeID, err := c.ch.Get(ksid)
+	if err != nil {
+		return "", errRequest("MetaClassifier", http.StatusInternalServerError, err)
+	}
+	return nodeID, nil
+}
+
+func (c *Cluster) SelfID() string {
+	return c.self
+}
+
+func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
 
 	c.nMutex.RLock()
 	node := c.nodes[nodeID]
 	c.nMutex.RUnlock()
 
-	ctxt.Debug(
-		"forwarding read",
+	logger.Debug(
+		"forwarding meta read",
 		zap.String("addr", node.address),
 		zap.Int("port", node.port),
-	)
-
-	return node.read(ksid, tsid, start, end)
-}
-
-func (c *Cluster) shard() {
-	series := c.s.ListSeries()
-
-	for _, s := range series {
-		n, err := c.ch.Get([]byte(s.TSID))
-		if err != nil {
-
-			logger.Error(
-				err.Error(),
-				zap.String("package", "cluster"),
-				zap.String("func", "shard"),
-			)
-			continue
-		}
-		if len(n) > 0 && n != c.self {
-			c.nMutex.RLock()
-			node := c.nodes[n]
-			c.nMutex.RUnlock()
-
-			ptsC := c.s.Delete(s)
-			for pts := range ptsC {
-				for _, p := range pts {
-					node.write(&pb.TSPoint{
-						Tsid:  s.TSID,
-						Ksid:  s.KSID,
-						Date:  p.Date,
-						Value: p.Value,
-					})
-				}
-			}
-		}
-	}
-
-}
-
-func (c *Cluster) Meta(m *pb.Meta) (bool, gobol.Error) {
-
-	log := logger.With(
 		zap.String("package", "cluster"),
 		zap.String("func", "Meta"),
 	)
 
-	nodeID, err := c.ch.Get([]byte(m.GetKsid()))
-	if err != nil {
-		return false, errRequest("Meta", http.StatusInternalServerError, err)
-	}
+	return node.meta(metas)
 
-	if nodeID == c.self {
-		//log.Debug("saving meta in local node")
-		c.m.Handle(m)
-		return false, nil
-	}
-
-	c.nMutex.RLock()
-	node := c.nodes[nodeID]
-	c.nMutex.RUnlock()
-
-	log.Debug(
-		"forwarding meta read",
-		zap.String("addr", node.address),
-		zap.Int("port", node.port),
-	)
-
-	return node.meta(m)
 }
 
 func (c *Cluster) getNodes() {

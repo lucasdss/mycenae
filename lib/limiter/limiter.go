@@ -3,36 +3,35 @@ package limiter
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/uol/gobol"
 	"github.com/uol/mycenae/lib/tserr"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
-	"net/http"
-	"time"
 )
 
-func New(limit int, burst int, log *zap.Logger) (*RateLimite, error) {
+func New(limit int, burst int, log *zap.Logger) (*RateLimit, error) {
 	if limit == 0 {
-		return nil, errors.New(fmt.Sprintf("Limiter: limit less then 1. %d", limit))
+		return nil, errors.New(fmt.Sprintf("Limiter: limit less than 1. %d", limit))
 	}
 
 	if burst == 0 {
-		return nil, errors.New(fmt.Sprintf("Limiter: burst less then 1. %d", burst))
+		return nil, errors.New(fmt.Sprintf("Limiter: burst less than 1. %d", burst))
 	}
 
-	l := rate.Limit(limit)
-
-	return &RateLimite{
+	return &RateLimit{
 		max:     burst,
 		count:   0,
-		limiter: rate.NewLimiter(l, burst),
+		limiter: rate.NewLimiter(rate.Limit(limit), burst),
 
 		gblog: log,
 	}, nil
 
 }
 
-type RateLimite struct {
+type RateLimit struct {
 	max     int
 	count   int
 	limiter *rate.Limiter
@@ -40,7 +39,7 @@ type RateLimite struct {
 	gblog *zap.Logger
 }
 
-func (rt *RateLimite) Reserve() gobol.Error {
+func (rt *RateLimit) Reserve() gobol.Error {
 
 	reservation := rt.limiter.Reserve()
 	if !reservation.OK() {
@@ -49,7 +48,7 @@ func (rt *RateLimite) Reserve() gobol.Error {
 		return rt.error()
 	}
 	wait := reservation.Delay()
-	if wait == time.Second*0 {
+	if wait == time.Duration(0) {
 		return nil
 	}
 
@@ -68,10 +67,10 @@ func (rt *RateLimite) Reserve() gobol.Error {
 	return nil
 }
 
-func (rt *RateLimite) error() gobol.Error {
+func (rt *RateLimit) error() gobol.Error {
 	return tserr.New(
 		fmt.Errorf("too many events"),
-		"too many evebts",
+		"too many events",
 		http.StatusTooManyRequests,
 		map[string]interface{}{
 			"limiter": "reserve",

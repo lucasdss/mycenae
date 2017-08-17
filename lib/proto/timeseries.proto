@@ -3,20 +3,21 @@ syntax = "proto3";
 package proto;
 
 service Timeseries {
-    rpc Write(TSPoint) returns (TSErr) {}
-    rpc Read(Query) returns (Response) {}
-    rpc GetMeta(Meta) returns (MetaFound) {}
+    rpc Write(stream Point) returns (TSResponse) {}
+    rpc Read(Query) returns (stream Point) {}
+    rpc GetMeta(stream Meta) returns (stream MetaFound) {}
 }
 
-message TSErr {
-    string err = 1;
+message TSResponse {
+    bool ok = 1;
 }
 
-message TSPoint {
+message Point {
     string ksid = 1;
     string tsid = 2;
     float value = 3;
     int64 date = 4;
+    bool empty = 5;
 }
 
 message Query {
@@ -24,16 +25,6 @@ message Query {
     string tsid = 2;
     int64 start = 3;
     int64 end = 4;
-}
-
-message Response {
-    repeated Point pts = 1;
-}
-
-message Point {
-    float Value = 1;
-    int64 Date = 2;
-    bool Empty = 3;
 }
 
 message Meta {
@@ -50,4 +41,5 @@ message Tag {
 
 message MetaFound {
     bool ok = 1;
+    string ksts = 2;
 }

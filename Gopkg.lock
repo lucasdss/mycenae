@@ -35,7 +35,7 @@
   branch = "master"
   name = "github.com/gocql/gocql"
   packages = [".","internal/lru","internal/murmur","internal/streams"]
-  revision = "db941d937da2750f2b9392ccafd3384a25c42cd5"
+  revision = "b9337fa4c59ce1db20300290bd7a9a7063fb6784"
 
 [[projects]]
   branch = "master"
@@ -47,7 +47,7 @@
   branch = "master"
   name = "github.com/golang/protobuf"
   packages = ["proto","ptypes/any"]
-  revision = "748d386b5c1ea99658fd69fe9f03991ce86a90c1"
+  revision = "ab9f9a6dab164b7d1246e0e688b0ab7b94d8553e"
 
 [[projects]]
   branch = "master"
@@ -64,8 +64,8 @@
 [[projects]]
   name = "github.com/hashicorp/consul"
   packages = ["api"]
-  revision = "b79d951ced8c5f18fe73d35b2806f3435e40cd64"
-  version = "v0.9.0"
+  revision = "75ca2cace08e38de8af1731ee8614d0533d5a4d4"
+  version = "v0.9.2"
 
 [[projects]]
   branch = "master"
@@ -122,10 +122,10 @@
   version = "v1"
 
 [[projects]]
-  branch = "master"
   name = "github.com/spaolacci/murmur3"
   packages = ["."]
   revision = "0d12bf811670bf6a1a63828dfbd003eded177fce"
+  version = "v1.0"
 
 [[projects]]
   name = "github.com/stretchr/testify"
@@ -149,7 +149,7 @@
   branch = "master"
   name = "github.com/uol/gobol"
   packages = [".","cassandra","loader","rip","rubber","saw","snitch"]
-  revision = "55b8919ea158e430bf37a124c6ccdf5264a4cf37"
+  revision = "c5ae0960967bd7637e642b85e397bdfc57e5a584"
 
 [[projects]]
   name = "go.uber.org/atomic"
@@ -172,20 +172,20 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["context","http2","http2/hpack","idna","internal/timeseries","lex/httplex","trace"]
-  revision = "f5079bd7f6f74e23c4d65efa0f4ce14cbd6a3c0f"
+  packages = ["context","http2","http2/hpack","idna","internal/timeseries","lex/httplex","netutil","trace"]
+  revision = "1c05540f6879653db88113bc4a2b70aec4bd491f"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "e312636bdaa2fac4f0acde9d17ab9fbad2b4ad10"
+  revision = "9f7170bcd8e9f4d3691c06401119c46a769a1e03"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/text"
   packages = ["internal/gen","internal/triegen","internal/ucd","secure/bidirule","transform","unicode/bidi","unicode/cldr","unicode/norm","unicode/rangetable"]
-  revision = "3bd178b88a8180be2df394a1fbb81313916f0e7b"
+  revision = "e56139fd9c5bc7244c76116c68e500765bb6db6b"
 
 [[projects]]
   branch = "master"
@@ -197,13 +197,13 @@
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "09f6ed296fc66555a25fe4ce95173148778dfa85"
+  revision = "6b7d9516179cd47f4714cfeb0103ad1dede756c4"
 
 [[projects]]
   name = "google.golang.org/grpc"
-  packages = [".","codes","credentials","grpclb/grpc_lb_v1","grpclog","internal","keepalive","metadata","naming","peer","stats","status","tap","transport"]
-  revision = "b8669c35455183da6d5c474ea6e72fbf55183274"
-  version = "v1.5.1"
+  packages = [".","codes","connectivity","credentials","grpclb/grpc_lb_v1","grpclog","internal","keepalive","metadata","naming","peer","stats","status","tap","transport"]
+  revision = "b3ddf786825de56a4178401b7e174ee332173b66"
+  version = "v1.5.2"
 
 [[projects]]
   name = "gopkg.in/inf.v0"
@@ -215,11 +215,11 @@
   branch = "v2"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
-  revision = "25c4ec802a7d637f88d584ab26798e94ad14c13b"
+  revision = "eb3733d160e74a9c7e442f435eb3bea458e1d19f"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a0947f8257a2f9017afd4567282f152d18fe34eb7bbdc42634b8c8bb60de21d5"
+  inputs-digest = "b8616c79ffdd89c208310188627a21c7079db576355cc77b5f2176f580de9e6c"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -1,7 +1,6 @@
 package collector
 
 import (
-	"fmt"
 	"hash/crc32"
 	"net"
 	"regexp"
@@ -43,7 +42,7 @@ func New(
 	es *rubber.Elastic,
 	bc *bcache.Bcache,
 	set *structs.Settings,
-	wLimiter *limiter.RateLimite,
+	wLimiter *limiter.RateLimit,
 ) (*Collector, error) {
 
 	gblog = log
@@ -54,7 +53,6 @@ func New(
 		cluster: cluster,
 		meta:    meta,
 		persist: persistence{
-			cluster: cluster,
 			esearch: es,
 			cass:    cass,
 		},
@@ -63,7 +61,10 @@ func New(
 		settings:   set,
 		concPoints: make(chan struct{}, set.MaxConcurrentPoints),
 		wLimiter:   wLimiter,
+		metas:      make(map[string][]*pb.Meta),
+		limiter:    ksLimiter{limite: make(map[string]*limiter.RateLimit)},
 	}
+	collect.metaHandler()
 
 	return collect, nil
 }
@@ -83,7 +84,15 @@ type Collector struct {
 	errorsSinceLastProbe   int64
 	saving                 int64
 	shutdown               bool
-	wLimiter               *limiter.RateLimite
+	wLimiter               *limiter.RateLimit
+	limiter                ksLimiter
+	metas                  map[string][]*pb.Meta
+	mtxMetas               sync.RWMutex
+}
+
+type ksLimiter struct {
+	limite map[string]*limiter.RateLimit
+	mtx    sync.RWMutex
 }
 
 func (collect *Collector) CheckUDPbind() bool {
@@ -139,22 +148,23 @@ func (collect *Collector) Stop() {
 	}
 }
 
-func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
+func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, gobol.Error) {
 
 	start := time.Now()
 
 	returnPoints := RestErrors{}
 	var wg sync.WaitGroup
 
-	pts := make([]*pb.TSPoint, len(points))
+	pts := make(map[string][]*pb.Point, len(points))
+	keyspaces := make(map[string]interface{})
 
-	mm := make(map[string]*pb.Meta)
 	var mtx sync.Mutex
 
 	wg.Add(len(points))
-	for i, rcvMsg := range points {
+	for _, rcvMsg := range points {
 
-		go func(rcvMsg gorilla.TSDBpoint, i int) {
+		go func(rcvMsg gorilla.TSDBpoint) {
+			defer wg.Done()
 
 			ks := "invalid"
 			if collect.isKSIDValid(rcvMsg.Tags["ksid"]) {
@@ -164,78 +174,214 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) RestErrors {
 			atomic.AddInt64(&collect.receivedSinceLastProbe, 1)
 			statsPoints(ks, "number")
 
-			defer wg.Done()
-
-			packet := &pb.TSPoint{}
+			packet := &pb.Point{}
 			m := &pb.Meta{}
 
 			gerr := collect.makePoint(packet, m, &rcvMsg)
 			if gerr != nil {
-				atomic.AddInt64(&collect.errorsSinceLastProbe, 1)
-
-				gblog.Error("makePacket", zap.Error(gerr))
-				reu := RestErrorUser{
-					Datapoint: rcvMsg,
-					Error:     gerr.Message(),
-				}
 				mtx.Lock()
-				returnPoints.Errors = append(returnPoints.Errors, reu)
+				collect.HandleGerr(ks, &returnPoints, rcvMsg, gerr)
 				mtx.Unlock()
-
-				statsPointsError(ks, "number")
 				return
 			}
 
-			ksts := utils.KSTS(m.GetKsid(), m.GetTsid())
+			nodePoint, gerr := collect.cluster.Classifier([]byte(packet.GetTsid()))
+			if gerr != nil {
+				mtx.Lock()
+				collect.HandleGerr(ks, &returnPoints, rcvMsg, gerr)
+				mtx.Unlock()
+				return
+			}
+
+			nodeMeta, gerr := collect.cluster.MetaClassifier([]byte(m.GetKsid()))
+			if gerr != nil {
+				mtx.Lock()
+				collect.HandleGerr(ks, &returnPoints, rcvMsg, gerr)
+				mtx.Unlock()
+				return
+			}
+
+			collect.metaQueue(nodeMeta, m)
 
 			mtx.Lock()
-			pts[i] = packet
-			if _, ok := mm[string(ksts)]; !ok {
-				mm[string(ksts)] = m
+			keyspaces[ks] = nil
+			for _, np := range nodePoint {
+				pts[np] = append(pts[np], packet)
 			}
 			mtx.Unlock()
 
-		}(rcvMsg, i)
+			statsProcTime(m.GetKsid(), time.Since(start), len(points))
+
+		}(rcvMsg)
 	}
 
 	wg.Wait()
 
-	gerr := collect.persist.cluster.Write(pts)
-	if gerr != nil {
-		reu := RestErrorUser{
-			Error: gerr.Message(),
+	for ks := range keyspaces {
+		collect.limiter.mtx.RLock()
+		l, ok := collect.limiter.limite[ks]
+		collect.limiter.mtx.RUnlock()
+		if !ok {
+			li, err := limiter.New(
+				collect.settings.MaxKeyspaceWriteRequests,
+				collect.settings.BurstKeyspaceWriteRequests,
+				gblog,
+			)
+			if err != nil {
+				gblog.Error(
+					err.Error(),
+					zap.String("struct", "CollectorV2"),
+					zap.String("func", "HandlePoint"),
+					zap.Error(err),
+				)
+				return RestErrors{}, errISE("handlePoint", "unable to create a new limiter", err)
+			}
+			collect.limiter.mtx.Lock()
+			collect.limiter.limite[ks] = li
+			collect.limiter.mtx.Unlock()
+			l = li
 		}
-		returnPoints.Errors = append(returnPoints.Errors, reu)
+		if gerr := l.Reserve(); gerr != nil {
+			return RestErrors{}, gerr
+		}
 	}
 
+	for n, points := range pts {
+		//gblog.Debug("saving map", zap.String("node", n), zap.Any("points", points))
+		collect.cluster.Write(n, points)
+	}
+
+	return returnPoints, nil
+
+}
+
+func (collect *Collector) metaHandler() {
 	go func() {
-		mtx.Lock()
-		defer mtx.Unlock()
-		for ksts, m := range mm {
-			if found := collect.boltc.Get([]byte(ksts)); found {
-				statsProcTime(m.GetKsid(), time.Since(start), len(points))
-				continue
+
+		ticker := time.NewTicker(time.Second)
+		for {
+
+			var dequeue []string
+			var mtx sync.Mutex
+			select {
+			case <-ticker.C:
+
+				collect.mtxMetas.Lock()
+				for nodeID, metas := range collect.metas {
+					if nodeID == collect.cluster.SelfID() {
+						go func() {
+							gblog.Debug(
+								"processing meta in local node",
+								zap.String("struct", "CollectorV2"),
+								zap.String("func", "metaHandler"),
+								zap.Int("count", len(metas)),
+							)
+							for _, m := range metas {
+								collect.meta.Handle(m)
+								mtx.Lock()
+								dequeue = append(dequeue, nodeID)
+								mtx.Unlock()
+							}
+						}()
+						continue
+					}
+
+					for _, m := range metas {
+						ksts := utils.KSTS(m.GetKsid(), m.GetTsid())
+						if !collect.boltc.Get(ksts) {
+
+							gblog.Debug(
+								"processing meta using gRPC",
+								zap.String("struct", "CollectorV2"),
+								zap.String("func", "metaHandler"),
+								zap.String("node", nodeID),
+								zap.Int("count", len(metas)),
+							)
+
+							ch, err := collect.cluster.Meta(nodeID, metas)
+							if err != nil {
+								gblog.Error(
+									err.Error(),
+									zap.String("struct", "CollectorV2"),
+									zap.String("func", "metaHandler"),
+									zap.Error(err),
+								)
+								break
+							}
+							for mf := range ch {
+								if mf.GetOk() {
+									if gerr := collect.boltc.Set(mf.GetKsts()); gerr != nil {
+										gblog.Error(
+											gerr.Error(),
+											zap.String("struct", "CollectorV2"),
+											zap.String("func", "HandlePoint"),
+											zap.Error(gerr),
+										)
+										continue
+									}
+								}
+							}
+						}
+					}
+					mtx.Lock()
+					dequeue = append(dequeue, nodeID)
+					mtx.Unlock()
+
+				}
+				collect.mtxMetas.Unlock()
 			}
 
-			ok, gerr := collect.cluster.Meta(m)
-			if gerr != nil {
-				gblog.Error(
-					fmt.Sprintf("%v", m),
-					zap.String("func", "collector/HandlePoint"),
-					zap.String("ksts", ksts),
-					zap.Error(gerr),
-				)
-				statsProcTime(m.GetKsid(), time.Since(start), len(points))
-				continue
+			mtx.Lock()
+			for _, nodeID := range dequeue {
+				collect.metaDequeue(nodeID)
 			}
-			if ok {
-				collect.boltc.Set(ksts)
-			}
-			statsProcTime(m.GetKsid(), time.Since(start), len(points))
+			mtx.Unlock()
+
 		}
 	}()
+}
 
-	return returnPoints
+func (collect *Collector) metaQueue(nodeID string, m *pb.Meta) {
+
+	if !collect.boltc.Get(utils.KSTS(m.GetKsid(), m.GetTsid())) {
+
+		collect.mtxMetas.Lock()
+		defer collect.mtxMetas.Unlock()
+
+		if len(collect.metas[nodeID]) >= 100000 {
+			gblog.Debug(
+				"dropping meta, buffer too big",
+				zap.String("struct", "CollectorV2"),
+				zap.String("func", "metaQueue"),
+				zap.Int("size", len(collect.metas[nodeID])),
+			)
+			return
+		}
+		collect.metas[nodeID] = append(collect.metas[nodeID], m)
+	}
+
+}
+
+func (collect *Collector) metaDequeue(nodeID string) {
+	collect.mtxMetas.Lock()
+	defer collect.mtxMetas.Unlock()
+
+	delete(collect.metas, nodeID)
+}
+
+func (collect *Collector) HandleGerr(ks string, returnPoints *RestErrors, rcvMsg gorilla.TSDBpoint, gerr gobol.Error) {
+
+	atomic.AddInt64(&collect.errorsSinceLastProbe, 1)
+
+	gblog.Error("makePacket", zap.Error(gerr))
+	reu := RestErrorUser{
+		Datapoint: rcvMsg,
+		Error:     gerr.Message(),
+	}
+
+	returnPoints.Errors = append(returnPoints.Errors, reu)
+
+	statsPointsError(ks, "number")
 
 }
 
