@@ -365,7 +365,7 @@ func serverInterceptor(
 
 	err := handler(srv, ss)
 	if err != nil {
-		statsProcError(info.FullMethod)
+		statsProcCount(info.FullMethod, "500")
 		logger.Error(
 			"invoke grpc server",
 			zap.String("method", info.FullMethod),
@@ -375,6 +375,7 @@ func serverInterceptor(
 		return err
 	}
 
+	statsProcCount(info.FullMethod, "200")
 	statsProcTime(info.FullMethod, time.Since(start))
 	return nil
 }

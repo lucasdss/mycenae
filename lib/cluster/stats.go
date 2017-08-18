@@ -6,16 +6,16 @@ import (
 
 func statsProcTime(method string, d time.Duration) {
 	statsValueAdd(
-		"grpc_server.processes_time",
-		map[string]string{"method": method},
+		"request.duration",
+		map[string]string{"path": method, "protocol": "grpc"},
 		float64(d) / float64(time.Millisecond),
 	)
 }
 
-func statsProcError(method string) {
+func statsProcCount(method, status string) {
 	statsIncrement(
-		"grpc_server.error",
-		map[string]string{"method": method},
+		"request.count",
+		map[string]string{"method": method, "status": status, "protocol": "grpc"},
 	)
 }
 
