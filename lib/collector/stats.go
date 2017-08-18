@@ -18,11 +18,11 @@ func statsUDP(ks, vt string) {
 	)
 }
 
-func statsProcTime(ks string, d time.Duration, pts int) {
+func statsProcTime(ks string, d time.Duration) {
 	statsValueAdd(
 		"points.processes_time",
 		map[string]string{"keyspace": ks},
-		(float64(d.Nanoseconds())/float64(time.Millisecond))/float64(pts),
+		(float64(d.Nanoseconds()) / float64(time.Millisecond)),
 	)
 }
 

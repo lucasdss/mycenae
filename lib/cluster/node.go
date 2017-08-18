@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"sync"
 
 	"golang.org/x/time/rate"
@@ -14,13 +15,14 @@ import (
 
 	"github.com/uol/gobol"
 	pb "github.com/uol/mycenae/lib/proto"
+	"github.com/uol/mycenae/lib/wal"
 	"go.uber.org/zap"
 )
 
 type node struct {
 	address string
 	port    int
-	conf    Config
+	conf    *Config
 	mtx     sync.RWMutex
 	ptsCh   chan []*pb.Point
 	metaCh  chan []*pb.Meta
@@ -31,9 +33,10 @@ type node struct {
 	wLimiter *rate.Limiter
 	rLimiter *rate.Limiter
 	mLimiter *rate.Limiter
+	wal      *wal.WAL
 }
 
-func newNode(address string, port int, conf Config) (*node, gobol.Error) {
+func newNode(address string, port int, conf *Config, walConf *wal.Settings) (*node, gobol.Error) {
 
 	//cred, err := newClientTLSFromFile(conf.Consul.CA, conf.Consul.Cert, conf.Consul.Key, "*")
 	cred, err := credentials.NewClientTLSFromFile(conf.Consul.Cert, "localhost.consul.macs.intranet")
@@ -45,6 +48,15 @@ func newNode(address string, port int, conf Config) (*node, gobol.Error) {
 	if err != nil {
 		return nil, errInit("newNode", err)
 	}
+
+	wSettings := &wal.Settings{
+		PathWAL:       filepath.Join(walConf.PathWAL, address),
+		SyncInterval:  walConf.SyncInterval,
+		MaxBufferSize: walConf.MaxBufferSize,
+		MaxConcWrite:  walConf.MaxConcWrite,
+	}
+
+	wal, err := wal.New(wSettings, logger)
 
 	logger.Debug(
 		"new node",
@@ -59,6 +71,7 @@ func newNode(address string, port int, conf Config) (*node, gobol.Error) {
 		port:     port,
 		conf:     conf,
 		conn:     conn,
+		wal:      wal,
 		ptsCh:    make(chan []*pb.Point, 5),
 		metaCh:   make(chan []*pb.Meta, 5),
 		wLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.9, conf.GrpcBurstServerConn),
@@ -77,11 +90,13 @@ func (n *node) write(pts []*pb.Point) error {
 
 	if err := n.wLimiter.Wait(ctx); err != nil {
 		logger.Error(
-			"write limit",
+			"write limit exceeded",
 			zap.String("package", "cluster"),
-			zap.String("func", "worker"),
-			zap.Error(err),
+			zap.String("func", "write"),
+			zap.String("error", err.Error()),
 		)
+		// send to wal
+		//n.wal.Add(p *proto.Point)
 		return err
 	}
 
@@ -90,9 +105,10 @@ func (n *node) write(pts []*pb.Point) error {
 		logger.Error(
 			"failed to get stream from server",
 			zap.String("package", "cluster"),
-			zap.String("func", "worker"),
+			zap.String("func", "write"),
 			zap.Error(err),
 		)
+		// send to wal
 		return err
 	}
 

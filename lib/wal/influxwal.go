@@ -402,7 +402,7 @@ func (l *WAL) Remove(files []string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, fn := range files {
-		l.traceLogger.Info(fmt.Sprintf("Removing %s", fn))
+		l.traceLogger.Info("Removing wal file", zap.String("file", fn))
 		os.RemoveAll(fn)
 	}
 
