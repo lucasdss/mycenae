@@ -506,12 +506,17 @@ func (plot *Plot) getTimeseries(
 
 				if query.ShowQuery {
 
+					qCopy := q
+
 					if queryLength > 0 {
 						index := i
-						q.Index = &index
+						qCopy.Index = &index
 					}
 
-					qCopy := q
+					if q.Rate {
+						qCopy.RateOptions = &opers.Rate.Options
+					}
+
 					qCopy.Order = []string{}
 					resp.Query = &qCopy
 				}

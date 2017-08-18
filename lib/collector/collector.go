@@ -142,7 +142,7 @@ func (collect *Collector) ReceivedErrorRatio() float64 {
 func (collect *Collector) Stop() {
 	collect.shutdown = true
 	for {
-		if collect.saving <= 0 {
+		if atomic.LoadInt64(&collect.saving) <= 0 {
 			return
 		}
 	}
