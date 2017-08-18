@@ -87,7 +87,7 @@ func (wal *WAL) Start() {
 	}
 
 	wal.checkpoint()
-	//wal.cleanup()
+	wal.cleanup()
 
 }
 
@@ -373,14 +373,14 @@ func (wal *WAL) Load() <-chan []*pb.Point {
 
 		date, tt, err := wal.loadCheckpoint()
 		if err != nil {
-			log.Panic(
+			log.Error(
 				"impossible to recovery checkpoint...",
 				zap.Int64("check_point_date", date),
 				zap.Error(err),
 			)
+			return
 		}
 
-		log.Sugar().Debug("transaction table loaded: ", tt)
 		wal.tt.mtx.Lock()
 		for k, v := range tt {
 			wal.tt.table[k] = v
@@ -389,10 +389,11 @@ func (wal *WAL) Load() <-chan []*pb.Point {
 
 		names, err := segmentFileNames(wal.settings.PathWAL)
 		if err != nil {
-			log.Panic(
-				"error getting list of files: %v",
+			log.Error(
+				"error getting list of files",
 				zap.Error(err),
 			)
+			return
 		}
 
 		for _, fn := range names {
@@ -440,7 +441,6 @@ func (wal *WAL) Load() <-chan []*pb.Point {
 							tsid := x[1]
 
 							if len(ksid) < 1 || len(tsid) < 1 {
-								log.Debug("point is empty", zap.String("ksts", ksts))
 								continue
 							}
 
@@ -522,26 +522,43 @@ func (wal *WAL) cleanup() {
 			case <-ticker.C:
 
 				timeout := time.Now().UTC().Add(-2 * time.Hour)
+				var lst []string
 
 				names, err := segmentFileNames(wal.settings.PathWAL)
 				if err != nil {
-					logger.Error("Error getting list of files", zap.Error(err))
+					logger.Error(
+						err.Error(),
+						zap.String("func", "cleanup"),
+						zap.String("struct", "wal"),
+						zap.Error(err),
+					)
 				}
 
 				for _, f := range names {
 
 					stat, err := os.Stat(f)
 					if err != nil {
-						logger.Sugar().Errorf("error to stat file %v: %v", f, err)
+						logger.Error(err.Error(),
+							zap.String("func", "cleanup"),
+							zap.String("struct", "wal"),
+							zap.String("file", f),
+							zap.Error(err),
+						)
 					}
 
 					if !stat.ModTime().UTC().After(timeout) {
-						logger.Sugar().Infof("removing write-ahead file %v", f)
-						err = os.Remove(f)
-						if err != nil {
-							logger.Sugar().Errorf("error to remove file %v: %v", f, err)
-						}
+						lst = append(lst, f)
 					}
+				}
+
+				err = wal.Remove(lst)
+				if err != nil {
+					logger.Error(
+						"error after removed wal",
+						zap.String("func", "cleanup"),
+						zap.String("struct", "wal"),
+						zap.Error(err),
+					)
 				}
 
 			}

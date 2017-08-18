@@ -40,7 +40,7 @@ type Settings struct {
 	UDPserver                  SettingsUDP
 	UDPserverV2                SettingsUDP
 	Depot                      depot.Settings
-	Cluster                    cluster.Config
+	Cluster                    *cluster.Config
 	TTL                        struct {
 		Max int
 	}

@@ -40,7 +40,7 @@ type workerMsg struct {
 	p       *pb.Point
 }
 
-func newServer(conf Config, strg *gorilla.Storage, m *meta.Meta) (*server, error) {
+func newServer(conf *Config, strg *gorilla.Storage, m *meta.Meta) (*server, error) {
 
 	s := &server{
 		storage:    strg,
@@ -51,7 +51,7 @@ func newServer(conf Config, strg *gorilla.Storage, m *meta.Meta) (*server, error
 		workerChan: make(chan workerMsg, conf.GrpcMaxServerConn),
 	}
 
-	go func(s *server, conf Config) {
+	go func(s *server, conf *Config) {
 		for {
 			grpcServer, lis, err := s.connect(conf)
 			if err != nil {
@@ -80,7 +80,7 @@ func newServer(conf Config, strg *gorilla.Storage, m *meta.Meta) (*server, error
 	return s, nil
 }
 
-func (s *server) connect(conf Config) (*grpc.Server, net.Listener, error) {
+func (s *server) connect(conf *Config) (*grpc.Server, net.Listener, error) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", conf.Port))
 	if err != nil {
 		return nil, nil, err

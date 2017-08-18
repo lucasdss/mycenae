@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/gocql/gocql"
 	"go.uber.org/zap"
@@ -36,6 +35,8 @@ import (
 	"github.com/uol/mycenae/lib/udp"
 	"github.com/uol/mycenae/lib/udpError"
 	"github.com/uol/mycenae/lib/wal"
+
+	pb "github.com/uol/mycenae/lib/proto"
 )
 
 func main() {
@@ -130,25 +131,43 @@ func main() {
 		tsLogger.Fatal("", zap.Error(err))
 	}
 
-	cluster, err := cluster.New(tsLogger, strg, meta, settings.Cluster)
+	cluster, err := cluster.New(tsLogger, strg, meta, settings.Cluster, settings.WAL)
 	if err != nil {
 		tsLogger.Fatal("", zap.Error(err))
 	}
 
 	go func() {
-		time.Sleep(time.Duration(settings.Cluster.ApplyWait) * time.Second)
-		tsLogger := tsLogger.With(
+		log := tsLogger.With(
 			zap.String("func", "main"),
 			zap.String("package", "main"),
 		)
 
+		limiter := make(chan interface{}, settings.MaxConcurrentPoints/2)
+		defer close(limiter)
 		for pts := range wal.Load() {
 
-			cluster.WAL(pts)
+			for _, p := range pts {
+				limiter <- struct{}{}
+				if p == nil {
+					continue
+				}
+				go func(p *pb.Point) {
+					gerr := strg.WAL(p)
+					if gerr != nil {
+						log.Error(
+							"unable to write in local node",
+							zap.String("package", "main"),
+							zap.String("func", "main"),
+							zap.Error(gerr),
+						)
+					}
+					<-limiter
+				}(p)
+			}
 
 		}
 
-		tsLogger.Debug("finished loading points")
+		log.Debug("finished loading points")
 
 	}()
 
