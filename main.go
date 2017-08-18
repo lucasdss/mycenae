@@ -130,7 +130,7 @@ func main() {
 		tsLogger.Fatal("", zap.Error(err))
 	}
 
-	cluster, err := cluster.New(tsLogger, strg, meta, settings.Cluster)
+	cluster, err := cluster.New(tsLogger, tssts, strg, meta, settings.Cluster)
 	if err != nil {
 		tsLogger.Fatal("", zap.Error(err))
 	}

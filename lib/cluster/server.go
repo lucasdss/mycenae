@@ -364,11 +364,17 @@ func serverInterceptor(
 	start := time.Now()
 
 	err := handler(srv, ss)
-	logger.Debug(
-		"invoke grpc server",
-		zap.String("method", info.FullMethod),
-		zap.Duration("duration", time.Since(start)),
-		zap.Error(err),
-	)
-	return err
+	if err != nil {
+		// statsProcError(info.FullMethod)
+		logger.Error(
+			"invoke grpc server",
+			zap.String("method", info.FullMethod),
+			zap.Duration("duration", time.Since(start)),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	// statsProcTime(info.FullMethod, time.Since(start))
+	return nil
 }
