@@ -262,6 +262,14 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 		n := c.nodes[node]
 		c.nMutex.RUnlock()
 
+		if n == nil {
+			log.Error(
+				"node unavailable",
+				zap.String("node", node),
+			)
+			continue
+		}
+
 		log.Debug(
 			"forwarding read as fallback",
 			zap.String("addr", n.address),
