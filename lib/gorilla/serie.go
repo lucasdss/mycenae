@@ -149,6 +149,10 @@ func (t *serie) addPoint(p *pb.Point) gobol.Error {
 	if delta < 0 {
 		t.lastWrite = now
 
+		if time.Unix(p.GetDate(), 0).Before(time.Now().Add(-22 * time.Hour)) {
+			return t.update(p)
+		}
+
 		index := utils.GetIndex(p.GetDate())
 		blkid := utils.BlockID(p.GetDate())
 
@@ -169,7 +173,6 @@ func (t *serie) addPoint(p *pb.Point) gobol.Error {
 			return nil
 		}
 
-		return t.update(p)
 	}
 
 	t.lastWrite = now
