@@ -152,7 +152,18 @@ func (t *serie) addPoint(p *pb.Point) gobol.Error {
 		index := utils.GetIndex(p.GetDate())
 		blkid := utils.BlockID(p.GetDate())
 
-		if t.blocks[index] != nil && t.blocks[index].id == blkid {
+		if t.blocks[index] == nil {
+			pByte, gerr := t.persist.Read(t.ksid, t.tsid, blkid)
+			if gerr != nil {
+				return gerr
+			}
+			t.blocks[index] = &block{id: blkid, points: pByte}
+			t.blocks[index].Add(p)
+			t.blocks[index].ToDepot(true)
+			return nil
+		}
+
+		if t.blocks[index].id == blkid {
 			t.blocks[index].Add(p)
 			t.blocks[index].ToDepot(true)
 			return nil

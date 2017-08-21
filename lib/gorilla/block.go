@@ -57,7 +57,7 @@ func (b *block) Add(p *pb.Point) {
 	)
 
 	if b.enc == nil {
-		if len(b.points) > headerSize {
+		if len(b.points) >= headerSize {
 			err := b.newEncoder(b.points, p.GetDate(), p.GetValue())
 			if err != nil {
 				log.Error(
@@ -68,9 +68,6 @@ func (b *block) Add(p *pb.Point) {
 			return
 		}
 		b.enc = tsz.NewEncoder(b.id)
-		b.enc.Encode(p.GetDate(), p.GetValue())
-		b.prevDate = p.GetDate()
-		return
 	}
 
 	if p.GetDate() > b.prevDate {
@@ -162,6 +159,11 @@ func (b *block) newEncoder(pByte []byte, date int64, value float32) error {
 }
 
 func (b *block) decode(points []byte) ([bucketSize]*pb.Point, error) {
+
+	if len(points) < headerSize {
+		return [bucketSize]*pb.Point{}, nil
+	}
+
 	id := b.id
 	dec := tsz.NewDecoder(points)
 
