@@ -7,7 +7,7 @@ import (
 func statsProcTime(method string, d time.Duration) {
 	statsValueAdd(
 		"request.duration",
-		map[string]string{"path": method, "protocol": "grpc"},
+		map[string]string{"path": method, "protocol": "gRPC"},
 		float64(d) / float64(time.Millisecond),
 	)
 }
@@ -15,7 +15,7 @@ func statsProcTime(method string, d time.Duration) {
 func statsProcCount(method, status string) {
 	statsIncrement(
 		"request.count",
-		map[string]string{"method": method, "status": status, "protocol": "grpc"},
+		map[string]string{"path": method, "status": status, "protocol": "gRPC"},
 	)
 }
 
