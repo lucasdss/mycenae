@@ -14,11 +14,13 @@ import (
 	"go.uber.org/zap"
 
 	pb "github.com/uol/mycenae/lib/proto"
+	"github.com/uol/mycenae/lib/tsstats"
 	"github.com/uol/mycenae/lib/utils"
 )
 
 var (
 	logger *zap.Logger
+	stats  *tsstats.StatsTS
 )
 
 const (
@@ -71,6 +73,11 @@ type tt struct {
 	mtx   sync.RWMutex
 	save  bool
 	table map[string]int64
+}
+
+// Set wal stats
+func (wal *WAL) SetStats(sts *tsstats.StatsTS) {
+	stats = sts
 }
 
 // Start dispatchs a goroutine with a ticker

@@ -88,6 +88,7 @@ func main() {
 	if err != nil {
 		tsLogger.Fatal(err.Error())
 	}
+	wal.SetStats(tssts)
 	wal.Start()
 
 	d, err := depot.NewCassandra(
