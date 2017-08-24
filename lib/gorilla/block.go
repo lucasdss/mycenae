@@ -1,6 +1,7 @@
 package gorilla
 
 import (
+	"fmt"
 	"io"
 	"sync"
 
@@ -8,6 +9,7 @@ import (
 
 	tsz "github.com/uol/go-tsz"
 	pb "github.com/uol/mycenae/lib/proto"
+	"github.com/uol/mycenae/lib/utils"
 )
 
 // block contains compressed points
@@ -127,16 +129,31 @@ func (b *block) newEncoder(pByte []byte, date int64, value float32) error {
 		zap.Int64("blkid", b.id),
 	)
 
-	points, err := b.decode(pByte)
-	if err != nil {
-		log.Error(
-			err.Error(),
-			zap.Error(err),
-		)
-		return err
+	var points [bucketSize]*pb.Point
+	if len(pByte) >= headerSize {
+
+		pts, err := b.decode(pByte)
+		if err != nil {
+			log.Error(
+				err.Error(),
+				zap.Error(err),
+			)
+			return err
+		}
+		points = pts
 	}
 
 	delta := date - b.id
+
+	blkid := utils.BlockID(date)
+	if blkid != b.id {
+		log.Error(
+			"block id divergency",
+			zap.Int64("point_blkid", blkid),
+			zap.Int64("delta", delta),
+		)
+		return fmt.Errorf("block id divergency, delta %v", delta)
+	}
 
 	log.Debug(
 		"point delta",

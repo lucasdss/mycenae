@@ -149,12 +149,12 @@ func (t *serie) addPoint(p *pb.Point) gobol.Error {
 	if delta < 0 {
 		t.lastWrite = now
 
-		if time.Unix(p.GetDate(), 0).Before(time.Now().Add(-22 * time.Hour)) {
+		blkid := utils.BlockID(p.GetDate())
+		index := utils.GetIndex(p.GetDate())
+
+		if time.Unix(blkid, 0).Before(time.Now().Add(-22 * time.Hour)) {
 			return t.update(p)
 		}
-
-		index := utils.GetIndex(p.GetDate())
-		blkid := utils.BlockID(p.GetDate())
 
 		if t.blocks[index] == nil {
 			pByte, gerr := t.persist.Read(t.ksid, t.tsid, blkid)
@@ -172,6 +172,8 @@ func (t *serie) addPoint(p *pb.Point) gobol.Error {
 			t.blocks[index].ToDepot(true)
 			return nil
 		}
+
+		return t.update(p)
 
 	}
 
@@ -276,11 +278,9 @@ func (t *serie) update(p *pb.Point) gobol.Error {
 
 	index := utils.GetIndex(blkID)
 
-	var pByte []byte
 	var blk *block
 	if t.blocks[index] != nil && t.blocks[index].id == blkID {
 
-		pByte = t.blocks[index].GetPoints()
 		blk = t.blocks[index]
 
 	} else {
@@ -294,15 +294,11 @@ func (t *serie) update(p *pb.Point) gobol.Error {
 			return gerr
 		}
 
-		pByte = x
-		blk = &block{id: blkID}
+		blk = &block{id: blkID, points: x}
 
 	}
 
-	err := blk.NewEncoder(pByte, p.GetDate(), p.GetValue())
-	if err != nil {
-		return errTsz("serie/update", t.ksid, t.tsid, 0, err)
-	}
+	blk.Add(p)
 
 	gerr := t.persist.Write(t.ksid, t.tsid, blkID, blk.GetPoints())
 	if gerr != nil {
