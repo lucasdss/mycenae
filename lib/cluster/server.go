@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 )
 
@@ -361,11 +362,16 @@ func serverInterceptor(
 	info *grpc.StreamServerInfo,
 	handler grpc.StreamHandler,
 ) error {
-	start := time.Now()
 
+	start := time.Now()
 	err := handler(srv, ss)
+	status, ok := status.FromError(err)
+	if !ok {
+		return err
+	}
+
+	statsProcCount(info.FullMethod, string(status.Code()))
 	if err != nil {
-		statsProcCount(info.FullMethod, "500")
 		logger.Error(
 			"invoke grpc server",
 			zap.String("method", info.FullMethod),
@@ -374,8 +380,7 @@ func serverInterceptor(
 		)
 		return err
 	}
-
-	statsProcCount(info.FullMethod, "200")
 	statsProcTime(info.FullMethod, time.Since(start))
+
 	return nil
 }
