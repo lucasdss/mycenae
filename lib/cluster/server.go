@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/netutil"
@@ -370,7 +371,7 @@ func serverInterceptor(
 		return err
 	}
 
-	statsProcCount(info.FullMethod, string(status.Code()))
+	statsProcCount(info.FullMethod, strconv.Itoa(int(status.Code())))
 	if err != nil {
 		logger.Error(
 			"invoke grpc server",
