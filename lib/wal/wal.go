@@ -80,6 +80,29 @@ func (wal *WAL) SetStats(sts *tsstats.StatsTS) {
 	stats = sts
 }
 
+func (wal *WAL) startStats() {
+
+	ticker := time.NewTicker(20 * time.Second)
+
+	for {
+		<-ticker.C
+		wal.runStatistics()
+	}
+}
+
+func (wal *WAL) runStatistics() {
+
+	statics := wal.Statistics(map[string]string{})
+
+	statsCountWrite(map[string]string{"status": "ok"}, float64(statics[0].Values[statWriteOk].(int64)))
+	wal.stats.WriteOK = 0
+	statsCountWrite(map[string]string{"status": "err"}, float64(statics[0].Values[statWriteErr].(int64)))
+	wal.stats.WriteErr = 0
+
+	statsSegmentSize(map[string]string{"segment": "old"}, float64(statics[0].Values[statWALOldBytes].(int64)))
+	statsSegmentSize(map[string]string{"segment": "current"}, float64(statics[0].Values[statWALCurrentBytes].(int64)))
+}
+
 // Start dispatchs a goroutine with a ticker
 // to save and sync points in disk
 func (wal *WAL) Start() {
@@ -96,6 +119,7 @@ func (wal *WAL) Start() {
 	wal.checkpoint()
 	wal.cleanup()
 
+	go wal.startStats()
 }
 
 func (wal *WAL) Stop() {
