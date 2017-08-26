@@ -1,14 +1,6 @@
 package depot
 
-import (
-	"github.com/uol/gobol"
-	"github.com/uol/gobol/cassandra"
-)
-
-type Settings struct {
-	Cassandra     cassandra.Settings
-	MaxConcurrent int
-}
+import "github.com/uol/gobol"
 
 // Persistence interface abstracts where we save data
 type Persistence interface {

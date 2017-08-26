@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/golang/snappy"
+	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/wal"
 )
 
@@ -46,11 +47,11 @@ func TestWALWriter_WriteMulti_Single(t *testing.T) {
 	p5 := wal.NewValue(1, ^uint64(0))
 
 	values := map[string][]wal.Value{
-		"cpu,host=A#!~#float":    []wal.Value{p1},
-		"cpu,host=A#!~#int":      []wal.Value{p2},
-		"cpu,host=A#!~#bool":     []wal.Value{p3},
-		"cpu,host=A#!~#string":   []wal.Value{p4},
-		"cpu,host=A#!~#unsigned": []wal.Value{p5},
+		"cpu,host=A#!~#float":    {p1},
+		"cpu,host=A#!~#int":      {p2},
+		"cpu,host=A#!~#bool":     {p3},
+		"cpu,host=A#!~#string":   {p4},
+		"cpu,host=A#!~#unsigned": {p5},
 	}
 
 	entry := &wal.WriteWALEntry{
@@ -287,7 +288,7 @@ func TestWALWriter_WriteMultiDelete_Multiple(t *testing.T) {
 
 	p1 := wal.NewValue(1, true)
 	values := map[string][]wal.Value{
-		"cpu,host=A#!~#value": []wal.Value{p1},
+		"cpu,host=A#!~#value": {p1},
 	}
 
 	writeEntry := &wal.WriteWALEntry{
@@ -384,7 +385,7 @@ func TestWALWriter_WriteMultiDeleteRange_Multiple(t *testing.T) {
 	p3 := wal.NewValue(3, 3.0)
 
 	values := map[string][]wal.Value{
-		"cpu,host=A#!~#value": []wal.Value{p1, p2, p3},
+		"cpu,host=A#!~#value": {p1, p2, p3},
 	}
 
 	writeEntry := &wal.WriteWALEntry{
@@ -490,7 +491,7 @@ func TestWAL_ClosedSegments(t *testing.T) {
 		t.Fatalf("error initializing zap logger: %v", err)
 	}
 
-	s := &wal.Settings{
+	s := &structs.WALSettings{
 		PathWAL:            dir,
 		SyncInterval:       "1s",
 		CleanupInterval:    "1h",
@@ -518,7 +519,7 @@ func TestWAL_ClosedSegments(t *testing.T) {
 	}
 
 	if _, err := w.WriteMulti(map[string][]wal.Value{
-		"cpu,host=A#!~#value": []wal.Value{
+		"cpu,host=A#!~#value": {
 			wal.NewValue(1, 1.1),
 		},
 	}); err != nil {
@@ -557,7 +558,7 @@ func TestWAL_Delete(t *testing.T) {
 		t.Fatalf("error initializing zap logger: %v", err)
 	}
 
-	s := &wal.Settings{
+	s := &structs.WALSettings{
 		PathWAL:            dir,
 		SyncInterval:       "1s",
 		CleanupInterval:    "1h",
@@ -620,7 +621,7 @@ func TestWALWriter_Corrupt(t *testing.T) {
 
 	p1 := wal.NewValue(1, 1.1)
 	values := map[string][]wal.Value{
-		"cpu,host=A#!~#float": []wal.Value{p1},
+		"cpu,host=A#!~#float": {p1},
 	}
 
 	entry := &wal.WriteWALEntry{
@@ -676,11 +677,11 @@ func TestWriteWALSegment_UnmarshalBinary_WriteWALCorrupt(t *testing.T) {
 	p5 := wal.NewValue(1, uint64(1))
 
 	values := map[string][]wal.Value{
-		"cpu,host=A#!~#float":    []wal.Value{p1, p1},
-		"cpu,host=A#!~#int":      []wal.Value{p2, p2},
-		"cpu,host=A#!~#bool":     []wal.Value{p3, p3},
-		"cpu,host=A#!~#string":   []wal.Value{p4, p4},
-		"cpu,host=A#!~#unsigned": []wal.Value{p5, p5},
+		"cpu,host=A#!~#float":    {p1, p1},
+		"cpu,host=A#!~#int":      {p2, p2},
+		"cpu,host=A#!~#bool":     {p3, p3},
+		"cpu,host=A#!~#string":   {p4, p4},
+		"cpu,host=A#!~#unsigned": {p5, p5},
 	}
 
 	w := &wal.WriteWALEntry{

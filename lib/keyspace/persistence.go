@@ -1,22 +1,23 @@
 package keyspace
 
 import (
-	"bytes"
 	"fmt"
 	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/uol/gobol"
-	"github.com/uol/gobol/rubber"
+	"github.com/uol/mycenae/lib/meta"
+	"github.com/uol/mycenae/lib/tsstats"
 )
 
 type persistence struct {
 	cassandra     *gocql.Session
-	esearch       *rubber.Elastic
+	meta          *meta.Meta
 	usernameGrant string
 	keyspaceMain  string
 
 	compaction string
+	stats      *tsstats.StatsTS
 }
 
 func (persist *persistence) createKeyspace(ksc Config, key string) gobol.Error {
@@ -31,7 +32,7 @@ func (persist *persistence) createKeyspace(ksc Config, key string) gobol.Error {
 			ksc.ReplicationFactor,
 		),
 	).Exec(); err != nil {
-		statsQueryError(key, "", "create")
+		statsQueryError(persist.stats, key, "", "create")
 		return errPersist("CreateKeyspace", err)
 	}
 
@@ -59,7 +60,7 @@ func (persist *persistence) createKeyspace(ksc Config, key string) gobol.Error {
 			defaultTTL,
 		),
 	).Exec(); err != nil {
-		statsQueryError(key, "", "create")
+		statsQueryError(persist.stats, key, "", "create")
 		return errPersist("CreateKeyspace", err)
 	}
 
@@ -85,25 +86,25 @@ func (persist *persistence) createKeyspace(ksc Config, key string) gobol.Error {
 			defaultTTL,
 		),
 	).Exec(); err != nil {
-		statsQueryError(key, "", "create")
+		statsQueryError(persist.stats, key, "", "create")
 		return errPersist("CreateKeyspace", err)
 	}
 
 	if err := persist.cassandra.Query(
 		fmt.Sprintf(`GRANT MODIFY ON KEYSPACE %s TO %s`, key, persist.usernameGrant),
 	).Exec(); err != nil {
-		statsQueryError(key, "", "create")
+		statsQueryError(persist.stats, key, "", "create")
 		return errPersist("CreateKeyspace", err)
 	}
 
 	if err := persist.cassandra.Query(
 		fmt.Sprintf(`GRANT SELECT ON KEYSPACE %s TO %s`, key, persist.usernameGrant),
 	).Exec(); err != nil {
-		statsQueryError(key, "", "create")
+		statsQueryError(persist.stats, key, "", "create")
 		return errPersist("CreateKeyspace", err)
 	}
 
-	statsQuery(key, "", "create", time.Since(start))
+	statsQuery(persist.stats, key, "", "create", time.Since(start))
 	return nil
 }
 
@@ -123,11 +124,11 @@ func (persist *persistence) createKeyspaceMeta(ksc Config, key string) gobol.Err
 		ksc.TTL,
 		ksc.TUUID,
 	).Exec(); err != nil {
-		statsQueryError(persist.keyspaceMain, "ts_keyspace", "insert")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_keyspace", "insert")
 		return errPersist("CreateKeyspaceMeta", err)
 	}
 
-	statsQuery(persist.keyspaceMain, "ts_keyspace", "insert", time.Since(start))
+	statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "insert", time.Since(start))
 	return nil
 }
 
@@ -140,11 +141,11 @@ func (persist *persistence) updateKeyspace(ksc ConfigUpdate, key string) gobol.E
 		ksc.Contact,
 		key,
 	).Exec(); err != nil {
-		statsQueryError(persist.keyspaceMain, "ts_keyspace", "update")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_keyspace", "update")
 		return errPersist("UpdateKeyspace", err)
 	}
 
-	statsQuery(persist.keyspaceMain, "ts_keyspace", "update", time.Since(start))
+	statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "update", time.Since(start))
 	return nil
 }
 
@@ -159,15 +160,15 @@ func (persist *persistence) countKeyspaceByKey(key string) (int, gobol.Error) {
 	).Scan(&count); err != nil {
 
 		if err == gocql.ErrNotFound {
-			statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+			statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 			return 0, nil
 		}
 
-		statsQueryError(persist.keyspaceMain, "ts_keyspace", "select")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_keyspace", "select")
 		return 0, errPersist("CountKeyspaceByKey", err)
 	}
 
-	statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+	statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 	return count, nil
 }
 
@@ -182,15 +183,15 @@ func (persist *persistence) countKeyspaceByName(name string) (int, gobol.Error) 
 	).Scan(&count); err != nil {
 
 		if err == gocql.ErrNotFound {
-			statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+			statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 			return 0, nil
 		}
 
-		statsQueryError(persist.keyspaceMain, "ts_keyspace", "select")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_keyspace", "select")
 		return 0, errPersist("CheckKeyspaceByName", err)
 	}
 
-	statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+	statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 	return count, nil
 }
 
@@ -205,15 +206,15 @@ func (persist *persistence) getKeyspaceKeyByName(name string) (string, gobol.Err
 	).Scan(&key); err != nil {
 
 		if err == gocql.ErrNotFound {
-			statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+			statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 			return "", errNotFound("GetKeyspaceKeyByName")
 		}
 
-		statsQueryError(persist.keyspaceMain, "ts_keyspace", "select")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_keyspace", "select")
 		return key, errPersist("GetKeyspaceKeyByName", err)
 	}
 
-	statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+	statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 	return key, nil
 }
 
@@ -228,15 +229,15 @@ func (persist *persistence) countDatacenterByName(name string) (int, gobol.Error
 	).Scan(&count); err != nil {
 
 		if err == gocql.ErrNotFound {
-			statsQuery(persist.keyspaceMain, "ts_datacenter", "select", time.Since(start))
+			statsQuery(persist.stats, persist.keyspaceMain, "ts_datacenter", "select", time.Since(start))
 			return 0, nil
 		}
 
-		statsQueryError(persist.keyspaceMain, "ts_datacenter", "select")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_datacenter", "select")
 		return 0, errPersist("CountDatacenterByName", err)
 	}
 
-	statsQuery(persist.keyspaceMain, "ts_datacenter", "select", time.Since(start))
+	statsQuery(persist.stats, persist.keyspaceMain, "ts_datacenter", "select", time.Since(start))
 	return count, nil
 }
 
@@ -246,11 +247,11 @@ func (persist *persistence) dropKeyspace(key string) gobol.Error {
 	if err := persist.cassandra.Query(
 		fmt.Sprintf(`DROP KEYSPACE IF EXISTS %s`, key),
 	).Exec(); err != nil {
-		statsQueryError(key, "", "drop")
+		statsQueryError(persist.stats, key, "", "drop")
 		return errPersist("DropKeyspace", err)
 	}
 
-	statsQuery(key, "", "drop", time.Since(start))
+	statsQuery(persist.stats, key, "", "drop", time.Since(start))
 	return nil
 }
 
@@ -270,15 +271,15 @@ func (persist *persistence) getKeyspace(key string) (Config, bool, gobol.Error) 
 	).Scan(&name, &datacenter, &replication, &ttl, &tuuid); err != nil {
 
 		if err == gocql.ErrNotFound {
-			statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+			statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 			return Config{}, false, errNotFound("GetKeyspace")
 		}
 
-		statsQueryError(persist.keyspaceMain, "ts_keyspace", "select")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_keyspace", "select")
 		return Config{}, false, errPersist("GetKeyspace", err)
 	}
 
-	statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+	statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 	return Config{
 		Key:               key,
 		Name:              name,
@@ -303,20 +304,20 @@ func (persist *persistence) checkKeyspace(key string) gobol.Error {
 	).Scan(&count); err != nil {
 
 		if err == gocql.ErrNotFound {
-			statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+			statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 			return errNotFound("CheckKeyspace")
 		}
 
-		statsQueryError(persist.keyspaceMain, "ts_keyspace", "select")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_keyspace", "select")
 		return errPersist("CheckKeyspace", err)
 	}
 
 	if count > 0 {
-		statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+		statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 		return nil
 	}
 
-	statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+	statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 	return errNotFound("CheckKeyspace")
 }
 
@@ -355,15 +356,15 @@ func (persist *persistence) listAllKeyspaces() ([]Config, gobol.Error) {
 	if err := iter.Close(); err != nil {
 
 		if err == gocql.ErrNotFound {
-			statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+			statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 			return []Config{}, errNoContent("ListAllKeyspaces")
 		}
 
-		statsQueryError(persist.keyspaceMain, "ts_keyspace", "select")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_keyspace", "select")
 		return []Config{}, errPersist("ListAllKeyspaces", err)
 	}
 
-	statsQuery(persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
+	statsQuery(persist.stats, persist.keyspaceMain, "ts_keyspace", "select", time.Since(start))
 	return keyspaces, nil
 }
 
@@ -382,11 +383,11 @@ func (persist *persistence) listDatacenters() ([]string, gobol.Error) {
 	if err := iter.Close(); err != nil {
 
 		if err == gocql.ErrNotFound {
-			statsQuery(persist.keyspaceMain, "ts_datacenter", "select", time.Since(start))
+			statsQuery(persist.stats, persist.keyspaceMain, "ts_datacenter", "select", time.Since(start))
 			return []string{}, errNoContent("ListDatacenters")
 		}
 
-		statsQueryError(persist.keyspaceMain, "ts_datacenter", "select")
+		statsQueryError(persist.stats, persist.keyspaceMain, "ts_datacenter", "select")
 		return []string{}, errPersist("ListDatacenters", err)
 	}
 
@@ -395,32 +396,23 @@ func (persist *persistence) listDatacenters() ([]string, gobol.Error) {
 
 func (persist *persistence) createIndex(esIndex string) gobol.Error {
 	start := time.Now()
-
-	body := &bytes.Buffer{}
-
-	body.WriteString(
-		`{"mappings":{"meta":{"properties":{"tagsNested":{"type":"nested","properties":{"tagKey":{"type":"string"},"tagValue":{"type":"string"}}}}},"metatext":{"properties":{"tagsNested":{"type":"nested","properties":{"tagKey":{"type":"string"},"tagValue":{"type":"string"}}}}}}}`,
-	)
-
-	_, err := persist.esearch.CreateIndex(esIndex, body)
+	err := persist.meta.CreateIndex(esIndex)
 	if err != nil {
-		statsIndexError(esIndex, "", "post")
+		statsIndexError(persist.stats, esIndex, "", "post")
 		return errPersist("CreateIndex", err)
 	}
-
-	statsIndex(esIndex, "", "post", time.Since(start))
+	statsIndex(persist.stats, esIndex, "", "post", time.Since(start))
 	return nil
 }
 
 func (persist *persistence) deleteIndex(esIndex string) gobol.Error {
 	start := time.Now()
-
-	_, err := persist.esearch.DeleteIndex(esIndex)
+	err := persist.meta.DeleteIndex(esIndex)
 	if err != nil {
-		statsIndexError(esIndex, "", "delete")
+		statsIndexError(persist.stats, esIndex, "", "delete")
 		return errPersist("DeleteIndex", err)
 	}
 
-	statsIndex(esIndex, "", "delete", time.Since(start))
+	statsIndex(persist.stats, esIndex, "", "delete", time.Since(start))
 	return nil
 }

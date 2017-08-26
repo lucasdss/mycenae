@@ -117,7 +117,7 @@ Burst = 10000
   CleanupInterval = "1h"
 	SyncInterval = "1s"
 
-  MaxBufferSize = 10000	
+  MaxBufferSize = 10000
   MaxConcWrite  = 4
 
 	CheckPointPath = "/tmp/mycenae/wal"

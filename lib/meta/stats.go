@@ -2,24 +2,22 @@ package meta
 
 import (
 	"time"
+
+	"github.com/uol/mycenae/lib/tsstats"
 )
 
-func statsProcTime(ks string, d time.Duration, pts int) {
-	statsValueAdd(
-		"points.processes_time",
+func statsProcTime(stats *tsstats.StatsTS, ks string, d time.Duration, pts int) {
+	statsValueAdd(stats, "points.processes_time",
 		map[string]string{"keyspace": ks},
 		(float64(d.Nanoseconds())/float64(time.Millisecond))/float64(pts),
 	)
 }
 
-func statsLostMeta() {
-	statsIncrement(
-		"meta.lost",
-		map[string]string{},
-	)
+func statsLostMeta(stats *tsstats.StatsTS) {
+	statsIncrement(stats, "meta.lost", map[string]string{})
 }
 
-func statsIndexError(i, t, m string) {
+func statsIndexError(stats *tsstats.StatsTS, i, t, m string) {
 	tags := map[string]string{"method": m}
 	if i != "" {
 		tags["index"] = i
@@ -27,10 +25,10 @@ func statsIndexError(i, t, m string) {
 	if t != "" {
 		tags["type"] = t
 	}
-	statsIncrement("elastic.request.error", tags)
+	statsIncrement(stats, "elastic.request.error", tags)
 }
 
-func statsIndex(i, t, m string, d time.Duration) {
+func statsIndex(stats *tsstats.StatsTS, i, t, m string, d time.Duration) {
 	tags := map[string]string{"method": m}
 	if i != "" {
 		tags["index"] = i
@@ -38,22 +36,20 @@ func statsIndex(i, t, m string, d time.Duration) {
 	if t != "" {
 		tags["type"] = t
 	}
-	statsIncrement("elastic.request", tags)
-	statsValueAdd(
-		"elastic.request.duration",
-		tags,
+	statsIncrement(stats, "elastic.request", tags)
+	statsValueAdd(stats, "elastic.request.duration", tags,
 		float64(d.Nanoseconds())/float64(time.Millisecond),
 	)
 }
 
-func statsBulkPoints() {
-	statsIncrement("elastic.bulk.points", map[string]string{})
+func statsBulkPoints(stats *tsstats.StatsTS) {
+	statsIncrement(stats, "elastic.bulk.points", map[string]string{})
 }
 
-func statsIncrement(metric string, tags map[string]string) {
-	stats.Increment("meta", metric, tags)
+func statsIncrement(stats *tsstats.StatsTS, metric string, tags map[string]string) {
+	stats.Increment(packageName, metric, tags)
 }
 
-func statsValueAdd(metric string, tags map[string]string, v float64) {
-	stats.ValueAdd("meta", metric, tags, v)
+func statsValueAdd(stats *tsstats.StatsTS, metric string, tags map[string]string, v float64) {
+	stats.ValueAdd(packageName, metric, tags, v)
 }

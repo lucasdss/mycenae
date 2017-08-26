@@ -15,6 +15,7 @@ import (
 func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 
 	atomic.AddInt64(&collector.saving, 1)
+	defer atomic.AddInt64(&collector.saving, -1)
 
 	rcvMsg := gorilla.TSDBpoint{}
 
@@ -66,7 +67,7 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 		esIndex := collector.settings.ElasticSearch.Index
 
 		if msgKs != "" {
-			found, gerr := collector.boltc.GetKeyspace(msgKs)
+			found, gerr := collector.kspace.KeyspaceExists(msgKs)
 			if found {
 				keyspace = msgKs
 				esIndex = msgKs
@@ -97,8 +98,6 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 	} else {
 		statsUDP(msgKs, "number")
 	}
-
-	atomic.AddInt64(&collector.saving, -1)
 
 }
 
