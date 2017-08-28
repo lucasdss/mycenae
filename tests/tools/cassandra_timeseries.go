@@ -52,17 +52,17 @@ type KeyspaceProperties struct {
 }
 
 const (
-	cqlCountKeyspaces = `SELECT count(*) FROM system_schema.keyspaces;`
-	cqlCountTsKeyspaces = `SELECT count(*) FROM mycenae.ts_keyspace;`
-	cqlKeyspaceTables = `SELECT table_name FROM system_schema.tables WHERE keyspace_name = ?`
-	cqlExists = `SELECT count(*) FROM system_schema.keyspaces WHERE keyspace_name = ?`
-	cqlExistsInformation = `SELECT count(*) FROM mycenae.ts_keyspace WHERE key = ? and name = ? and replication_factor = ? and datacenter = ? and ks_ttl = ? and ks_tuuid = ? and contact = ? ALLOW FILTERING`
-	cqlTableProperties = `SELECT bloom_filter_fp_chance, caching, comment, compaction, compression, dclocal_read_repair_chance, default_time_to_live, gc_grace_seconds, max_index_interval, memtable_flush_period_in_ms, min_index_interval, read_repair_chance, speculative_retry from system_schema.tables  where keyspace_name = ? and table_name = ?`
+	cqlCountKeyspaces     = `SELECT count(*) FROM system_schema.keyspaces;`
+	cqlCountTsKeyspaces   = `SELECT count(*) FROM mycenae.ts_keyspace;`
+	cqlKeyspaceTables     = `SELECT table_name FROM system_schema.tables WHERE keyspace_name = ?`
+	cqlExists             = `SELECT count(*) FROM system_schema.keyspaces WHERE keyspace_name = ?`
+	cqlExistsInformation  = `SELECT count(*) FROM mycenae.ts_keyspace WHERE key = ? and name = ? and replication_factor = ? and datacenter = ? and ks_ttl = ? and ks_tuuid = ? and contact = ? ALLOW FILTERING`
+	cqlTableProperties    = `SELECT bloom_filter_fp_chance, caching, comment, compaction, compression, dclocal_read_repair_chance, default_time_to_live, gc_grace_seconds, max_index_interval, memtable_flush_period_in_ms, min_index_interval, read_repair_chance, speculative_retry from system_schema.tables  where keyspace_name = ? and table_name = ?`
 	cqlKeyspaceProperties = `SELECT keyspace_name, durable_writes, replication from system_schema.keyspaces where keyspace_name = ?`
-	cqlDropKS = `DROP KEYSPACE %v`
-	cqlSelectKS = `SELECT name, replication_factor, datacenter, ks_ttl, ks_tuuid, contact, replication_factor_meta FROM mycenae.ts_keyspace WHERE key = ?`
-	cqlDeleteKS = `DELETE FROM mycenae.ts_keyspace WHERE key = '%v'`
-	cqlInsertKS = `INSERT INTO mycenae.ts_keyspace (key, name , datacenter , replication_factor, ks_ttl, ks_tuuid) VALUES ('%v', '%v', 'dc_gt_a1', 1, 90, false)`
+	cqlDropKS             = `DROP KEYSPACE %v`
+	cqlSelectKS           = `SELECT name, replication_factor, datacenter, ks_ttl, ks_tuuid, contact, replication_factor_meta FROM mycenae.ts_keyspace WHERE key = ?`
+	cqlDeleteKS           = `DELETE FROM mycenae.ts_keyspace WHERE key = '%v'`
+	cqlInsertKS           = `INSERT INTO mycenae.ts_keyspace (key, name , datacenter , replication_factor, ks_ttl, ks_tuuid) VALUES ('%v', '%v', 'dc_gt_a1', 1, 90, false)`
 )
 
 func (ts *cassTs) GetValueFromIDSTAMP(keyspace, id string) (nValue float64) {
@@ -300,7 +300,7 @@ func (ts *cassTs) TableProperties(keyspace string, table string) TableProperties
 	var caching, compaction, compression map[string]string
 	var speculative_retry, comment string
 	var default_time_to_live, gc_grace_seconds, max_index_interval, memtable_flush_period_in_ms,
-	min_index_interval int
+		min_index_interval int
 	var bloom_filter_fp_chance, dclocal_read_repair_chance, read_repair_chance float64
 
 	if err := ts.cql.Query(cqlTableProperties,
@@ -393,6 +393,6 @@ func (ts *cassTs) KeyspaceProperties(keyspace string) KeyspaceProperties {
 	return KeyspaceProperties{
 		Keyspace_name:  keyspace_name,
 		Durable_writes: durable_writes,
-		Replication: replication,
+		Replication:    replication,
 	}
 }

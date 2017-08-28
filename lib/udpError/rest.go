@@ -10,7 +10,6 @@ import (
 )
 
 func (uerror *UDPerror) ListErrorTags(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-
 	ks := ps.ByName("keyspace")
 	if ks == "" {
 		rip.AddStatsMap(r, map[string]string{"path": "/keyspaces/#keyspace/errortags", "keyspace": "empty"})
@@ -19,9 +18,7 @@ func (uerror *UDPerror) ListErrorTags(w http.ResponseWriter, r *http.Request, ps
 	}
 
 	rip.AddStatsMap(r, map[string]string{"path": "/keyspaces/#keyspace/errortags", "keyspace": ks})
-
 	query := StructV2Error{}
-
 	gerr := rip.FromJSON(r, &query)
 	if gerr != nil {
 		rip.Fail(w, gerr)
@@ -29,13 +26,9 @@ func (uerror *UDPerror) ListErrorTags(w http.ResponseWriter, r *http.Request, ps
 	}
 
 	q := r.URL.Query()
-
 	sizeStr := q.Get("size")
-
 	var size int
-
 	if sizeStr != "" {
-
 		size, err := strconv.Atoi(sizeStr)
 		if err != nil {
 			gerr := errParamSize("ListErrorTags", err)
@@ -50,11 +43,8 @@ func (uerror *UDPerror) ListErrorTags(w http.ResponseWriter, r *http.Request, ps
 	}
 
 	fromStr := q.Get("from")
-
 	var from int
-
 	if fromStr != "" {
-
 		from, err := strconv.Atoi(fromStr)
 		if err != nil {
 			gerr := errParamFrom("ListErrorTags", err)
@@ -68,7 +58,7 @@ func (uerror *UDPerror) ListErrorTags(w http.ResponseWriter, r *http.Request, ps
 		}
 	}
 
-	keys, total, gerr := uerror.listErrorTags(
+	keys, total, gerr := uerror.meta.ListErrorTags(
 		ks,
 		"errortag",
 		query.Metric,
@@ -86,13 +76,10 @@ func (uerror *UDPerror) ListErrorTags(w http.ResponseWriter, r *http.Request, ps
 		return
 	}
 
-	out := Response{
+	rip.SuccessJSON(w, http.StatusOK, Response{
 		TotalRecords: total,
 		Payload:      keys,
-	}
-
-	rip.SuccessJSON(w, http.StatusOK, out)
-	return
+	})
 }
 
 func (uerror *UDPerror) GetErrorInfo(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {

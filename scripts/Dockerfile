@@ -13,5 +13,4 @@ COPY mycenae "/bin/mycenae"
 #
 # Start
 #
-#CMD /bin/mycenae -config=/config/mycenae.toml || find /tmp -iname '*.log' | xargs cat
-CMD [ "/bin/sh", "-c", "/bin/mycenae -config=/config/mycenae.toml" ]
+CMD /bin/mycenae -config="/config/mycenae.toml"

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#
+# Runs the tests with an elasticsearch to connect to
+#
+
+export ELASTICSEARCH=$(docker inspect --format "{{ .NetworkSettings.IPAddress }}" elastic)
+go test -v -bench=. -timeout=1h

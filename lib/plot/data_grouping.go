@@ -18,51 +18,33 @@ const (
 )
 
 func basic(totalPoints int, serie gorilla.Pnts) (groupSerie gorilla.Pnts) {
-
 	total := len(serie)
-
 	group := float32(total) / float32(totalPoints)
-
 	group = round(group, .5, 0)
 
-	var counter float32
-
-	var avgCounter float32
-
-	var nilCounter float32
-
-	var groupDate int64
-
-	var groupValue float32
-
+	var (
+		counter    float32
+		avgCounter float32
+		nilCounter float32
+		groupDate  int64
+		groupValue float32
+	)
 	for i, point := range serie {
-
 		groupDate += point.Date
-
 		if point.Empty {
-
 			nilCounter++
-
 		} else {
-
 			groupValue += point.Value
-
 			avgCounter++
-
 		}
 
 		counter++
-
 		if counter == group || i == total-1 {
-
 			groupDate = groupDate / int64(counter)
-
 			groupValue = groupValue / avgCounter
-
 			groupPoint := &pb.Point{}
 
 			groupPoint.Date = groupDate
-
 			groupPoint.Value = groupValue
 
 			if nilCounter == counter {
@@ -70,33 +52,22 @@ func basic(totalPoints int, serie gorilla.Pnts) (groupSerie gorilla.Pnts) {
 			}
 
 			groupSerie = append(groupSerie, groupPoint)
-
 			counter = 0
-
 			avgCounter = 0
-
 			nilCounter = 0
-
 			groupDate = 0
-
 			groupValue = 0
-
 		}
-
 	}
-
 	return
-
 }
 
 func rate(options structs.TSDBrateOptions, serie gorilla.Pnts) gorilla.Pnts {
-
 	if len(serie) == 1 {
 		return serie
 	}
 
 	rateSerie := gorilla.Pnts{}
-
 	for i := 1; i < len(serie); i++ {
 
 		if serie[i].Empty || serie[i-1].Empty {
@@ -109,7 +80,6 @@ func rate(options structs.TSDBrateOptions, serie gorilla.Pnts) gorilla.Pnts {
 		}
 
 		var value float32
-
 		if options.Counter && serie[i].Value < serie[i-1].Value {
 			value = (float32(*options.CounterMax) + serie[i].Value - serie[i-1].Value) / float32((serie[i].Date)-(serie[i-1].Date))
 			if options.ResetValue != 0 && float32(options.ResetValue) <= value {
@@ -118,21 +88,16 @@ func rate(options structs.TSDBrateOptions, serie gorilla.Pnts) gorilla.Pnts {
 		} else {
 			value = (serie[i].Value - serie[i-1].Value) / float32((serie[i].Date)-(serie[i-1].Date))
 		}
-
-		p := &pb.Point{
+		rateSerie = append(rateSerie, &pb.Point{
 			Value: value,
 			Date:  serie[i].Date,
 			Empty: false,
-		}
-
-		rateSerie = append(rateSerie, p)
+		})
 	}
-
 	return rateSerie
 }
 
 func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, serie gorilla.Pnts) gorilla.Pnts {
-
 	switch options.Unit {
 	case "sec":
 		// start is already in seconds
@@ -161,17 +126,12 @@ func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, s
 	}
 
 	groupDate := start
-
 	endInterval := getEndInterval(start, options.Unit, options.Value)
 
 	var groupedCount float32
-
 	groupedPoint := &pb.Point{}
-
 	groupedSerie := gorilla.Pnts{}
-
 	for i := 0; i < len(serie); i++ {
-
 		point := serie[i]
 
 		//Ajusting for missing points
@@ -184,14 +144,10 @@ func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, s
 				} else {
 					groupedPoint.Empty = true
 				}
-
 				groupedSerie = append(groupedSerie, groupedPoint)
-
 				groupedPoint = &pb.Point{}
 			}
-
 			groupDate = endInterval
-
 			endInterval = getEndInterval(endInterval, options.Unit, options.Value)
 		}
 
@@ -221,31 +177,23 @@ func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, s
 		}
 
 		if i+1 == len(serie) || serie[i+1].Date >= endInterval {
-
 			groupedPoint.Date = groupDate
-
 			groupDate = endInterval
-
 			if options.Downsample == "avg" {
 				groupedPoint.Value = groupedPoint.Value / groupedCount
 			}
 
 			groupedSerie = append(groupedSerie, groupedPoint)
-
 			groupedCount = 0
-
 			groupedPoint = &pb.Point{}
-
 			if i+1 != len(serie) {
 				endInterval = getEndInterval(endInterval, options.Unit, options.Value)
 			}
 		}
-
 	}
 
 	if keepEmpties {
 		for i := endInterval; i < end; i = endInterval {
-
 			groupedPoint := &pb.Point{
 				Date: endInterval,
 			}
@@ -255,18 +203,14 @@ func downsample(options structs.DSoptions, keepEmpties bool, start, end int64, s
 			} else {
 				groupedPoint.Empty = true
 			}
-
 			groupedSerie = append(groupedSerie, groupedPoint)
-
 			endInterval = getEndInterval(i, options.Unit, options.Value)
 		}
 	}
-
 	return groupedSerie
 }
 
 func getEndInterval(start int64, unit string, value int) int64 {
-
 	var end int64
 
 	switch unit {
@@ -289,44 +233,31 @@ func getEndInterval(start int64, unit string, value int) int64 {
 		base := time.Date(startDate.Year(), time.January, 1, 0, 0, 0, 0, time.Local)
 		end = base.AddDate(value, 0, 0).Unix()
 	}
-
 	return end
 }
 
 func merge(mergeType string, keepEmpties bool, serie gorilla.Pnts) gorilla.Pnts {
-
 	mergedSerie := gorilla.Pnts{}
 
 	for i := 0; i < len(serie); i++ {
-
 		point := serie[i]
 
 		var mergedPoint *pb.Point
-
 		if i < len(serie)-1 {
-
 			j := i + 1
-
 			nextPoint := serie[j]
-
 			var mergedCount, nullCount float32
 
 			mergedPoint = point
-
 			mergedCount++
-
 			if point.Empty {
 				nullCount++
 			}
 
 			for point.Date == nextPoint.Date {
-
 				i++
-
 				mergedCount++
-
 				if !nextPoint.Empty {
-
 					mergedPoint.Empty = false
 
 					switch mergeType {
@@ -348,40 +279,29 @@ func merge(mergeType string, keepEmpties bool, serie gorilla.Pnts) gorilla.Pnts 
 				} else {
 					nullCount++
 				}
-
 				if j == len(serie)-1 {
 					break
 				}
-
 				j++
-
 				nextPoint = serie[j]
 			}
-
 			if mergedCount-nullCount > 1 {
-
 				if mergeType == "avg" {
 					mergedPoint.Value = mergedPoint.Value / mergedCount
 				}
-
 			} else if nullCount == mergedCount && keepEmpties {
 				mergedPoint.Empty = true
 			}
-
 		} else {
 			mergedPoint = point
 		}
-
 		mergedSerie = append(mergedSerie, mergedPoint)
-
 	}
-
 	return mergedSerie
 }
 
 func filterValues(oper structs.FilterValueOperation, serie gorilla.Pnts) gorilla.Pnts {
-
-	filteredSerie := gorilla.Pnts{}
+	var filteredSerie gorilla.Pnts
 
 	switch oper.BoolOper {
 	case "<":
@@ -415,26 +335,19 @@ func filterValues(oper structs.FilterValueOperation, serie gorilla.Pnts) gorilla
 			}
 		}
 	}
-
 	return filteredSerie
 }
 
 func round(val float32, roundOn float32, places int) float32 {
-
 	var round float64
 
 	pow := math.Pow(10, float64(places))
-
 	digit := pow * float64(val)
-
 	_, div := math.Modf(digit)
-
 	if float32(div) >= roundOn {
 		round = math.Ceil(digit)
 	} else {
 		round = math.Floor(digit)
 	}
-
 	return float32(round / pow)
-
 }

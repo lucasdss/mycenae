@@ -294,7 +294,7 @@ func TestListErrorTimeseriesIdsMultipleTags(t *testing.T) {
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
 	data := tools.TsErrorV2{
 		Metric: metric,
-		Tags: []tools.TsTagV2{{TagKey: tk1, TagValue: tv1}, {TagKey: tk2, TagValue: tv2}},
+		Tags:   []tools.TsTagV2{{TagKey: tk1, TagValue: tv1}, {TagKey: tk2, TagValue: tv2}},
 	}
 
 	postAndCheckError("", path, data, 200, t)
@@ -534,7 +534,7 @@ func TestGetErrorTimeseriesMethodNotAllowed(t *testing.T) {
 	path := fmt.Sprintf("keyspaces/%s/errortags", ksMycenae)
 	data := tools.TsErrorV2{
 		Metric: "metric",
-		Tags: []tools.TsTagV2{{TagKey: "tagKey", TagValue: "tagValue"}},
+		Tags:   []tools.TsTagV2{{TagKey: "tagKey", TagValue: "tagValue"}},
 	}
 
 	body, _ := json.Marshal(data)

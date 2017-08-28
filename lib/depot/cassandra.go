@@ -8,6 +8,7 @@ import (
 	"github.com/gocql/gocql"
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/cassandra"
+	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/tsstats"
 	"github.com/uol/mycenae/lib/wal"
 
@@ -40,7 +41,7 @@ var (
 )
 
 func NewCassandra(
-	s *Settings,
+	s *structs.DepotSettings,
 	readConsistency []gocql.Consistency,
 	writeConsistency []gocql.Consistency,
 	wal *wal.WAL,

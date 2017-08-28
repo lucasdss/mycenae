@@ -380,7 +380,7 @@ func TestAgent_AddService(t *testing.T) {
 				Port:    8100,
 			},
 			[]*structs.CheckType{
-				&structs.CheckType{
+				{
 					CheckID: "check1",
 					Name:    "name1",
 					TTL:     time.Minute,
@@ -388,7 +388,7 @@ func TestAgent_AddService(t *testing.T) {
 				},
 			},
 			map[string]*structs.HealthCheck{
-				"check1": &structs.HealthCheck{
+				"check1": {
 					Node:        "node1",
 					CheckID:     "check1",
 					Name:        "name1",
@@ -408,26 +408,26 @@ func TestAgent_AddService(t *testing.T) {
 				Port:    8200,
 			},
 			[]*structs.CheckType{
-				&structs.CheckType{
+				{
 					CheckID: "check1",
 					Name:    "name1",
 					TTL:     time.Minute,
 					Notes:   "note1",
 				},
-				&structs.CheckType{
+				{
 					CheckID: "check-noname",
 					TTL:     time.Minute,
 				},
-				&structs.CheckType{
+				{
 					Name: "check-noid",
 					TTL:  time.Minute,
 				},
-				&structs.CheckType{
+				{
 					TTL: time.Minute,
 				},
 			},
 			map[string]*structs.HealthCheck{
-				"check1": &structs.HealthCheck{
+				"check1": {
 					Node:        "node1",
 					CheckID:     "check1",
 					Name:        "name1",
@@ -436,7 +436,7 @@ func TestAgent_AddService(t *testing.T) {
 					ServiceID:   "svcid2",
 					ServiceName: "svcname2",
 				},
-				"check-noname": &structs.HealthCheck{
+				"check-noname": {
 					Node:        "node1",
 					CheckID:     "check-noname",
 					Name:        "Service 'svcname2' check",
@@ -444,7 +444,7 @@ func TestAgent_AddService(t *testing.T) {
 					ServiceID:   "svcid2",
 					ServiceName: "svcname2",
 				},
-				"service:svcid2:3": &structs.HealthCheck{
+				"service:svcid2:3": {
 					Node:        "node1",
 					CheckID:     "service:svcid2:3",
 					Name:        "check-noid",
@@ -452,7 +452,7 @@ func TestAgent_AddService(t *testing.T) {
 					ServiceID:   "svcid2",
 					ServiceName: "svcname2",
 				},
-				"service:svcid2:4": &structs.HealthCheck{
+				"service:svcid2:4": {
 					Node:        "node1",
 					CheckID:     "service:svcid2:4",
 					Name:        "Service 'svcname2' check",
@@ -526,7 +526,7 @@ func TestAgent_RemoveService(t *testing.T) {
 			Service: "memcache",
 			Port:    8000,
 		}
-		chkTypes := []*structs.CheckType{&structs.CheckType{TTL: time.Minute}}
+		chkTypes := []*structs.CheckType{{TTL: time.Minute}}
 
 		if err := a.AddService(srv, chkTypes, false, ""); err != nil {
 			t.Fatalf("err: %v", err)
@@ -563,8 +563,8 @@ func TestAgent_RemoveService(t *testing.T) {
 			Port:    8000,
 		}
 		chkTypes := []*structs.CheckType{
-			&structs.CheckType{TTL: time.Minute},
-			&structs.CheckType{TTL: 30 * time.Second},
+			{TTL: time.Minute},
+			{TTL: 30 * time.Second},
 		}
 		if err := a.AddService(srv, chkTypes, false, ""); err != nil {
 			t.Fatalf("err: %v", err)
@@ -1544,7 +1544,7 @@ func TestAgent_Service_Reap(t *testing.T) {
 		Port:    8000,
 	}
 	chkTypes := []*structs.CheckType{
-		&structs.CheckType{
+		{
 			Status: api.HealthPassing,
 			TTL:    25 * time.Millisecond,
 			DeregisterCriticalServiceAfter: 200 * time.Millisecond,
@@ -1618,7 +1618,7 @@ func TestAgent_Service_NoReap(t *testing.T) {
 		Port:    8000,
 	}
 	chkTypes := []*structs.CheckType{
-		&structs.CheckType{
+		{
 			Status: api.HealthPassing,
 			TTL:    25 * time.Millisecond,
 		},
@@ -1686,7 +1686,7 @@ func TestAgent_addCheck_restoresSnapshot(t *testing.T) {
 	}
 
 	// Re-registering the service preserves the state of the check
-	chkTypes := []*structs.CheckType{&structs.CheckType{TTL: 30 * time.Second}}
+	chkTypes := []*structs.CheckType{{TTL: 30 * time.Second}}
 	if err := a.AddService(svc, chkTypes, false, ""); err != nil {
 		t.Fatalf("err: %s", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -14,26 +15,26 @@ import (
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rubber"
 	"github.com/uol/mycenae/lib/bcache"
+	pb "github.com/uol/mycenae/lib/proto"
+	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/tsstats"
 	"github.com/uol/mycenae/lib/utils"
-
-	pb "github.com/uol/mycenae/lib/proto"
-
 	"go.uber.org/zap"
 )
 
-var (
-	gblog *zap.Logger
-	stats *tsstats.StatsTS
+const (
+	elasticMetaType   = "meta"
+	elasticNestedPath = "tagsNested"
 )
 
-type Meta struct {
+type elasticMeta struct {
 	boltc    *bcache.Bcache
 	validKey *regexp.Regexp
-	settings *Settings
-	persist  persistence
+	settings *structs.MetaSettings
+	esearch  *rubber.Elastic
+	stats    *tsstats.StatsTS
+	logger   *zap.Logger
 
-	concPoints  chan struct{}
 	concBulk    chan struct{}
 	metaPntChan chan *pb.Meta
 	metaTxtChan chan *pb.Meta
@@ -52,23 +53,23 @@ type savingObj struct {
 	mtx sync.RWMutex
 }
 
-func (so *savingObj) get(ksts []byte) (*pb.Meta, bool) {
+func (so *savingObj) get(key string) (*pb.Meta, bool) {
 	so.mtx.RLock()
 	defer so.mtx.RUnlock()
-	v, ok := so.mm[string(ksts)]
+	v, ok := so.mm[key]
 	return v, ok
 }
 
-func (so *savingObj) add(ksts []byte, m *pb.Meta) {
+func (so *savingObj) add(key string, m *pb.Meta) {
 	so.mtx.Lock()
 	defer so.mtx.Unlock()
-	so.mm[string(ksts)] = nil
+	so.mm[key] = nil
 }
 
-func (so *savingObj) del(key *string) {
+func (so *savingObj) del(key string) {
 	so.mtx.Lock()
 	defer so.mtx.Unlock()
-	delete(so.mm, *key)
+	delete(so.mm, key)
 }
 
 func (so *savingObj) iter() <-chan string {
@@ -86,23 +87,13 @@ func (so *savingObj) iter() <-chan string {
 	return c
 }
 
-type Settings struct {
-	MetaSaveInterval    string
-	MaxConcurrentBulks  int
-	MaxConcurrentPoints int
-	MaxMetaBulkSize     int
-	MetaBufferSize      int
-	MetaHeadInterval    string
-}
-
-func New(
+func createElasticMeta(
 	log *zap.Logger,
 	sts *tsstats.StatsTS,
 	es *rubber.Elastic,
 	bc *bcache.Bcache,
-	set *Settings,
-) (*Meta, error) {
-
+	set *structs.MetaSettings,
+) (*elasticMeta, error) {
 	d, err := time.ParseDuration(set.MetaSaveInterval)
 	if err != nil {
 		return nil, err
@@ -112,25 +103,21 @@ func New(
 		return nil, err
 	}
 
-	gblog = log
-	stats = sts
-
-	m := &Meta{
+	m := &elasticMeta{
 		boltc:       bc,
 		settings:    set,
+		esearch:     es,
 		validKey:    regexp.MustCompile(`^[0-9A-Za-z-._%&#;/]+$`),
-		concPoints:  make(chan struct{}, set.MaxConcurrentPoints),
 		concBulk:    make(chan struct{}, set.MaxConcurrentBulks),
 		metaPntChan: make(chan *pb.Meta, set.MetaBufferSize),
 		metaTxtChan: make(chan *pb.Meta, set.MetaBufferSize),
-		metaPayload: &bytes.Buffer{},
-		persist: persistence{
-			esearch: es,
-		},
-		sm: &savingObj{mm: make(map[string]*pb.Meta)},
+		metaPayload: bytes.NewBuffer(nil),
+		stats:       sts,
+		logger:      log,
+		sm:          &savingObj{mm: make(map[string]*pb.Meta)},
 	}
 
-	gblog.Debug(
+	m.logger.Debug(
 		"meta initialized",
 		zap.String("MetaSaveInterval", set.MetaSaveInterval),
 		zap.Int("MaxConcurrentBulks", set.MaxConcurrentBulks),
@@ -144,8 +131,7 @@ func New(
 	return m, nil
 }
 
-func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.Duration) {
-
+func (meta *elasticMeta) metaCoordinator(saveInterval time.Duration, headInterval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(saveInterval)
 		for {
@@ -153,9 +139,9 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 			case <-ticker.C:
 				for ksts := range meta.sm.iter() {
 					//found, gerr := meta.boltc.GetTsNumber(ksts, meta.CheckTSID)
-					found, gerr := meta.CheckTSID("meta", ksts)
+					found, gerr := meta.CheckTSID(elasticMetaType, ksts)
 					if gerr != nil {
-						gblog.Error(
+						meta.logger.Error(
 							gerr.Error(),
 							zap.String("func", "metaCoordinator"),
 							zap.Error(gerr),
@@ -163,7 +149,7 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 						continue
 					}
 					if !found {
-						if pkt, ok := meta.sm.get([]byte(ksts)); ok {
+						if pkt, ok := meta.sm.get(ksts); ok {
 							meta.metaPntChan <- pkt
 							time.Sleep(headInterval)
 							continue
@@ -171,15 +157,14 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 					}
 
 					if gerr := meta.boltc.Set(ksts); gerr != nil {
-						gblog.Error(
+						meta.logger.Error(
 							gerr.Error(),
 							zap.String("func", "metaCoordinator"),
 							zap.Error(gerr),
 						)
 					}
-					meta.sm.del(&ksts)
+					meta.sm.del(ksts)
 					time.Sleep(headInterval)
-
 				}
 			}
 		}
@@ -190,98 +175,76 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 	for {
 		select {
 		case <-ticker.C:
-
 			if meta.metaPayload.Len() != 0 {
-
 				meta.concBulk <- struct{}{}
-
-				bulk := &bytes.Buffer{}
-
+				bulk := bytes.NewBuffer(nil)
 				err := meta.readMeta(bulk)
 				if err != nil {
-					gblog.Error(
+					meta.logger.Error(
 						"",
 						zap.String("func", "metaCoordinator"),
 						zap.Error(err),
 					)
 					continue
 				}
-
 				go meta.saveBulk(bulk)
-
 			}
-
 		case p := <-meta.metaPntChan:
-
 			gerr := meta.generateBulk(p, true)
 			if gerr != nil {
-				gblog.Error(
+				meta.logger.Error(
 					gerr.Error(),
 					zap.String("func", "metaCoordinator/SaveBulkES"),
 				)
 			}
-
 			if meta.metaPayload.Len() > meta.settings.MaxMetaBulkSize {
-
 				meta.concBulk <- struct{}{}
-
-				bulk := &bytes.Buffer{}
-
+				bulk := bytes.NewBuffer(nil)
 				err := meta.readMeta(bulk)
 				if err != nil {
-					gblog.Error(
+					meta.logger.Error(
 						"",
 						zap.String("func", "metaCoordinator"),
 						zap.Error(err),
 					)
 					continue
 				}
-
 				go meta.saveBulk(bulk)
 			}
-
 		case p := <-meta.metaTxtChan:
-
 			gerr := meta.generateBulk(p, false)
 			if gerr != nil {
-				gblog.Error(
+				meta.logger.Error(
 					gerr.Error(),
 					zap.String("func", "metaCoordinator/SaveBulkES"),
 				)
 			}
-
 			if meta.metaPayload.Len() > meta.settings.MaxMetaBulkSize {
-
 				meta.concBulk <- struct{}{}
-
-				bulk := &bytes.Buffer{}
-
+				bulk := bytes.NewBuffer(nil)
 				err := meta.readMeta(bulk)
 				if err != nil {
-					gblog.Error(
+					meta.logger.Error(
 						"",
 						zap.String("func", "metaCoordinator"),
 						zap.Error(err),
 					)
 					continue
 				}
-
 				go meta.saveBulk(bulk)
 			}
 		}
 	}
 }
 
-func (meta *Meta) readMeta(bulk *bytes.Buffer) error {
-
+func (meta *elasticMeta) readMeta(bulk *bytes.Buffer) error {
 	for {
-		b, err := meta.metaPayload.ReadBytes(124)
+		b, err := meta.metaPayload.ReadBytes(124) // |
 		if err != nil {
 			return err
 		}
 
 		b = b[:len(b)-1]
-
 		_, err = bulk.Write(b)
 		if err != nil {
 			return err
@@ -291,55 +254,43 @@ func (meta *Meta) readMeta(bulk *bytes.Buffer) error {
 			break
 		}
 	}
-
 	return nil
 }
 
-func (meta *Meta) Handle(pkt *pb.Meta) bool {
-
+func (meta *elasticMeta) Handle(pkt *pb.Meta) bool {
 	ksts := utils.KSTS(pkt.GetKsid(), pkt.GetTsid())
 	if meta.boltc.Get(ksts) {
-		/*
-			gblog.Debug(
-				"point already in cache",
-				zap.String("package", "meta"),
-				zap.String("func", "Handle"),
-				zap.String("ksts", *ksts),
-			)
-		*/
 		return true
 	}
 
-	if _, ok := meta.sm.get(ksts); !ok {
-		gblog.Debug(
+	if _, ok := meta.sm.get(string(ksts)); !ok {
+		meta.logger.Debug(
 			"adding point in save map",
-			zap.String("package", "meta"),
+			zap.String("package", packageName),
 			zap.String("func", "Handle"),
 			zap.String("ksts", string(ksts)),
 		)
-		meta.sm.add(ksts, pkt)
+		meta.sm.add(string(ksts), pkt)
 		meta.metaPntChan <- pkt
 	}
-
 	return false
 }
 
-func (meta *Meta) SaveTxtMeta(packet *pb.Meta) {
-
+func (meta *elasticMeta) SaveTxtMeta(packet *pb.Meta) {
 	ksts := utils.KSTS(packet.GetKsid(), packet.GetTsid())
 
 	if len(meta.metaTxtChan) >= meta.settings.MetaBufferSize {
-		gblog.Warn(
+		meta.logger.Warn(
 			fmt.Sprintf("discarding point: %v", packet),
-			zap.String("package", "meta"),
+			zap.String("package", packageName),
 			zap.String("func", "SaveMeta"),
 		)
-		statsLostMeta()
+		statsLostMeta(meta.stats)
 		return
 	}
 	found, gerr := meta.boltc.GetTsText(string(ksts), meta.CheckTSID)
 	if gerr != nil {
-		gblog.Error(
+		meta.logger.Error(
 			gerr.Error(),
 			zap.String("func", "saveMeta"),
 			zap.Error(gerr),
@@ -350,25 +301,23 @@ func (meta *Meta) SaveTxtMeta(packet *pb.Meta) {
 
 	if !found {
 		meta.metaTxtChan <- packet
-		statsBulkPoints()
+		statsBulkPoints(meta.stats)
 	}
-
 }
 
-func (meta *Meta) generateBulk(packet *pb.Meta, number bool) gobol.Error {
-
-	var metricType, tagkType, tagvType, metaType string
-
+func (meta *elasticMeta) generateBulk(packet *pb.Meta, number bool) gobol.Error {
+	var content []byte
+	var (
+		metricType = "metrictext"
+		tagkType   = "tagktext"
+		tagvType   = "tagvtext"
+		metaType   = "metatext"
+	)
 	if number {
 		metricType = "metric"
 		tagkType = "tagk"
 		tagvType = "tagv"
-		metaType = "meta"
-	} else {
-		metricType = "metrictext"
-		tagkType = "tagktext"
-		tagvType = "tagvtext"
-		metaType = "metatext"
+		metaType = elasticMetaType
 	}
 
 	idx := BulkType{
@@ -386,7 +335,6 @@ func (meta *Meta) generateBulk(packet *pb.Meta, number bool) gobol.Error {
 
 	meta.metaPayload.Write(indexJSON)
 	meta.metaPayload.WriteString("\n")
-
 	metric := EsMetric{
 		Metric: packet.GetMetric(),
 	}
@@ -398,42 +346,34 @@ func (meta *Meta) generateBulk(packet *pb.Meta, number bool) gobol.Error {
 
 	meta.metaPayload.Write(docJSON)
 	meta.metaPayload.WriteString("\n")
-
 	cleanTags := []Tag{}
-
 	for _, tag := range packet.GetTags() {
-
 		if tag.GetKey() != "ksid" && tag.GetKey() != "ttl" {
-
-			idx := BulkType{
+			idx = BulkType{
 				ID: EsIndex{
 					EsIndex: packet.GetKsid(),
 					EsType:  tagkType,
 					EsID:    tag.GetKey(),
 				},
 			}
-
-			indexJSON, err := json.Marshal(idx)
-
+			content, err = json.Marshal(idx)
 			if err != nil {
 				return errMarshal("saveTsInfo", err)
 			}
 
-			meta.metaPayload.Write(indexJSON)
+			meta.metaPayload.Write(content)
 			meta.metaPayload.WriteString("\n")
-
 			docTK := EsTagKey{
 				Key: tag.GetKey(),
 			}
 
-			docJSON, err := json.Marshal(docTK)
+			content, err = json.Marshal(docTK)
 			if err != nil {
 				return errMarshal("saveTsInfo", err)
 			}
 
-			meta.metaPayload.Write(docJSON)
+			meta.metaPayload.Write(content)
 			meta.metaPayload.WriteString("\n")
-
 			idx = BulkType{
 				ID: EsIndex{
 					EsIndex: packet.GetKsid(),
@@ -449,11 +389,9 @@ func (meta *Meta) generateBulk(packet *pb.Meta, number bool) gobol.Error {
 
 			meta.metaPayload.Write(indexJSON)
 			meta.metaPayload.WriteString("\n")
-
 			docTV := EsTagValue{
 				Value: tag.GetValue(),
 			}
-
 			docJSON, err = json.Marshal(docTV)
 			if err != nil {
 				return errMarshal("saveTsInfo", err)
@@ -461,12 +399,10 @@ func (meta *Meta) generateBulk(packet *pb.Meta, number bool) gobol.Error {
 
 			meta.metaPayload.Write(docJSON)
 			meta.metaPayload.WriteString("\n")
-
 			cleanTags = append(cleanTags, Tag{
 				Key:   tag.GetKey(),
 				Value: tag.GetValue(),
 			})
-
 		}
 	}
 
@@ -485,8 +421,7 @@ func (meta *Meta) generateBulk(packet *pb.Meta, number bool) gobol.Error {
 
 	meta.metaPayload.Write(indexJSON)
 	meta.metaPayload.WriteString("\n")
-
-	docM := MetaInfo{
+	docM := Info{
 		ID:     packet.GetTsid(),
 		Metric: packet.GetMetric(),
 		Tags:   cleanTags,
@@ -499,36 +434,74 @@ func (meta *Meta) generateBulk(packet *pb.Meta, number bool) gobol.Error {
 
 	meta.metaPayload.Write(docJSON)
 	meta.metaPayload.WriteString("\n")
-
 	meta.metaPayload.WriteString("|")
-
 	return nil
 }
 
-func (meta *Meta) saveBulk(boby io.Reader) {
-
-	gerr := meta.persist.SaveBulkES(boby)
-	if gerr != nil {
-		gblog.Error(
-			gerr.Error(),
-			zap.String("func", "metaCoordinator/SaveBulkES"),
+func (meta *elasticMeta) saveBulk(body io.Reader) {
+	defer func() { <-meta.concBulk }()
+	start := time.Now()
+	status, err := meta.esearch.PostBulk(body)
+	if err != nil {
+		statsIndexError(meta.stats, "", "", "bulk")
+		meta.logger.Error(
+			"Elastic search problem",
+			zap.String("function", "saveBulk"),
+			zap.String("structure", "elasticMeta"),
+			zap.String("package", packageName),
+			zap.Int("status", status),
+			zap.Error(err),
 		)
 	}
-
-	<-meta.concBulk
+	statsIndex(meta.stats, "", "", "bulk", time.Since(start))
 }
 
-func (meta *Meta) CheckTSID(esType, id string) (bool, gobol.Error) {
-
+func (meta *elasticMeta) CheckTSID(esType, id string) (bool, gobol.Error) {
 	info := strings.Split(id, "|")
+	esindex, id := info[0], info[1]
 
-	respCode, gerr := meta.persist.HeadMetaFromES(info[0], esType, info[1])
-	if gerr != nil {
-		return false, gerr
+	start := time.Now()
+	respCode, err := meta.esearch.GetHead(esindex, esType, id)
+	if err != nil {
+		statsIndexError(meta.stats, esindex, esType, "head")
+		return false, errPersist("HeadMetaFromES", err)
 	}
-	if respCode != 200 {
-		return false, nil
+	statsIndex(meta.stats, esindex, esType, "head", time.Since(start))
+	return respCode == http.StatusOK, nil
+}
+
+func (meta *elasticMeta) SendError(index, dtype, id string, doc ErrorData) gobol.Error {
+	start := time.Now()
+	_, err := meta.esearch.Put(index, dtype, id, doc)
+	if err != nil {
+		statsIndexError(meta.stats, index, dtype, "put")
+		return errPersist("SendErrorToES", err)
+	}
+	statsIndex(meta.stats, index, dtype, "PUT", time.Since(start))
+	return nil
+}
+
+func (meta *elasticMeta) CreateIndex(index string) gobol.Error {
+	start := time.Now()
+	body := bytes.NewBuffer(nil)
+	body.WriteString(mappingIndex)
+	_, err := meta.esearch.CreateIndex(index, body)
+	if err != nil {
+		statsIndexError(meta.stats, index, "", "post")
+		return errPersist("CreateIndex", err)
+	}
+	statsIndex(meta.stats, index, "", "post", time.Since(start))
+	return nil
+}
+
+func (meta *elasticMeta) DeleteIndex(index string) gobol.Error {
+	start := time.Now()
+	_, err := meta.esearch.DeleteIndex(index)
+	if err != nil {
+		statsIndexError(meta.stats, index, "", "delete")
+		return errPersist("DeleteIndex", err)
 	}
 
-	return true, nil
+	statsIndex(meta.stats, index, "", "delete", time.Since(start))
+	return nil
 }

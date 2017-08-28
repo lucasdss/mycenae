@@ -7,8 +7,8 @@ import (
 	"github.com/uol/gobol/rip"
 )
 
+// Create is the ReST endpoint that creates keyspaces
 func (kspace *Keyspace) Create(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-
 	ks := ps.ByName("keyspace")
 	if ks == "" {
 		rip.AddStatsMap(r, map[string]string{"path": "/keyspaces/#keyspace", "keyspace": "empty"})
@@ -27,14 +27,12 @@ func (kspace *Keyspace) Create(w http.ResponseWriter, r *http.Request, ps httpro
 
 	rip.AddStatsMap(r, map[string]string{"path": "/keyspaces/#keyspace", "keyspace": ks})
 
-	ksc := Config{}
-
+	var ksc Config
 	gerr := rip.FromJSON(r, &ksc)
 	if gerr != nil {
 		rip.Fail(w, gerr)
 		return
 	}
-
 	ksc.Name = ks
 
 	keyspaceKey, gerr := kspace.createKeyspace(ksc)
@@ -51,6 +49,7 @@ func (kspace *Keyspace) Create(w http.ResponseWriter, r *http.Request, ps httpro
 	return
 }
 
+// Update is the ReST endpoint that updates keyspaces
 func (kspace *Keyspace) Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	ks := ps.ByName("keyspace")
@@ -82,6 +81,7 @@ func (kspace *Keyspace) Update(w http.ResponseWriter, r *http.Request, ps httpro
 	return
 }
 
+// GetAll is the ReST endpoint that lists all keyspaces
 func (kspace *Keyspace) GetAll(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	keyspaces, total, gerr := kspace.listAllKeyspaces()
@@ -104,6 +104,7 @@ func (kspace *Keyspace) GetAll(w http.ResponseWriter, r *http.Request, ps httpro
 	return
 }
 
+// Check  is the ReST endpoint that checks if a keyspace exists
 func (kspace *Keyspace) Check(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	ks := ps.ByName("keyspace")
@@ -119,15 +120,13 @@ func (kspace *Keyspace) Check(w http.ResponseWriter, r *http.Request, ps httprou
 		rip.Fail(w, gerr)
 		return
 	}
-
 	rip.AddStatsMap(r, map[string]string{"path": "/keyspaces/#keyspace", "keyspace": ks})
-
 	rip.Success(w, http.StatusOK, nil)
 	return
 }
 
+// ListDC is the ReST endpoint that list datacenters
 func (kspace *Keyspace) ListDC(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-
 	datacenters, gerr := kspace.listDatacenters()
 	if gerr != nil {
 		rip.Fail(w, gerr)
@@ -138,12 +137,8 @@ func (kspace *Keyspace) ListDC(w http.ResponseWriter, r *http.Request, ps httpro
 		rip.Fail(w, gerr)
 		return
 	}
-
-	out := Response{
+	rip.SuccessJSON(w, http.StatusOK, Response{
 		TotalRecords: len(datacenters),
 		Payload:      datacenters,
-	}
-
-	rip.SuccessJSON(w, http.StatusOK, out)
-	return
+	})
 }

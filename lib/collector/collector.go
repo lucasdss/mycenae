@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/uol/gobol"
-	"github.com/uol/gobol/rubber"
 
 	"github.com/uol/mycenae/lib/bcache"
 	"github.com/uol/mycenae/lib/cluster"
 	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/gorilla"
+	"github.com/uol/mycenae/lib/keyspace"
 	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/structs"
@@ -39,8 +39,8 @@ func New(
 	cluster *cluster.Cluster,
 	meta *meta.Meta,
 	cass *depot.Cassandra,
-	es *rubber.Elastic,
 	bc *bcache.Bcache,
+	kspace *keyspace.Keyspace,
 	set *structs.Settings,
 	wLimiter *limiter.RateLimit,
 ) (*Collector, error) {
@@ -50,11 +50,13 @@ func New(
 
 	collect := &Collector{
 		boltc:   bc,
+		kspace:  kspace,
 		cluster: cluster,
 		meta:    meta,
 		persist: persistence{
-			esearch: es,
+			cluster: cluster,
 			cass:    cass,
+			meta:    meta,
 		},
 		validKey:   regexp.MustCompile(`^[0-9A-Za-z-._%&#;/]+$`),
 		validKSID:  regexp.MustCompile(`^[0-9a-z_]+$`),
@@ -71,6 +73,7 @@ func New(
 
 type Collector struct {
 	boltc     *bcache.Bcache
+	kspace    *keyspace.Keyspace
 	cluster   *cluster.Cluster
 	meta      *meta.Meta
 	persist   persistence
@@ -96,14 +99,12 @@ type ksLimiter struct {
 }
 
 func (collect *Collector) CheckUDPbind() bool {
-
 	ctxt := gblog.With(
 		zap.String("struct", "CollectorV2"),
 		zap.String("func", "CheckUDPbind"),
 	)
 
 	port := ":" + collect.settings.UDPserverV2.Port
-
 	addr, err := net.ResolveUDPAddr("udp", port)
 	if err != nil {
 		ctxt.Error("addr:", zap.Error(err))
@@ -114,12 +115,10 @@ func (collect *Collector) CheckUDPbind() bool {
 		ctxt.Debug("", zap.Error(err))
 		return true
 	}
-
 	return false
 }
 
 func (collect *Collector) ReceivedErrorRatio() float64 {
-
 	ctxt := gblog.With(
 		zap.String("struct", "CollectorV2"),
 		zap.String("func", "ReceivedErrorRatio"),
