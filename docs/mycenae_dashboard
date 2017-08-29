@@ -2059,7 +2059,7 @@
 				"thresholds": [],
 				"timeFrom": null,
 				"timeShift": null,
-				"title": "WAL count write",
+				"title": "WAL write count",
 				"tooltip": {
 					"shared": true,
 					"sort": 0,
