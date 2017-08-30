@@ -1,12 +1,15 @@
-package cluster
+package consul
 
 import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/uol/gobol"
@@ -91,16 +94,42 @@ type Conf struct {
 	NodeID string `json:"NodeID"`
 }
 
-func newConsul(conf ConsulConfig) (*consul, gobol.Error) {
+type Consul struct {
+	c          *http.Client
+	token      string
+	serviceAPI string
+	agentAPI   string
+	healthAPI  string
+	kvAPI      string
+}
+
+type KVPair struct {
+	Key         string
+	CreateIndex uint64
+	ModifyIndex uint64
+	LockIndex   uint64
+	Flags       uint64
+	Value       []byte
+	Session     string
+}
+
+type KVPairs []KVPair
+
+type Schema struct {
+	Timestamp int64 `json:"timestamp"`
+	Total     int   `json:"total"`
+}
+
+func New(conf ConsulConfig) (*Consul, gobol.Error) {
 
 	cert, err := tls.LoadX509KeyPair(conf.Cert, conf.Key)
 	if err != nil {
-		return nil, errInit("newConsul", err)
+		return nil, errInit("New", err)
 	}
 
 	caCert, err := ioutil.ReadFile(conf.CA)
 	if err != nil {
-		return nil, errInit("newConsul", err)
+		return nil, errInit("New", err)
 	}
 
 	caCertPool := x509.NewCertPool()
@@ -120,7 +149,7 @@ func newConsul(conf ConsulConfig) (*consul, gobol.Error) {
 
 	address := fmt.Sprintf("%s://%s:%d", conf.Protocol, conf.Address, conf.Port)
 
-	return &consul{
+	return &Consul{
 		c: &http.Client{
 			Transport: tr,
 			Timeout:   time.Second,
@@ -129,19 +158,12 @@ func newConsul(conf ConsulConfig) (*consul, gobol.Error) {
 		serviceAPI: fmt.Sprintf("%s/v1/catalog/service/%s", address, conf.Service),
 		agentAPI:   fmt.Sprintf("%s/v1/agent/self", address),
 		healthAPI:  fmt.Sprintf("%s/v1/health/service/%s", address, conf.Service),
+		kvAPI:      fmt.Sprintf("%s/v1/kv/", address),
 		token:      conf.Token,
 	}, nil
 }
 
-type consul struct {
-	c          *http.Client
-	token      string
-	serviceAPI string
-	agentAPI   string
-	healthAPI  string
-}
-
-func (c *consul) getNodes() ([]Health, gobol.Error) {
+func (c *Consul) GetNodes() ([]Health, gobol.Error) {
 
 	req, err := http.NewRequest("GET", c.healthAPI, nil)
 	if err != nil {
@@ -166,7 +188,7 @@ func (c *consul) getNodes() ([]Health, gobol.Error) {
 	return srvs, nil
 }
 
-func (c *consul) getSelf() (string, gobol.Error) {
+func (c *Consul) GetSelf() (string, gobol.Error) {
 
 	req, err := http.NewRequest("GET", c.agentAPI, nil)
 	if err != nil {
@@ -193,4 +215,128 @@ func (c *consul) getSelf() (string, gobol.Error) {
 	}
 
 	return self.Config.NodeID, nil
+}
+
+func (c *Consul) GetLock() (bool, gobol.Error) {
+
+	var err error
+	var ikeyspaceLocked interface{}
+
+	schemaRaw, gerr := c.readKey("schema")
+	if gerr != nil {
+		return false, errRequest("GetLock", http.StatusInternalServerError, gerr)
+	}
+
+	if schemaRaw == nil {
+		return false, errRequest("GetLock", http.StatusInternalServerError, errors.New("Schema status not found"))
+	}
+
+	var schema Schema
+	err = json.Unmarshal(schemaRaw.([]uint8), &schema)
+	if err != nil {
+		return false, errRequest("GetLock", http.StatusInternalServerError, err)
+	}
+
+	if time.Now().Unix()-schema.Timestamp > 7200 {
+		return false, errRequest("GetLock", http.StatusInternalServerError, errors.New("Schema status was not updated in the last two hours"))
+	}
+
+	if schema.Total > 1 {
+		return false, errRequest("GetLock", http.StatusInternalServerError, errors.New("More than 1 schema was found"))
+	}
+
+	ikeyspaceLocked, err = c.readKey("keyspaceLocked")
+	if err != nil {
+		return false, errRequest("GetLock", http.StatusInternalServerError, err)
+	}
+
+	i := 0
+	for ikeyspaceLocked != nil {
+		ikeyspaceLocked, err = c.readKey("keyspaceLocked")
+		if err != nil {
+			return false, errRequest("GetLock", http.StatusInternalServerError, err)
+		}
+
+		if i == 60 {
+			return false, errRequest("GetLock", http.StatusLocked, nil)
+		}
+
+		time.Sleep(time.Second)
+		i++
+	}
+
+	name, err := os.Hostname()
+	if err != nil {
+		return false, errRequest("GetLock", http.StatusInternalServerError, err)
+	}
+
+	req, err := http.NewRequest("PUT", c.kvAPI+"keyspaceLocked", strings.NewReader(name))
+	if err != nil {
+		return false, errRequest("GetLock", http.StatusInternalServerError, err)
+	}
+	req.Header.Add("X-Consul-Token", c.token)
+
+	resp, err := c.c.Do(req)
+	if err != nil {
+		return false, errRequest("GetLock", http.StatusInternalServerError, err)
+	}
+
+	if resp.StatusCode >= 300 {
+		return false, errRequest("GetLock", resp.StatusCode, err)
+	}
+
+	return true, nil
+}
+
+func (c *Consul) ReleaseLock() (bool, gobol.Error) {
+
+	req, err := http.NewRequest("DELETE", c.kvAPI+"keyspaceLocked", nil)
+	if err != nil {
+		return false, errRequest("ReleaseLock", http.StatusInternalServerError, err)
+	}
+	req.Header.Add("X-Consul-Token", c.token)
+
+	resp, err := c.c.Do(req)
+	if err != nil {
+		return false, errRequest("ReleaseLock", http.StatusInternalServerError, err)
+	}
+
+	if resp.StatusCode >= 300 {
+		return false, errRequest("ReleaseLock", resp.StatusCode, err)
+	}
+
+	return true, nil
+}
+
+func (c *Consul) readKey(key string) (interface{}, gobol.Error) {
+
+	req, err := http.NewRequest("GET", c.kvAPI+key, nil)
+	if err != nil {
+		return nil, errRequest("readKey", http.StatusInternalServerError, err)
+	}
+	req.Header.Add("X-Consul-Token", c.token)
+
+	resp, err := c.c.Do(req)
+	if err != nil {
+		return nil, errRequest("readKey", http.StatusInternalServerError, err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode >= 300 {
+		return nil, errRequest("readKey", resp.StatusCode, err)
+	}
+
+	dec := json.NewDecoder(resp.Body)
+
+	var value KVPairs
+
+	err = dec.Decode(&value)
+	if err != nil {
+		return nil, errRequest("readKey", http.StatusInternalServerError, err)
+	}
+
+	return value[0].Value, nil
 }

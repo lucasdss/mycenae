@@ -9,6 +9,7 @@ import (
 	"github.com/billhathaway/consistentHash"
 	"github.com/uol/gobol"
 
+	"github.com/uol/mycenae/lib/consul"
 	"github.com/uol/mycenae/lib/gorilla"
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
@@ -19,7 +20,7 @@ import (
 var logger *zap.Logger
 
 type Config struct {
-	Consul ConsulConfig
+	Consul consul.ConsulConfig
 	//gRPC port
 	Port int
 	//Ticker interval to check cluster changes
@@ -44,6 +45,7 @@ func New(
 	sto *gorilla.Storage,
 	m *meta.Meta,
 	conf *Config,
+	c *consul.Consul,
 	walConf *wal.Settings,
 ) (*Cluster, gobol.Error) {
 
@@ -65,13 +67,7 @@ func New(
 
 	conf.gRPCtimeout = gRPCtimeout
 
-	c, gerr := newConsul(conf.Consul)
-	if gerr != nil {
-		log.Error("", zap.Error(gerr))
-		return nil, gerr
-	}
-
-	s, gerr := c.getSelf()
+	s, gerr := c.GetSelf()
 	if gerr != nil {
 		log.Error("", zap.Error(gerr))
 		return nil, gerr
@@ -115,7 +111,7 @@ func New(
 
 type Cluster struct {
 	s           *gorilla.Storage
-	c           *consul
+	c           *consul.Consul
 	m           *meta.Meta
 	walSettings *wal.Settings
 	ch          *consistentHash.ConsistentHash
@@ -361,7 +357,7 @@ func (c *Cluster) getNodes() {
 		zap.String("func", "getNodes"),
 	)
 
-	srvs, err := c.c.getNodes()
+	srvs, err := c.c.GetNodes()
 	if err != nil {
 		logger.Error("", zap.Error(err))
 	}

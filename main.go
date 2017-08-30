@@ -23,6 +23,7 @@ import (
 	"github.com/uol/mycenae/lib/bcache"
 	"github.com/uol/mycenae/lib/cluster"
 	"github.com/uol/mycenae/lib/collector"
+	"github.com/uol/mycenae/lib/consul"
 	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/gorilla"
 	"github.com/uol/mycenae/lib/keyspace"
@@ -108,10 +109,16 @@ func main() {
 		tsLogger.Fatal("ERROR - Connecting to elasticsearch: ", zap.Error(err))
 	}
 
+	consul, err := consul.New(settings.Cluster.Consul)
+	if err != nil {
+		tsLogger.Fatal("ERROR - Connecting to consul: ", zap.Error(err))
+	}
+
 	ks := keyspace.New(
 		tssts,
 		d.Session,
 		es,
+		consul,
 		settings.Depot.Cassandra.Username,
 		settings.Depot.Cassandra.Keyspace,
 		settings.CompactionStrategy,
@@ -131,7 +138,7 @@ func main() {
 		tsLogger.Fatal("", zap.Error(err))
 	}
 
-	cluster, err := cluster.New(tsLogger, strg, meta, settings.Cluster, settings.WAL)
+	cluster, err := cluster.New(tsLogger, strg, meta, settings.Cluster, consul, settings.WAL)
 	if err != nil {
 		tsLogger.Fatal("", zap.Error(err))
 	}

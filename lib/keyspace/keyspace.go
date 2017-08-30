@@ -7,9 +7,10 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/pborman/uuid"
+
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rubber"
-
+	"github.com/uol/mycenae/lib/consul"
 	"github.com/uol/mycenae/lib/tsstats"
 )
 
@@ -27,6 +28,7 @@ func New(
 	sts *tsstats.StatsTS,
 	cass *gocql.Session,
 	es *rubber.Elastic,
+	consul *consul.Consul,
 	usernameGrant,
 	keyspaceMain string,
 	compaction string,
@@ -42,6 +44,7 @@ func New(
 	}
 
 	return &Keyspace{
+		consul: consul,
 		persist: persistence{
 			cassandra:     cass,
 			esearch:       es,
@@ -53,6 +56,7 @@ func New(
 }
 
 type Keyspace struct {
+	consul  *consul.Consul
 	persist persistence
 }
 

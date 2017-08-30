@@ -36,6 +36,8 @@ docker run "${pod_arguments[@]}" golang /sbin/init
 
 sleep 3
 
+./../scripts/checkCluster.sh
+
 cassandra1=$(docker inspect --format "{{ .NetworkSettings.IPAddress }}" consulCassandra1)
 cassandra2=$(docker inspect --format "{{ .NetworkSettings.IPAddress }}" consulCassandra2)
 cassandra3=$(docker inspect --format "{{ .NetworkSettings.IPAddress }}" consulCassandra3)
