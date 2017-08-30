@@ -127,7 +127,9 @@ func (plot *Plot) getTextSerieBucket(
 	search *regexp.Regexp,
 	tsChan chan TST,
 ) {
-	resultSet, count, gerr := plot.cass.GetText(keyspace, key, start, end, search)
+
+	resultSet, count, gerr := plot.persist.cass.GetText(keyspace, key, start, end, search)
+
 	tsChan <- TST{
 		index: index,
 		Total: count,

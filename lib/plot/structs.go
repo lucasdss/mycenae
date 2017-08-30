@@ -7,7 +7,6 @@ import (
 	"github.com/uol/gobol"
 	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/gorilla"
-	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/utils"
 )
@@ -31,6 +30,7 @@ type TsQuery struct {
 }
 
 func (query *TsQuery) Validate() gobol.Error {
+
 	i, err := utils.MilliToSeconds(query.Start)
 	if err != nil {
 		return errValidationS("ListPoints", err.Error())
@@ -42,11 +42,13 @@ func (query *TsQuery) Validate() gobol.Error {
 		return errValidationS("ListPoints", err.Error())
 	}
 	query.End = j
+
 	if query.End < query.Start {
 		return errValidationS("ListPoints", "end date should be equal or bigger than start date")
 	}
 
 	if len(query.Merge) > 0 {
+
 		for _, ks := range query.Merge {
 			if len(ks.Keys) < 2 {
 				return errValidationS(
@@ -87,6 +89,7 @@ func (query *TsQuery) Validate() gobol.Error {
 			query.Downsample.Options.Downsample != "min" &&
 			query.Downsample.Options.Downsample != "sum" &&
 			query.Downsample.Options.Downsample != "pnt" {
+
 			return errValidationS(
 				"ListPoints",
 				"valid approximation values are 'avg' 'sum' 'max' 'min' 'ptn'",
@@ -216,16 +219,184 @@ type TST struct {
 	gerr  gobol.Error
 }
 
+type EsResponseTag struct {
+	Took     int                  `json:"took"`
+	TimedOut bool                 `json:"timed_out"`
+	Shards   EsRespShards         `json:"_shards"`
+	Hits     EsRespHitsWrapperTag `json:"hits"`
+}
+
 type EsRespShards struct {
 	Total      int `json:"total"`
 	Successful int `json:"successful"`
 	Failed     int `json:"failed"`
 }
 
+type EsRespHitsWrapperTag struct {
+	Total    int             `json:"total"`
+	MaxScore float32         `json:"max_score"`
+	Hits     []EsRespHitsTag `json:"hits"`
+}
+
+type EsRespHitsTag struct {
+	Index   string  `json:"_index"`
+	Type    string  `json:"_type"`
+	Id      string  `json:"_id"`
+	Version int     `json:"_version,omitempty"`
+	Found   bool    `json:"found,omitempty"`
+	Score   float32 `json:"_score"`
+	Source  TagKey  `json:"_source"`
+}
+
+type TagKey struct {
+	Key string `json:"key"`
+}
+
+type EsResponseMetric struct {
+	Took     int                     `json:"took"`
+	TimedOut bool                    `json:"timed_out"`
+	Shards   EsRespShards            `json:"_shards"`
+	Hits     EsRespHitsWrapperMetric `json:"hits"`
+}
+
+type EsRespHitsWrapperMetric struct {
+	Total    int                `json:"total"`
+	MaxScore float32            `json:"max_score"`
+	Hits     []EsRespHitsMetric `json:"hits"`
+}
+
+type EsRespHitsMetric struct {
+	Index   string     `json:"_index"`
+	Type    string     `json:"_type"`
+	Id      string     `json:"_id"`
+	Version int        `json:"_version,omitempty"`
+	Found   bool       `json:"found,omitempty"`
+	Score   float32    `json:"_score"`
+	Source  MetricName `json:"_source"`
+}
+
+type MetricName struct {
+	Name string `json:"name"`
+}
+
+type EsResponseTagKey struct {
+	Took     int                     `json:"took"`
+	TimedOut bool                    `json:"timed_out"`
+	Shards   EsRespShards            `json:"_shards"`
+	Hits     EsRespHitsWrapperTagKey `json:"hits"`
+}
+
+type EsRespHitsWrapperTagKey struct {
+	Total    int                `json:"total"`
+	MaxScore float32            `json:"max_score"`
+	Hits     []EsRespHitsTagKey `json:"hits"`
+}
+
+type EsRespHitsTagKey struct {
+	Index   string  `json:"_index"`
+	Type    string  `json:"_type"`
+	Id      string  `json:"_id"`
+	Version int     `json:"_version,omitempty"`
+	Found   bool    `json:"found,omitempty"`
+	Score   float32 `json:"_score"`
+	Source  TagKey  `json:"_source"`
+}
+
+type EsResponseTagValue struct {
+	Took     int                       `json:"took"`
+	TimedOut bool                      `json:"timed_out"`
+	Shards   EsRespShards              `json:"_shards"`
+	Hits     EsRespHitsWrapperTagValue `json:"hits"`
+}
+
+type EsRespHitsWrapperTagValue struct {
+	Total    int                  `json:"total"`
+	MaxScore float32              `json:"max_score"`
+	Hits     []EsRespHitsTagValue `json:"hits"`
+}
+
+type EsRespHitsTagValue struct {
+	Index   string   `json:"_index"`
+	Type    string   `json:"_type"`
+	Id      string   `json:"_id"`
+	Version int      `json:"_version,omitempty"`
+	Found   bool     `json:"found,omitempty"`
+	Score   float32  `json:"_score"`
+	Source  TagValue `json:"_source"`
+}
+
+type TagValue struct {
+	Value string `json:"value"`
+}
+
+type EsResponseMeta struct {
+	Took     int                   `json:"took"`
+	TimedOut bool                  `json:"timed_out"`
+	Shards   EsRespShards          `json:"_shards"`
+	Hits     EsRespHitsWrapperMeta `json:"hits"`
+}
+
+type EsRespHitsWrapperMeta struct {
+	Total    int              `json:"total"`
+	MaxScore float32          `json:"max_score"`
+	Hits     []EsRespHitsMeta `json:"hits"`
+}
+
+type EsRespHitsMeta struct {
+	Index   string   `json:"_index"`
+	Type    string   `json:"_type"`
+	Id      string   `json:"_id"`
+	Version int      `json:"_version,omitempty"`
+	Found   bool     `json:"found,omitempty"`
+	Score   float32  `json:"_score"`
+	Source  MetaInfo `json:"_source"`
+}
+
+type MetaInfo struct {
+	Metric string `json:"metric"`
+	ID     string `json:"id"`
+	Tags   []Tag  `json:"tagsNested"`
+}
+
+type QueryWrapper struct {
+	Size   int64       `json:"size,omitempty"`
+	From   int64       `json:"from,omitempty"`
+	Query  BoolWrapper `json:"filter"`
+	Fields []string    `json:"fields,omitempty"`
+}
+
+type BoolWrapper struct {
+	Bool OperatorWrapper `json:"bool"`
+}
+
+type OperatorWrapper struct {
+	Must    []interface{} `json:"must,omitempty"`
+	MustNot []interface{} `json:"must_not,omitempty"`
+	Should  []interface{} `json:"should,omitempty"`
+}
+
+type EsRegexp struct {
+	Regexp map[string]string `json:"regexp"`
+}
+
 type TsMetaInfo struct {
 	TsId   string            `json:"id"`
 	Metric string            `json:"metric,omitempty"`
 	Tags   map[string]string `json:"tags,omitempty"`
+}
+
+type EsNestedQuery struct {
+	Nested EsNested `json:"nested"`
+}
+
+type EsNested struct {
+	Path      string      `json:"path"`
+	ScoreMode string      `json:"score_mode,omitempty"`
+	Query     BoolWrapper `json:"filter"`
+}
+
+type Term struct {
+	Term map[string]string `json:"term"`
 }
 
 type TSDBfilter struct {
@@ -242,14 +413,14 @@ type TSDBobj struct {
 }
 
 type TSDBlookup struct {
-	Type         string          `json:"type"`
-	Metric       string          `json:"metric"`
-	Tags         []Tag           `json:"tags"`
-	Limit        int             `json:"limit"`
-	Time         int             `json:"time"`
-	Results      []meta.TSDBData `json:"results"`
-	StartIndex   int             `json:"startIndex"`
-	TotalResults int             `json:"totalResults"`
+	Type         string    `json:"type"`
+	Metric       string    `json:"metric"`
+	Tags         []Tag     `json:"tags"`
+	Limit        int       `json:"limit"`
+	Time         int       `json:"time"`
+	Results      []TSDBobj `json:"results"`
+	StartIndex   int       `json:"startIndex"`
+	TotalResults int       `json:"totalResults"`
 }
 
 type TSDBresponses []TSDBresponse

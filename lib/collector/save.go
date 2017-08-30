@@ -6,7 +6,6 @@ import (
 
 	"github.com/uol/gobol"
 	"github.com/uol/mycenae/lib/gorilla"
-	"github.com/uol/mycenae/lib/meta"
 )
 
 func (collector *Collector) saveText(packet gorilla.Point) gobol.Error {
@@ -36,22 +35,29 @@ func (collector *Collector) saveError(
 	statsUDPerror(ks, "number")
 
 	idks := fmt.Sprintf("%s%s", id, keyspace)
+
 	gerr := collector.persist.InsertError(idks, msg, errMsg, now)
 	if gerr != nil {
 		return gerr
 	}
 
-	var tags []meta.Tag
+	var tags []Tag
+
 	for k, v := range recvTags {
-		tags = append(tags, meta.Tag{
+		tag := Tag{
 			Key:   k,
 			Value: v,
-		})
+		}
+		tags = append(tags, tag)
 	}
-	collector.persist.SendErrorToES(esIndex, "errortag", id, meta.ErrorData{
+
+	doc := StructV2Error{
 		Key:    id,
 		Metric: metric,
 		Tags:   tags,
-	})
+	}
+
+	collector.persist.SendErrorToES(esIndex, "errortag", id, doc)
+
 	return nil
 }

@@ -2,11 +2,11 @@ package plot
 
 import (
 	"github.com/uol/gobol"
+	"github.com/uol/gobol/rubber"
 
+	"github.com/uol/mycenae/lib/bcache"
 	"github.com/uol/mycenae/lib/cluster"
 	"github.com/uol/mycenae/lib/depot"
-	"github.com/uol/mycenae/lib/keyspace"
-	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/tsstats"
 
 	"go.uber.org/zap"
@@ -21,9 +21,9 @@ func New(
 	gbl *zap.Logger,
 	sts *tsstats.StatsTS,
 	cluster *cluster.Cluster,
+	es *rubber.Elastic,
 	cass *depot.Cassandra,
-	kspace *keyspace.Keyspace,
-	meta *meta.Meta,
+	bc *bcache.Bcache,
 	esIndex string,
 	maxTimeseries int,
 	maxConcurrentTimeseries int,
@@ -54,10 +54,8 @@ func New(
 		esIndex:           esIndex,
 		MaxTimeseries:     maxTimeseries,
 		LogQueryThreshold: logQueryTSthreshold,
-		kspace:            kspace,
-		meta:              meta,
-		cluster:           cluster,
-		cass:              cass,
+		boltc:             bc,
+		persist:           persistence{cluster: cluster, esTs: es, cass: cass},
 		concTimeseries:    make(chan struct{}, maxConcurrentTimeseries),
 		concReads:         make(chan struct{}, maxConcurrentReads),
 	}, nil
@@ -67,10 +65,8 @@ type Plot struct {
 	esIndex           string
 	MaxTimeseries     int
 	LogQueryThreshold int
-	kspace            *keyspace.Keyspace
-	meta              *meta.Meta
-	cluster           *cluster.Cluster
-	cass              *depot.Cassandra
+	boltc             *bcache.Bcache
+	persist           persistence
 	concTimeseries    chan struct{}
 	concReads         chan struct{}
 }

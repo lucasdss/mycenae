@@ -186,7 +186,7 @@ const MetricForm string = "testMetric-"
 const TagKeyForm string = "testTagKey-"
 const TagValueForm string = "testTagValue-"
 
-var Sleep2 = 2 * time.Second
+var Sleep2 = 5 * time.Second
 var Sleep3 = 3 * time.Second
 
 func (m *mycenaeTool) Init(set MycenaeSettings) {

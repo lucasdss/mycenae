@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/uol/gobol"
+	"github.com/uol/gobol/rubber"
 
 	"github.com/uol/mycenae/lib/bcache"
 	"github.com/uol/mycenae/lib/cluster"
 	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/gorilla"
-	"github.com/uol/mycenae/lib/keyspace"
 	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/structs"
@@ -39,8 +39,8 @@ func New(
 	cluster *cluster.Cluster,
 	meta *meta.Meta,
 	cass *depot.Cassandra,
+	es *rubber.Elastic,
 	bc *bcache.Bcache,
-	kspace *keyspace.Keyspace,
 	set *structs.Settings,
 	wLimiter *limiter.RateLimit,
 ) (*Collector, error) {
@@ -50,13 +50,11 @@ func New(
 
 	collect := &Collector{
 		boltc:   bc,
-		kspace:  kspace,
 		cluster: cluster,
 		meta:    meta,
 		persist: persistence{
-			cluster: cluster,
+			esearch: es,
 			cass:    cass,
-			meta:    meta,
 		},
 		validKey:   regexp.MustCompile(`^[0-9A-Za-z-._%&#;/]+$`),
 		validKSID:  regexp.MustCompile(`^[0-9a-z_]+$`),
@@ -66,14 +64,12 @@ func New(
 		metas:      make(map[string][]*pb.Meta),
 		limiter:    ksLimiter{limite: make(map[string]*limiter.RateLimit)},
 	}
-	collect.metaHandler()
 
 	return collect, nil
 }
 
 type Collector struct {
 	boltc     *bcache.Bcache
-	kspace    *keyspace.Keyspace
 	cluster   *cluster.Cluster
 	meta      *meta.Meta
 	persist   persistence
@@ -99,12 +95,14 @@ type ksLimiter struct {
 }
 
 func (collect *Collector) CheckUDPbind() bool {
+
 	ctxt := gblog.With(
 		zap.String("struct", "CollectorV2"),
 		zap.String("func", "CheckUDPbind"),
 	)
 
 	port := ":" + collect.settings.UDPserverV2.Port
+
 	addr, err := net.ResolveUDPAddr("udp", port)
 	if err != nil {
 		ctxt.Error("addr:", zap.Error(err))
@@ -115,10 +113,12 @@ func (collect *Collector) CheckUDPbind() bool {
 		ctxt.Debug("", zap.Error(err))
 		return true
 	}
+
 	return false
 }
 
 func (collect *Collector) ReceivedErrorRatio() float64 {
+
 	ctxt := gblog.With(
 		zap.String("struct", "CollectorV2"),
 		zap.String("func", "ReceivedErrorRatio"),
@@ -156,6 +156,7 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 
 	pts := make(map[string][]*pb.Point, len(points))
 	keyspaces := make(map[string]interface{})
+	metas := make(map[string][]*pb.Meta)
 
 	var mtx sync.Mutex
 
@@ -200,12 +201,13 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 				return
 			}
 
-			collect.metaQueue(nodeMeta, m)
-
 			mtx.Lock()
 			keyspaces[ks] = nil
 			for _, np := range nodePoint {
 				pts[np] = append(pts[np], packet)
+			}
+			if !collect.boltc.Get(utils.KSTS(m.GetKsid(), m.GetTsid())) {
+				metas[nodeMeta] = append(metas[nodeMeta], m)
 			}
 			mtx.Unlock()
 
@@ -248,6 +250,10 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 		collect.cluster.Write(n, points)
 	}
 
+	for n, m := range metas {
+		collect.metaHandler(n, m)
+	}
+
 	go func() {
 		for ks := range keyspaces {
 			statsProcTime(ks, time.Since(start))
@@ -255,121 +261,63 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 	}()
 
 	return returnPoints, nil
-
 }
 
-func (collect *Collector) metaHandler() {
-	go func() {
+func (collect *Collector) metaHandler(nodeID string, metas []*pb.Meta) {
 
-		ticker := time.NewTicker(time.Second)
-		for {
-
-			var dequeue []string
-			var mtx sync.Mutex
-			select {
-			case <-ticker.C:
-
-				collect.mtxMetas.Lock()
-				for nodeID, metas := range collect.metas {
-					if nodeID == collect.cluster.SelfID() {
-						go func() {
-							gblog.Debug(
-								"processing meta in local node",
-								zap.String("struct", "CollectorV2"),
-								zap.String("func", "metaHandler"),
-								zap.Int("count", len(metas)),
-							)
-							for _, m := range metas {
-								collect.meta.Handle(m)
-								mtx.Lock()
-								dequeue = append(dequeue, nodeID)
-								mtx.Unlock()
-							}
-						}()
-						continue
-					}
-
-					for _, m := range metas {
-						ksts := utils.KSTS(m.GetKsid(), m.GetTsid())
-						if !collect.boltc.Get(ksts) {
-
-							gblog.Debug(
-								"processing meta using gRPC",
-								zap.String("struct", "CollectorV2"),
-								zap.String("func", "metaHandler"),
-								zap.String("node", nodeID),
-								zap.Int("count", len(metas)),
-							)
-
-							ch, err := collect.cluster.Meta(nodeID, metas)
-							if err != nil {
-								gblog.Error(
-									err.Error(),
-									zap.String("struct", "CollectorV2"),
-									zap.String("func", "metaHandler"),
-									zap.Error(err),
-								)
-								break
-							}
-							for mf := range ch {
-								if mf.GetOk() {
-									if gerr := collect.boltc.Set(mf.GetKsts()); gerr != nil {
-										gblog.Error(
-											gerr.Error(),
-											zap.String("struct", "CollectorV2"),
-											zap.String("func", "HandlePoint"),
-											zap.Error(gerr),
-										)
-										continue
-									}
-								}
-							}
-						}
-					}
-					mtx.Lock()
-					dequeue = append(dequeue, nodeID)
-					mtx.Unlock()
-
-				}
-				collect.mtxMetas.Unlock()
-			}
-
-			mtx.Lock()
-			for _, nodeID := range dequeue {
-				collect.metaDequeue(nodeID)
-			}
-			mtx.Unlock()
-
-		}
-	}()
-}
-
-func (collect *Collector) metaQueue(nodeID string, m *pb.Meta) {
-
-	if !collect.boltc.Get(utils.KSTS(m.GetKsid(), m.GetTsid())) {
-
-		collect.mtxMetas.Lock()
-		defer collect.mtxMetas.Unlock()
-
-		if len(collect.metas[nodeID]) >= 100000 {
+	if nodeID == collect.cluster.SelfID() {
+		go func() {
 			gblog.Debug(
-				"dropping meta, buffer too big",
+				"processing meta in local node",
 				zap.String("struct", "CollectorV2"),
-				zap.String("func", "metaQueue"),
-				zap.Int("size", len(collect.metas[nodeID])),
+				zap.String("func", "metaHandler"),
+				zap.Int("count", len(metas)),
 			)
-			return
-		}
-		collect.metas[nodeID] = append(collect.metas[nodeID], m)
+			for _, m := range metas {
+				collect.meta.Handle(m)
+			}
+		}()
+		return
 	}
 
-}
+	for _, m := range metas {
+		ksts := utils.KSTS(m.GetKsid(), m.GetTsid())
+		if !collect.boltc.Get(ksts) {
 
-func (collect *Collector) metaDequeue(nodeID string) {
-	collect.mtxMetas.Lock()
-	defer collect.mtxMetas.Unlock()
+			gblog.Debug(
+				"processing meta using gRPC",
+				zap.String("struct", "CollectorV2"),
+				zap.String("func", "metaHandler"),
+				zap.String("node", nodeID),
+				zap.Int("count", len(metas)),
+			)
 
-	delete(collect.metas, nodeID)
+			ch, err := collect.cluster.Meta(nodeID, metas)
+			if err != nil {
+				gblog.Error(
+					err.Error(),
+					zap.String("struct", "CollectorV2"),
+					zap.String("func", "metaHandler"),
+					zap.Error(err),
+				)
+				break
+			}
+			for mf := range ch {
+				if mf.GetOk() {
+					if gerr := collect.boltc.Set(mf.GetKsts()); gerr != nil {
+						gblog.Error(
+							gerr.Error(),
+							zap.String("struct", "CollectorV2"),
+							zap.String("func", "HandlePoint"),
+							zap.Error(gerr),
+						)
+						continue
+					}
+				}
+			}
+		}
+	}
+
 }
 
 func (collect *Collector) HandleGerr(ks string, returnPoints *RestErrors, rcvMsg gorilla.TSDBpoint, gerr gobol.Error) {

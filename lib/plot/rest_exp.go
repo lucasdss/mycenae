@@ -118,7 +118,7 @@ func (plot *Plot) expressionQuery(w http.ResponseWriter, r *http.Request, keyspa
 		return
 	}
 
-	found, gerr := plot.kspace.KeyspaceExists(keyspace)
+	found, gerr := plot.boltc.GetKeyspace(keyspace)
 	if gerr != nil {
 		rip.Fail(w, gerr)
 		return
@@ -240,7 +240,7 @@ func (plot *Plot) expressionParse(w http.ResponseWriter, expQuery ExpParse) {
 			return
 		}
 
-		found, gerr := plot.kspace.KeyspaceExists(expQuery.Keyspace)
+		found, gerr := plot.boltc.GetKeyspace(expQuery.Keyspace)
 		if gerr != nil {
 			rip.Fail(w, gerr)
 			return
@@ -369,7 +369,7 @@ func (plot *Plot) expressionExpand(w http.ResponseWriter, keyspace string, expQu
 		return
 	}
 
-	found, gerr := plot.kspace.KeyspaceExists(keyspace)
+	found, gerr := plot.boltc.GetKeyspace(keyspace)
 	if gerr != nil {
 		rip.Fail(w, gerr)
 		return
@@ -443,7 +443,8 @@ func (plot *Plot) expandStruct(
 	}
 
 	if needExpand {
-		tsobs, total, gerr := plot.meta.MetaFilterOpenTSDB(
+
+		tsobs, total, gerr := plot.MetaFilterOpenTSDB(
 			keyspace,
 			"",
 			tsdb.Metric,

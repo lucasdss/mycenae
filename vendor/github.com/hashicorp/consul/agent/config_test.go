@@ -809,7 +809,7 @@ func TestDecodeConfig(t *testing.T) {
 			in: `{"watches":[{"type":"a","prefix":"b","handler":"c"}]}`,
 			c: &Config{
 				Watches: []map[string]interface{}{
-					{
+					map[string]interface{}{
 						"type":    "a",
 						"prefix":  "b",
 						"handler": "c",
@@ -852,7 +852,7 @@ func TestDecodeConfig(t *testing.T) {
 				}`,
 			c: &Config{
 				Services: []*structs.ServiceDefinition{
-					{
+					&structs.ServiceDefinition{
 						ID:                "a",
 						Name:              "b",
 						Tags:              []string{"c", "d"},
@@ -867,7 +867,7 @@ func TestDecodeConfig(t *testing.T) {
 							Notes:             "j",
 							Script:            "k",
 							HTTP:              "l",
-							Header:            map[string][]string{"a": {"b"}, "c": {"d", "e"}},
+							Header:            map[string][]string{"a": []string{"b"}, "c": []string{"d", "e"}},
 							Method:            "x",
 							TCP:               "m",
 							DockerContainerID: "n",
@@ -935,7 +935,7 @@ func TestDecodeConfig(t *testing.T) {
 				}`,
 			c: &Config{
 				Services: []*structs.ServiceDefinition{
-					{
+					&structs.ServiceDefinition{
 						ID:                "a",
 						Name:              "b",
 						Tags:              []string{"c", "d"},
@@ -951,7 +951,7 @@ func TestDecodeConfig(t *testing.T) {
 								Notes:             "j",
 								Script:            "k",
 								HTTP:              "l",
-								Header:            map[string][]string{"a": {"b"}, "c": {"d", "e"}},
+								Header:            map[string][]string{"a": []string{"b"}, "c": []string{"d", "e"}},
 								Method:            "x",
 								TCP:               "m",
 								DockerContainerID: "n",
@@ -969,7 +969,7 @@ func TestDecodeConfig(t *testing.T) {
 								Notes:             "jj",
 								Script:            "kk",
 								HTTP:              "ll",
-								Header:            map[string][]string{"aa": {"bb"}, "cc": {"dd", "ee"}},
+								Header:            map[string][]string{"aa": []string{"bb"}, "cc": []string{"dd", "ee"}},
 								Method:            "xx",
 								TCP:               "mm",
 								DockerContainerID: "nn",
@@ -1047,7 +1047,7 @@ func TestDecodeConfig(t *testing.T) {
 				}`,
 			c: &Config{
 				Services: []*structs.ServiceDefinition{
-					{
+					&structs.ServiceDefinition{
 						ID:                "a",
 						Name:              "b",
 						Tags:              []string{"c", "d"},
@@ -1062,7 +1062,7 @@ func TestDecodeConfig(t *testing.T) {
 							Notes:             "j",
 							Script:            "k",
 							HTTP:              "l",
-							Header:            map[string][]string{"a": {"b"}, "c": {"d", "e"}},
+							Header:            map[string][]string{"a": []string{"b"}, "c": []string{"d", "e"}},
 							Method:            "x",
 							TCP:               "m",
 							DockerContainerID: "n",
@@ -1074,7 +1074,7 @@ func TestDecodeConfig(t *testing.T) {
 							DeregisterCriticalServiceAfter: 5 * time.Second,
 						},
 					},
-					{
+					&structs.ServiceDefinition{
 						ID:                "aa",
 						Name:              "bb",
 						Tags:              []string{"cc", "dd"},
@@ -1089,7 +1089,7 @@ func TestDecodeConfig(t *testing.T) {
 							Notes:             "jj",
 							Script:            "kk",
 							HTTP:              "ll",
-							Header:            map[string][]string{"aa": {"bb"}, "cc": {"dd", "ee"}},
+							Header:            map[string][]string{"aa": []string{"bb"}, "cc": []string{"dd", "ee"}},
 							Method:            "xx",
 							TCP:               "mm",
 							DockerContainerID: "nn",
@@ -1131,7 +1131,7 @@ func TestDecodeConfig(t *testing.T) {
 				}`,
 			c: &Config{
 				Checks: []*structs.CheckDefinition{
-					{
+					&structs.CheckDefinition{
 						ID:                "a",
 						Name:              "b",
 						Notes:             "c",
@@ -1141,7 +1141,7 @@ func TestDecodeConfig(t *testing.T) {
 						Script:            "d",
 						Shell:             "e",
 						HTTP:              "f",
-						Header:            map[string][]string{"a": {"b"}, "c": {"d", "e"}},
+						Header:            map[string][]string{"a": []string{"b"}, "c": []string{"d", "e"}},
 						Method:            "x",
 						TCP:               "g",
 						DockerContainerID: "h",
@@ -1202,7 +1202,7 @@ func TestDecodeConfig(t *testing.T) {
 				}`,
 			c: &Config{
 				Checks: []*structs.CheckDefinition{
-					{
+					&structs.CheckDefinition{
 						ID:                "a",
 						Name:              "b",
 						Notes:             "c",
@@ -1212,7 +1212,7 @@ func TestDecodeConfig(t *testing.T) {
 						Script:            "g",
 						Shell:             "h",
 						HTTP:              "i",
-						Header:            map[string][]string{"a": {"b"}, "c": {"d", "e"}},
+						Header:            map[string][]string{"a": []string{"b"}, "c": []string{"d", "e"}},
 						Method:            "x",
 						TCP:               "j",
 						DockerContainerID: "k",
@@ -1222,7 +1222,7 @@ func TestDecodeConfig(t *testing.T) {
 						TTL:               4 * time.Second,
 						DeregisterCriticalServiceAfter: 5 * time.Second,
 					},
-					{
+					&structs.CheckDefinition{
 						ID:                "aa",
 						Name:              "bb",
 						Notes:             "cc",
@@ -1232,7 +1232,7 @@ func TestDecodeConfig(t *testing.T) {
 						Script:            "gg",
 						Shell:             "hh",
 						HTTP:              "ii",
-						Header:            map[string][]string{"aa": {"bb"}, "cc": {"dd", "ee"}},
+						Header:            map[string][]string{"aa": []string{"bb"}, "cc": []string{"dd", "ee"}},
 						Method:            "xx",
 						TCP:               "jj",
 						DockerContainerID: "kk",
@@ -1451,7 +1451,7 @@ func TestMergeConfig(t *testing.T) {
 		ACLReplicationToken:    "8765309",
 		ACLEnforceVersion8:     Bool(true),
 		Watches: []map[string]interface{}{
-			{
+			map[string]interface{}{
 				"type":    "keyprefix",
 				"prefix":  "foo/",
 				"handler": "foobar",

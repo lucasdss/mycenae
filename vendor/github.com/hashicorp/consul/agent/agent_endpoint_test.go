@@ -272,7 +272,7 @@ func TestAgent_Reload(t *testing.T) {
 	cfg := TestConfig()
 	cfg.ACLEnforceVersion8 = Bool(false)
 	cfg.Services = []*structs.ServiceDefinition{
-		{Name: "redis"},
+		&structs.ServiceDefinition{Name: "redis"},
 	}
 
 	params := map[string]interface{}{
@@ -297,7 +297,7 @@ func TestAgent_Reload(t *testing.T) {
 	cfg2 := TestConfig()
 	cfg2.ACLEnforceVersion8 = Bool(false)
 	cfg2.Services = []*structs.ServiceDefinition{
-		{Name: "redis-reloaded"},
+		&structs.ServiceDefinition{Name: "redis-reloaded"},
 	}
 
 	if err := a.ReloadConfig(cfg2); err != nil {
@@ -1003,9 +1003,9 @@ func TestAgent_UpdateCheck(t *testing.T) {
 	}
 
 	cases := []checkUpdate{
-		{api.HealthPassing, "hello-passing"},
-		{api.HealthCritical, "hello-critical"},
-		{api.HealthWarning, "hello-warning"},
+		checkUpdate{api.HealthPassing, "hello-passing"},
+		checkUpdate{api.HealthCritical, "hello-critical"},
+		checkUpdate{api.HealthWarning, "hello-warning"},
 	}
 
 	for _, c := range cases {
@@ -1131,10 +1131,10 @@ func TestAgent_RegisterService(t *testing.T) {
 			TTL: 15 * time.Second,
 		},
 		Checks: []*structs.CheckType{
-			{
+			&structs.CheckType{
 				TTL: 20 * time.Second,
 			},
-			{
+			&structs.CheckType{
 				TTL: 30 * time.Second,
 			},
 		},
@@ -1183,10 +1183,10 @@ func TestAgent_RegisterService_ACLDeny(t *testing.T) {
 			TTL: 15 * time.Second,
 		},
 		Checks: []*structs.CheckType{
-			{
+			&structs.CheckType{
 				TTL: 20 * time.Second,
 			},
-			{
+			&structs.CheckType{
 				TTL: 30 * time.Second,
 			},
 		},

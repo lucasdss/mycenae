@@ -98,7 +98,7 @@ func (plot *Plot) getTimeSerie(
 	tsChan chan TS,
 ) {
 
-	pts, err := plot.cluster.Read(keyspace, key, start, end)
+	pts, err := plot.persist.cluster.Read(keyspace, key, start, end)
 	if err != nil {
 		gblog.Error("", zap.Error(err))
 	}
@@ -144,7 +144,7 @@ func (plot *Plot) getTimeSerieBucket(
 	bucketChan chan TS,
 ) {
 
-	resultSet, gerr := plot.cluster.Read(keyspace, key, start, end)
+	resultSet, gerr := plot.persist.cluster.Read(keyspace, key, start, end)
 
 	bucketChan <- TS{
 		index: index,

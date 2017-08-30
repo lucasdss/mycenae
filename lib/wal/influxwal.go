@@ -23,7 +23,6 @@ import (
 	"go.uber.org/zap"
 
 	pb "github.com/uol/mycenae/lib/proto"
-	"github.com/uol/mycenae/lib/structs"
 )
 
 const (
@@ -129,17 +128,12 @@ type WAL struct {
 	get      chan []pb.Point
 	give     chan []pb.Point
 	wg       sync.WaitGroup
-	settings *structs.WALSettings
-
-	tt tt
-
-	syncInterval       time.Duration
-	checkPointInterval time.Duration
-	cleanupInterval    time.Duration
+	settings *Settings
+	tt       tt
 }
 
 // NewWAL initializes a new WAL at the given directory.
-func New(settings *structs.WALSettings, l *zap.Logger) (*WAL, error) {
+func New(settings *Settings, l *zap.Logger) (*WAL, error) {
 	logger = zap.NewNop()
 	if l != nil {
 		logger = l
@@ -164,6 +158,10 @@ func New(settings *structs.WALSettings, l *zap.Logger) (*WAL, error) {
 		return nil, err
 	}
 
+	settings.syncInterval = si
+	settings.checkPointInterval = ckpti
+	settings.cleanupInterval = cli
+
 	wal := &WAL{
 
 		path: settings.PathWAL,
@@ -182,10 +180,6 @@ func New(settings *structs.WALSettings, l *zap.Logger) (*WAL, error) {
 		writeCh:  make(chan *pb.Point, settings.MaxBufferSize),
 		syncCh:   make(chan []pb.Point, settings.MaxConcWrite),
 		tt:       tt{table: make(map[string]int64)},
-
-		syncInterval:       si,
-		checkPointInterval: ckpti,
-		cleanupInterval:    cli,
 	}
 
 	wal.get, wal.give = wal.recycler()

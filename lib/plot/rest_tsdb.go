@@ -12,7 +12,6 @@ import (
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rip"
 
-	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/parser"
 	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/utils"
@@ -69,7 +68,7 @@ func (plot *Plot) Lookup(w http.ResponseWriter, r *http.Request, ps httprouter.P
 		}
 	}
 
-	tsds, total, gerr := plot.meta.MetaOpenTSDB(keyspace, "", metric, tagMap, int64(10000), int64(0))
+	tsds, total, gerr := plot.MetaOpenTSDB(keyspace, "", metric, tagMap, int64(10000), int64(0))
 	if gerr != nil {
 		rip.Fail(w, gerr)
 		return
@@ -125,13 +124,13 @@ func (plot *Plot) Suggest(w http.ResponseWriter, r *http.Request, ps httprouter.
 		return
 	case "metrics":
 		q := fmt.Sprintf("%v.*", q.Get("q"))
-		resp, _, gerr = plot.meta.ListMetrics(keyspace, "metric", q, int64(max), int64(0))
+		resp, _, gerr = plot.ListMetrics(keyspace, "metric", q, int64(max), int64(0))
 	case "tagk":
 		q := fmt.Sprintf("%v.*", q.Get("q"))
-		resp, _, gerr = plot.meta.ListTagKey(keyspace, q, int64(max), int64(0))
+		resp, _, gerr = plot.ListTagKey(keyspace, q, int64(max), int64(0))
 	case "tagv":
 		q := fmt.Sprintf("%v.*", q.Get("q"))
-		resp, _, gerr = plot.meta.ListTagValue(keyspace, q, int64(max), int64(0))
+		resp, _, gerr = plot.ListTagValue(keyspace, q, int64(max), int64(0))
 	default:
 		gerr = errValidationS("Suggest", "unsopported type")
 		rip.Fail(w, gerr)
@@ -159,7 +158,7 @@ func (plot *Plot) Query(w http.ResponseWriter, r *http.Request, ps httprouter.Pa
 
 	rip.AddStatsMap(r, map[string]string{"path": "/keyspaces/#keyspace/api/query", "keyspace": keyspace})
 
-	found, gerr := plot.kspace.KeyspaceExists(keyspace)
+	found, gerr := plot.boltc.GetKeyspace(keyspace)
 	if gerr != nil {
 		rip.Fail(w, gerr)
 		return
@@ -334,7 +333,7 @@ func (plot *Plot) getTimeseries(
 		//	}
 		//}
 
-		tsobs, total, gerr := plot.meta.MetaFilterOpenTSDB(keyspace, "", q.Metric, q.Filters, int64(plot.MaxTimeseries))
+		tsobs, total, gerr := plot.MetaFilterOpenTSDB(keyspace, "", q.Metric, q.Filters, int64(plot.MaxTimeseries))
 		if gerr != nil {
 			return resps, gerr
 		}
@@ -360,10 +359,10 @@ func (plot *Plot) getTimeseries(
 			continue
 		}
 
-		var groups [][]meta.TSDBData
+		var groups [][]TSDBobj
 
 		if q.ExplicitTags {
-			newTsobs := []meta.TSDBData{}
+			newTsobs := []TSDBobj{}
 			fl := len(q.Filters)
 			for _, ob := range tsobs {
 				if len(ob.Tags) == fl {

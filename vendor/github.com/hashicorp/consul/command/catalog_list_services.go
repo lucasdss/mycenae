@@ -114,7 +114,7 @@ func (c *CatalogListServicesCommand) Run(args []string) int {
 
 	// Order the map for consistent output
 	order := make([]string, 0, len(services))
-	for k := range services {
+	for k, _ := range services {
 		order = append(order, k)
 	}
 	sort.Strings(order)

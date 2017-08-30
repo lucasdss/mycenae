@@ -12,27 +12,41 @@ import (
 	"github.com/uol/mycenae/lib/gorilla"
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
-	"github.com/uol/mycenae/lib/tsstats"
 	"github.com/uol/mycenae/lib/wal"
-	"github.com/uol/mycenae/lib/structs"
 	"go.uber.org/zap"
 )
 
-var (
-	logger *zap.Logger
-	stats *tsstats.StatsTS
-)
+var logger *zap.Logger
 
+type Config struct {
+	Consul ConsulConfig
+	//gRPC port
+	Port int
+	//Ticker interval to check cluster changes
+	CheckInterval string
+	//Time, in seconds, to wait before applying cluster changes to consistency hashing
+	ApplyWait int64
+
+	GrpcTimeout         string
+	gRPCtimeout         time.Duration
+	GrpcMaxServerConn   int64
+	GrpcBurstServerConn int
+	MaxListenerConn     int
+}
 
 type state struct {
 	add  bool
 	time int64
 }
 
-func New(log *zap.Logger, sts *tsstats.StatsTS, sto *gorilla.Storage, m *meta.Meta, conf *structs.ClusterConfig, walConf *structs.WALSettings) (*Cluster, gobol.Error) {
+func New(
+	log *zap.Logger,
+	sto *gorilla.Storage,
+	m *meta.Meta,
+	conf *Config,
+	walConf *wal.Settings,
+) (*Cluster, gobol.Error) {
 
-  
-  stats = sts
 	if sto == nil {
 		return nil, errInit("New", errors.New("storage can't be nil"))
 	}
@@ -48,6 +62,8 @@ func New(log *zap.Logger, sts *tsstats.StatsTS, sto *gorilla.Storage, m *meta.Me
 		log.Error("", zap.Error(err))
 		return nil, errInit("New", err)
 	}
+
+	conf.gRPCtimeout = gRPCtimeout
 
 	c, gerr := newConsul(conf.Consul)
 	if gerr != nil {
@@ -78,9 +94,9 @@ func New(log *zap.Logger, sts *tsstats.StatsTS, sto *gorilla.Storage, m *meta.Me
 		c:           c,
 		s:           sto,
 		m:           m,
+		walSettings: walConf,
 		ch:          consistentHash.New(),
 		cfg:         conf,
-		walSettings: walConf,
 		apply:       conf.ApplyWait,
 		nodes:       map[string]*node{},
 		toAdd:       map[string]state{},
@@ -88,8 +104,6 @@ func New(log *zap.Logger, sts *tsstats.StatsTS, sto *gorilla.Storage, m *meta.Me
 		self:        s,
 		port:        conf.Port,
 		server:      server,
-
-		gRPCtimeout: gRPCtimeout,
 	}
 
 	clr.ch.Add(s)
@@ -103,9 +117,9 @@ type Cluster struct {
 	s           *gorilla.Storage
 	c           *consul
 	m           *meta.Meta
+	walSettings *wal.Settings
 	ch          *consistentHash.ConsistentHash
-	cfg         *structs.ClusterConfig
-	walSettings *structs.WALSettings
+	cfg         *Config
 	apply       int64
 
 	server   *server
@@ -118,8 +132,6 @@ type Cluster struct {
 	tag  string
 	self string
 	port int
-
-	gRPCtimeout time.Duration
 }
 
 func (c *Cluster) checkCluster(interval time.Duration) {
@@ -251,7 +263,6 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 		c.nMutex.RUnlock()
 
 		if n == nil {
-
 			log.Error(
 				"node unavailable",
 				zap.String("node", node),
@@ -371,7 +382,7 @@ func (c *Cluster) getNodes() {
 							continue
 						}
 
-						n, err := newNode(srv.Node.Address, c.port, c.gRPCtimeout, c.cfg, c.walSettings)
+						n, err := newNode(srv.Node.Address, c.port, c.cfg, c.walSettings)
 						if err != nil {
 							logger.Error("", zap.Error(err))
 							continue

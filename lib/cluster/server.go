@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/netutil"
@@ -16,7 +15,6 @@ import (
 	"github.com/uol/mycenae/lib/gorilla"
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
-	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/utils"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
@@ -24,7 +22,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 )
 
@@ -43,7 +40,7 @@ type workerMsg struct {
 	p       *pb.Point
 }
 
-func newServer(conf *structs.ClusterConfig, strg *gorilla.Storage, m *meta.Meta) (*server, error) {
+func newServer(conf *Config, strg *gorilla.Storage, m *meta.Meta) (*server, error) {
 
 	s := &server{
 		storage:    strg,
@@ -54,7 +51,7 @@ func newServer(conf *structs.ClusterConfig, strg *gorilla.Storage, m *meta.Meta)
 		workerChan: make(chan workerMsg, conf.GrpcMaxServerConn),
 	}
 
-	go func(s *server, conf *structs.ClusterConfig) {
+	go func(s *server, conf *Config) {
 		for {
 			grpcServer, lis, err := s.connect(conf)
 			if err != nil {
@@ -83,7 +80,7 @@ func newServer(conf *structs.ClusterConfig, strg *gorilla.Storage, m *meta.Meta)
 	return s, nil
 }
 
-func (s *server) connect(conf *structs.ClusterConfig) (*grpc.Server, net.Listener, error) {
+func (s *server) connect(conf *Config) (*grpc.Server, net.Listener, error) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", conf.Port))
 	if err != nil {
 		return nil, nil, err
@@ -364,25 +361,14 @@ func serverInterceptor(
 	info *grpc.StreamServerInfo,
 	handler grpc.StreamHandler,
 ) error {
-
 	start := time.Now()
+
 	err := handler(srv, ss)
-	status, ok := status.FromError(err)
-	if !ok {
-		return err
-	}
-
-	statsProcCount(info.FullMethod, strconv.Itoa(int(status.Code())))
-	if err != nil {
-		logger.Error(
-			"invoke grpc server",
-			zap.String("method", info.FullMethod),
-			zap.Duration("duration", time.Since(start)),
-			zap.Error(err),
-		)
-		return err
-	}
-	statsProcTime(info.FullMethod, time.Since(start))
-
-	return nil
+	logger.Debug(
+		"invoke grpc server",
+		zap.String("method", info.FullMethod),
+		zap.Duration("duration", time.Since(start)),
+		zap.Error(err),
+	)
+	return err
 }

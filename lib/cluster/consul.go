@@ -10,8 +10,28 @@ import (
 	"time"
 
 	"github.com/uol/gobol"
-	"github.com/uol/mycenae/lib/structs"
 )
+
+type ConsulConfig struct {
+	//Consul agent adrress without the scheme
+	Address string
+	//Consul agent port
+	Port int
+	//Location of consul agent cert file
+	Cert string
+	//Location of consul agent key file
+	Key string
+	//Location of consul agent CA file
+	CA string
+	//Name of the service to be probed on consul
+	Service string
+	//Tag of the service
+	Tag string
+	// Token of the service
+	Token string
+	// Protocol of the service
+	Protocol string
+}
 
 type Health struct {
 	Node    Node    `json:"Node"`
@@ -71,7 +91,7 @@ type Conf struct {
 	NodeID string `json:"NodeID"`
 }
 
-func newConsul(conf structs.ConsulConfig) (*consul, gobol.Error) {
+func newConsul(conf ConsulConfig) (*consul, gobol.Error) {
 
 	cert, err := tls.LoadX509KeyPair(conf.Cert, conf.Key)
 	if err != nil {

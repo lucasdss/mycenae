@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"golang.org/x/time/rate"
 
@@ -16,7 +15,6 @@ import (
 
 	"github.com/uol/gobol"
 	pb "github.com/uol/mycenae/lib/proto"
-	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/wal"
 	"go.uber.org/zap"
 )
@@ -24,7 +22,7 @@ import (
 type node struct {
 	address string
 	port    int
-	conf    *structs.ClusterConfig
+	conf    *Config
 	mtx     sync.RWMutex
 	ptsCh   chan []*pb.Point
 	metaCh  chan []*pb.Meta
@@ -36,11 +34,9 @@ type node struct {
 	rLimiter *rate.Limiter
 	mLimiter *rate.Limiter
 	wal      *wal.WAL
-
-	gRPCtimeout time.Duration
 }
 
-func newNode(address string, port int, grpcTimeout time.Duration, conf *structs.ClusterConfig, walConf *structs.WALSettings) (*node, gobol.Error) {
+func newNode(address string, port int, conf *Config, walConf *wal.Settings) (*node, gobol.Error) {
 
 	//cred, err := newClientTLSFromFile(conf.Consul.CA, conf.Consul.Cert, conf.Consul.Key, "*")
 	cred, err := credentials.NewClientTLSFromFile(conf.Consul.Cert, "localhost.consul.macs.intranet")
@@ -53,7 +49,7 @@ func newNode(address string, port int, grpcTimeout time.Duration, conf *structs.
 		return nil, errInit("newNode", err)
 	}
 
-	wSettings := &structs.WALSettings{
+	wSettings := &wal.Settings{
 		PathWAL:       filepath.Join(walConf.PathWAL, address),
 		SyncInterval:  walConf.SyncInterval,
 		MaxBufferSize: walConf.MaxBufferSize,
@@ -71,18 +67,17 @@ func newNode(address string, port int, grpcTimeout time.Duration, conf *structs.
 	)
 
 	node := &node{
-		address:     address,
-		port:        port,
-		conn:        conn,
-		conf:        conf,
-		wal:         wal,
-		ptsCh:       make(chan []*pb.Point, 5),
-		metaCh:      make(chan []*pb.Meta, 5),
-		wLimiter:    rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.9, conf.GrpcBurstServerConn),
-		rLimiter:    rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
-		mLimiter:    rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
-		client:      pb.NewTimeseriesClient(conn),
-		gRPCtimeout: grpcTimeout,
+		address:  address,
+		port:     port,
+		conf:     conf,
+		conn:     conn,
+		wal:      wal,
+		ptsCh:    make(chan []*pb.Point, 5),
+		metaCh:   make(chan []*pb.Meta, 5),
+		wLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.9, conf.GrpcBurstServerConn),
+		rLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
+		mLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
+		client:   pb.NewTimeseriesClient(conn),
 	}
 
 	return node, nil
@@ -90,7 +85,7 @@ func newNode(address string, port int, grpcTimeout time.Duration, conf *structs.
 
 func (n *node) write(pts []*pb.Point) error {
 
-	ctx, cancel := context.WithTimeout(context.Background(), n.gRPCtimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
 	defer cancel()
 
 	if err := n.wLimiter.Wait(ctx); err != nil {
@@ -167,7 +162,7 @@ func (n *node) write(pts []*pb.Point) error {
 
 func (n *node) read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), n.gRPCtimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
 	defer cancel()
 
 	if err := n.rLimiter.Wait(ctx); err != nil {
@@ -196,7 +191,8 @@ func (n *node) read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Err
 }
 
 func (n *node) meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), n.gRPCtimeout)
+
+	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
 
 	if err := n.mLimiter.Wait(ctx); err != nil {
 		logger.Error(
@@ -205,7 +201,6 @@ func (n *node) meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
 			zap.String("func", "node/meta"),
 			zap.Error(err),
 		)
-		cancel()
 		return nil, err
 	}
 
@@ -217,7 +212,6 @@ func (n *node) meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
 			zap.String("func", "node/meta"),
 			zap.Error(err),
 		)
-		cancel()
 		return nil, err
 	}
 
@@ -252,7 +246,7 @@ func (n *node) meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
 	go func() {
 		defer close(c)
 		defer cancel()
-		for range metas {
+		for _ = range metas {
 			mf, err := stream.Recv()
 			if err == io.EOF {
 				return

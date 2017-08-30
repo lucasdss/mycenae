@@ -5,14 +5,14 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/uol/gobol"
-	"github.com/uol/mycenae/lib/meta"
+	"github.com/uol/gobol/rubber"
 
 	"go.uber.org/zap"
 )
 
 type persistence struct {
 	cassandra     *gocql.Session
-	meta          *meta.Meta
+	esearch       *rubber.Elastic
 	consistencies []gocql.Consistency
 }
 
@@ -62,4 +62,20 @@ func (persist *persistence) GetErrorInfo(key string) ([]ErrorInfo, gobol.Error) 
 	}
 	statsSelectFerror("default", "ts_error")
 	return []ErrorInfo{}, errPersist("GetErrorInfo", err)
+}
+
+func (persist *persistence) ListESErrorTags(
+	esIndex,
+	esType string,
+	esQuery interface{},
+	response *EsResponseTag,
+) gobol.Error {
+	start := time.Now()
+	_, err := persist.esearch.Query(esIndex, esType, esQuery, response)
+	if err != nil {
+		statsIndexError(esIndex, esType, "POST")
+		return errPersist("ListESErrorTags", err)
+	}
+	statsIndex(esIndex, esType, "POST", time.Since(start))
+	return nil
 }

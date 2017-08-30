@@ -67,7 +67,7 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 		esIndex := collector.settings.ElasticSearch.Index
 
 		if msgKs != "" {
-			found, gerr := collector.kspace.KeyspaceExists(msgKs)
+			found, gerr := collector.boltc.GetKeyspace(msgKs)
 			if found {
 				keyspace = msgKs
 				esIndex = msgKs
