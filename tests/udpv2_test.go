@@ -793,11 +793,11 @@ func TestUDPv2Bucket53WeeksYear(t *testing.T) {
 
 		*p.Value = float32(i)
 		*p.Timestamp = timestamps[i]
-
+		time.Sleep(time.Millisecond *50)
 		mycenaeTools.UDP.Send(p.Marshal())
 	}
 
-	time.Sleep(3 * tools.Sleep2)
+	time.Sleep(tools.Sleep2)
 
 	for i := 0; i < 6; i++ {
 
@@ -814,7 +814,7 @@ func TestUDPv2Bucket53WeeksYear(t *testing.T) {
 }
 
 func TestUDPv2Bucket52WeeksYear(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	timestamps := [6]int64{
 		time.Date(2014, time.December, 28, 00, 00, 01, 0, time.UTC).Unix(),
@@ -833,11 +833,11 @@ func TestUDPv2Bucket52WeeksYear(t *testing.T) {
 
 		*p.Value = float32(i)
 		*p.Timestamp = timestamps[i]
-
+		time.Sleep(time.Millisecond *50)
 		mycenaeTools.UDP.Send(p.Marshal())
 	}
 
-	time.Sleep(3 * tools.Sleep2)
+	time.Sleep(tools.Sleep2)
 
 	for i := 0; i < 6; i++ {
 
@@ -857,7 +857,7 @@ func TestUDPv2Bucket52WeeksYear(t *testing.T) {
 }
 
 func TestUDPv2BucketFullYear(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	timestamps := [52]int64{}
 	day := time.Date(2014, time.January, 1, 12, 00, 01, 0, time.UTC)
@@ -872,12 +872,13 @@ func TestUDPv2BucketFullYear(t *testing.T) {
 		*p.Timestamp = day.Unix()
 		timestamps[i] = *p.Timestamp
 
+		time.Sleep(time.Millisecond *50)
 		mycenaeTools.UDP.Send(p.Marshal())
 
 		day = day.AddDate(0, 0, 7)
 	}
 
-	time.Sleep(3 * tools.Sleep2)
+	time.Sleep(tools.Sleep2)
 
 	for i := 0; i < 52; i++ {
 
