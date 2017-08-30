@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -67,4 +68,14 @@ func KSTS(ksid, tsid string) (ksts []byte) {
 	copy(ksts[lksid:], "|")
 	copy(ksts[lksid+1:], tsid)
 	return ksts
+}
+
+func FromKSTS(ksts string) (ksid, tsid string) {
+	s := strings.Split(ksts, "|")
+
+	if len(s) < 2 {
+		return "", ""
+	}
+
+	return s[0], s[1]
 }

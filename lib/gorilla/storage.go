@@ -208,8 +208,9 @@ func (s *Storage) Write(p *pb.Point) gobol.Error {
 	return s.getSerie(p.GetKsid(), p.GetTsid()).addPoint(p)
 }
 
-func (s *Storage) WAL(p *pb.Point) gobol.Error {
-	return s.getSerie(p.Ksid, p.Tsid).addPoint(p)
+func (s *Storage) WAL(ksts string, blockID int64, pts []byte) error {
+	ksid, tsid := utils.FromKSTS(ksts)
+	return s.getSerie(ksid, tsid).Merge(blockID, pts)
 }
 
 //Read points from a timeseries, if range start bigger than 24hours

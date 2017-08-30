@@ -1,6 +1,7 @@
 package gorilla
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -595,7 +596,7 @@ func (t *serie) store(index int) gobol.Error {
 			zap.String("func", "serie/store"),
 			zap.String("ksid", t.ksid),
 			zap.String("tsid", t.tsid),
-			zap.Int64("blkid", bktid),
+			zap.Int64("bktid", bktid),
 			zap.Int("index", index),
 		)
 
@@ -612,4 +613,43 @@ func (t *serie) store(index int) gobol.Error {
 	}
 
 	return nil
+}
+
+func (t *serie) Merge(blkid int64, pts []byte) error {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
+	index := utils.GetIndex(blkid)
+
+	if t.blocks[index] == nil {
+		gblog.Debug(
+			"initializing block",
+			zap.String("package", "gorilla"),
+			zap.String("func", "serie/Merge"),
+			zap.String("ksid", t.ksid),
+			zap.String("tsid", t.tsid),
+			zap.Int64("blkid", blkid),
+			zap.Int("index", index),
+		)
+		t.blocks[index] = &block{id: blkid, points: pts}
+		return nil
+	}
+
+	if t.blocks[index].id == blkid {
+		gblog.Debug(
+			"merging points",
+			zap.String("package", "gorilla"),
+			zap.String("func", "serie/Merge"),
+			zap.String("ksid", t.ksid),
+			zap.String("tsid", t.tsid),
+			zap.Int64("blkid", blkid),
+			zap.Int("index", index),
+		)
+
+		err := t.blocks[index].Merge(pts)
+
+		return err
+	}
+
+	return fmt.Errorf("block in memory (%v) does not match block id (%v) to be merged", t.blocks[index].id, blkid)
 }

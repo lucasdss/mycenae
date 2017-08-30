@@ -12,6 +12,10 @@ import (
 	"github.com/uol/mycenae/lib/utils"
 )
 
+const (
+	bucketSize = 7200
+)
+
 // block contains compressed points
 type block struct {
 	mtx      sync.RWMutex
@@ -124,8 +128,8 @@ func (b *block) NewEncoder(pByte []byte, date int64, value float32) error {
 
 func (b *block) newEncoder(pByte []byte, date int64, value float32) error {
 	log := gblog.With(
-		zap.String("package", "storage/block"),
-		zap.String("func", "newEncode"),
+		zap.String("struct", "storage/block"),
+		zap.String("func", "newEncoder"),
 		zap.Int64("blkid", b.id),
 	)
 
@@ -188,13 +192,6 @@ func (b *block) decode(points []byte) ([bucketSize]*pb.Point, error) {
 	var d int64
 	var v float32
 
-	log := gblog.With(
-		zap.String("package", "storage"),
-		zap.String("func", "block/decode"),
-		zap.Int64("blkid", id),
-		zap.Int("blockSize", len(points)),
-	)
-
 	for dec.Scan(&d, &v) {
 		delta := d - id
 		pts[delta] = &pb.Point{Date: d, Value: v}
@@ -204,8 +201,6 @@ func (b *block) decode(points []byte) ([bucketSize]*pb.Point, error) {
 	if err != nil && err != io.EOF {
 		return [bucketSize]*pb.Point{}, err
 	}
-
-	log.Debug("finished tsz decoding")
 
 	return pts, nil
 }
@@ -275,4 +270,78 @@ func (b *block) ToDepot(tdp bool) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	b.toDepot = tdp
+}
+
+func (b *block) Merge(points []byte) error {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+
+	pts1, err := b.decode(points)
+	if err != nil {
+		return err
+	}
+
+	enc := tsz.NewEncoder(b.id)
+
+	if b.enc != nil {
+		pts2, err := b.decode(b.close())
+		if err != nil {
+			return err
+		}
+
+		for i, p1 := range pts1 {
+
+			p2 := pts2[i]
+			if p2 != nil {
+				enc.Encode(p2.Date, p2.Value)
+				continue
+			}
+			if p1 != nil {
+				enc.Encode(p1.Date, p1.Value)
+				continue
+			}
+		}
+
+		b.enc = enc
+		b.points = enc.Get()
+
+		return nil
+	}
+
+	if len(b.points) >= headerSize {
+		pts2, err := b.decode(b.points)
+		if err != nil {
+			return err
+		}
+
+		for i, p1 := range pts1 {
+
+			p2 := pts2[i]
+			if p2 != nil {
+				enc.Encode(p2.Date, p2.Value)
+				continue
+			}
+			if p1 != nil {
+				enc.Encode(p1.Date, p1.Value)
+				continue
+			}
+		}
+
+		b.enc = enc
+		b.points = enc.Get()
+
+		return nil
+
+	}
+
+	for _, p1 := range pts1 {
+		if p1 != nil {
+			enc.Encode(p1.Date, p1.Value)
+		}
+	}
+
+	b.enc = enc
+	b.points = enc.Get()
+
+	return nil
 }

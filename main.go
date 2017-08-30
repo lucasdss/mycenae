@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/gocql/gocql"
@@ -35,8 +36,6 @@ import (
 	"github.com/uol/mycenae/lib/udp"
 	"github.com/uol/mycenae/lib/udpError"
 	"github.com/uol/mycenae/lib/wal"
-
-	pb "github.com/uol/mycenae/lib/proto"
 )
 
 func main() {
@@ -84,17 +83,17 @@ func main() {
 		tsLogger.Fatal(err.Error())
 	}
 
-	wal, err := wal.New(settings.WAL, tsLogger)
+	w, err := wal.New(settings.WAL, tsLogger)
 	if err != nil {
 		tsLogger.Fatal(err.Error())
 	}
-	wal.Start()
+	w.Start()
 
 	d, err := depot.NewCassandra(
 		&settings.Depot,
 		rcs,
 		wcs,
-		wal,
+		w,
 		tsLogger,
 		tssts,
 	)
@@ -123,15 +122,10 @@ func main() {
 		tsLogger.Fatal("", zap.Error(err))
 	}
 
-	strg := gorilla.New(tsLogger, tssts, d, wal)
+	strg := gorilla.New(tsLogger, tssts, d, w)
 	strg.Start()
 
 	meta, err := meta.New(tsLogger, tssts, es, bc, settings.Meta)
-	if err != nil {
-		tsLogger.Fatal("", zap.Error(err))
-	}
-
-	cluster, err := cluster.New(tsLogger, strg, meta, settings.Cluster, settings.WAL)
 	if err != nil {
 		tsLogger.Fatal("", zap.Error(err))
 	}
@@ -142,34 +136,39 @@ func main() {
 			zap.String("package", "main"),
 		)
 
-		limiter := make(chan interface{}, settings.MaxConcurrentPoints/2)
-		defer close(limiter)
-		for pts := range wal.Load() {
+		wLimiter := make(chan interface{}, settings.MaxConcurrentPoints/2)
+		var wg sync.WaitGroup
 
-			for _, p := range pts {
-				limiter <- struct{}{}
-				if p == nil {
-					continue
-				}
-				go func(p *pb.Point) {
-					gerr := strg.WAL(p)
-					if gerr != nil {
-						log.Error(
-							"unable to write in local node",
-							zap.String("package", "main"),
-							zap.String("func", "main"),
-							zap.Error(gerr),
-						)
-					}
-					<-limiter
-				}(p)
+		for lp := range w.Load() {
+			if lp.Points == nil {
+				continue
 			}
 
+			wLimiter <- struct{}{}
+			wg.Add(1)
+			go func(lp wal.LoadPoints) {
+				gerr := strg.WAL(lp.KSTS, lp.BlockID, lp.Points)
+				if gerr != nil {
+					log.Error(
+						"unable to write in local node",
+						zap.Error(gerr),
+					)
+				}
+				wg.Done()
+				<-wLimiter
+			}(lp)
+
 		}
+		wg.Wait()
+		close(wLimiter)
 
 		log.Debug("finished loading points")
-
 	}()
+
+	cluster, err := cluster.New(tsLogger, strg, meta, settings.Cluster, settings.WAL)
+	if err != nil {
+		tsLogger.Fatal("", zap.Error(err))
+	}
 
 	limiter, err := limiter.New(settings.MaxRateLimit, settings.Burst, tsLogger)
 	if err != nil {
