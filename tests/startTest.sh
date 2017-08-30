@@ -48,4 +48,4 @@ docker exec testMycenae /bin/sh -c "echo $cassandra3 cassandra3 >> /etc/hosts"
 docker exec testMycenae /bin/sh -c "echo $elastic elastic >> /etc/hosts"
 docker exec testMycenae /bin/sh -c "echo $mycenae mycenae >> /etc/hosts"
 
-docker exec testMycenae go test -timeout 20m -v ../tests/
+# docker exec testMycenae go test -timeout 20m -v ../tests/
