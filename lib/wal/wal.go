@@ -117,7 +117,7 @@ func (wal *WAL) Start() {
 	wal.checkpoint()
 	wal.cleanup()
 
-	go wal.runStatistics()
+	wal.runStatistics()
 }
 
 func (wal *WAL) Stop() {
