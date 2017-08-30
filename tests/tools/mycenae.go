@@ -186,7 +186,7 @@ const MetricForm string = "testMetric-"
 const TagKeyForm string = "testTagKey-"
 const TagValueForm string = "testTagValue-"
 
-var Sleep2 = 2 * time.Second
+var Sleep2 = 5 * time.Second
 var Sleep3 = 3 * time.Second
 
 func (m *mycenaeTool) Init(set MycenaeSettings) {
@@ -217,11 +217,9 @@ func (m *mycenaeTool) CreateKeyspace(dc, name, contact string, ttl, repFactor in
 func (m *mycenaeTool) GetPoints(keyspace string, start int64, end int64, id string) (int, MycenaePoints) {
 
 	payload := `{
-		"keys": [
-			{
+		"keys": [{
 			"tsid":"` + id + `"
-			}
-		],
+		}],
 		"start":` + strconv.FormatInt(start, 10) + `,
 		"end":` + strconv.FormatInt(end, 10) + `
 	}`
@@ -247,11 +245,9 @@ func (m *mycenaeTool) GetPoints(keyspace string, start int64, end int64, id stri
 func (m *mycenaeTool) GetTextPoints(keyspace string, start int64, end int64, id string) (int, MycenaePointsText) {
 
 	payload := `{
-		"text": [
-			{
+		"text": [{
 			"tsid":"` + id + `"
-			}
-		],
+		}],
 		"start":` + strconv.FormatInt(start, 10) + `,
 		"end":` + strconv.FormatInt(end, 10) + `
 	}`
@@ -300,7 +296,7 @@ func (m *mycenaeTool) GetPayload(keyspace string) *Payload {
 func (m *mycenaeTool) GetTextPayload(keyspace string) *Payload {
 
 	timestamp := time.Now().Unix()
-	var value string = "text ts text"
+	var value = "text ts text"
 	random := rand.Int()
 
 	p := &Payload{

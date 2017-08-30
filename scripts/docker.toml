@@ -74,7 +74,7 @@ Burst = 10000
   # Number of points in buffer
   MetaBufferSize = 100000
   MetaSaveInterval = "1s"
-  MetaHeadInterval = "50ms"
+  MetaHeadInterval = "30ms"
 
 [cluster]
   port = 6969

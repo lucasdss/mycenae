@@ -8,9 +8,8 @@ import (
 	"github.com/uol/mycenae/lib/depot"
 	pb "github.com/uol/mycenae/lib/proto"
 	"github.com/uol/mycenae/lib/tsstats"
-	"github.com/uol/mycenae/lib/wal"
-
 	"github.com/uol/mycenae/lib/utils"
+	"github.com/uol/mycenae/lib/wal"
 	"go.uber.org/zap"
 )
 
@@ -114,8 +113,6 @@ func (s *Storage) Start() {
 					}
 				}
 			case stpC := <-s.stop:
-
-				s.mtx.Lock()
 
 				u := make(map[string]int64)
 				var wg sync.WaitGroup

@@ -35,7 +35,7 @@
   branch = "master"
   name = "github.com/gocql/gocql"
   packages = [".","internal/lru","internal/murmur","internal/streams"]
-  revision = "b9337fa4c59ce1db20300290bd7a9a7063fb6784"
+  revision = "2029819581ab63a84cd2dd172fbe5604757f906e"
 
 [[projects]]
   branch = "master"
@@ -173,19 +173,19 @@
   branch = "master"
   name = "golang.org/x/net"
   packages = ["context","http2","http2/hpack","idna","internal/timeseries","lex/httplex","netutil","trace"]
-  revision = "1c05540f6879653db88113bc4a2b70aec4bd491f"
+  revision = "66aacef3dd8a676686c7ae3716979581e8b03c47"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "9f7170bcd8e9f4d3691c06401119c46a769a1e03"
+  revision = "2d6f6f883a06fc0d5f4b14a81e4c28705ea64c15"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/text"
   packages = ["internal/gen","internal/triegen","internal/ucd","secure/bidirule","transform","unicode/bidi","unicode/cldr","unicode/norm","unicode/rangetable"]
-  revision = "e56139fd9c5bc7244c76116c68e500765bb6db6b"
+  revision = "18c65dde6afd36dbc39197ca72008895b8dfbfb6"
 
 [[projects]]
   branch = "master"
@@ -197,7 +197,7 @@
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "6b7d9516179cd47f4714cfeb0103ad1dede756c4"
+  revision = "ee236bd376b077c7a89f260c026c4735b195e459"
 
 [[projects]]
   name = "google.golang.org/grpc"

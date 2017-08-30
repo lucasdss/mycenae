@@ -797,7 +797,7 @@ func TestUDPv2Bucket53WeeksYear(t *testing.T) {
 		mycenaeTools.UDP.Send(p.Marshal())
 	}
 
-	time.Sleep(tools.Sleep2)
+	time.Sleep(3 * tools.Sleep2)
 
 	for i := 0; i < 6; i++ {
 
@@ -837,7 +837,7 @@ func TestUDPv2Bucket52WeeksYear(t *testing.T) {
 		mycenaeTools.UDP.Send(p.Marshal())
 	}
 
-	time.Sleep(tools.Sleep2)
+	time.Sleep(3 * tools.Sleep2)
 
 	for i := 0; i < 6; i++ {
 
@@ -877,7 +877,7 @@ func TestUDPv2BucketFullYear(t *testing.T) {
 		day = day.AddDate(0, 0, 7)
 	}
 
-	time.Sleep(tools.Sleep2)
+	time.Sleep(3 * tools.Sleep2)
 
 	for i := 0; i < 52; i++ {
 

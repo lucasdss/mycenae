@@ -15,6 +15,7 @@ import (
 func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 
 	atomic.AddInt64(&collector.saving, 1)
+	defer atomic.AddInt64(&collector.saving, -1)
 
 	rcvMsg := gorilla.TSDBpoint{}
 
@@ -97,8 +98,6 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 	} else {
 		statsUDP(msgKs, "number")
 	}
-
-	atomic.AddInt64(&collector.saving, -1)
 
 }
 

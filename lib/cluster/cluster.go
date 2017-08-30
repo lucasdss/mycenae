@@ -271,8 +271,8 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 		c.nMutex.RUnlock()
 
 		if n == nil {
-			log.Debug(
-				"node is empty",
+			log.Error(
+				"node unavailable",
 				zap.String("node", node),
 			)
 			continue
