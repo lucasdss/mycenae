@@ -13,6 +13,7 @@ import (
 
 	"go.uber.org/zap"
 
+	tsz "github.com/uol/go-tsz"
 	pb "github.com/uol/mycenae/lib/proto"
 	"github.com/uol/mycenae/lib/utils"
 )
@@ -359,9 +360,18 @@ func (wal *WAL) syncWorker() {
 
 }
 
-func (wal *WAL) Load() <-chan []*pb.Point {
+type LoadPoints struct {
+	KSTS    string
+	Points  []byte
+	BlockID int64
+}
 
-	ptsChan := make(chan []*pb.Point, wal.settings.MaxConcWrite)
+func (wal *WAL) Load() <-chan LoadPoints {
+
+	ptsChan := make(chan LoadPoints, wal.settings.MaxConcWrite)
+
+	seriesMap := make(map[string]map[int64]*tsz.Encoder)
+	var mtx sync.Mutex
 
 	go func() {
 		defer close(ptsChan)
@@ -449,7 +459,8 @@ func (wal *WAL) Load() <-chan []*pb.Point {
 								pD := v.UnixNano()
 								pV := float32(v.Value().(float64))
 
-								if utils.BlockID(pD) >= tt[ksts] {
+								blkid := utils.BlockID(pD)
+								if blkid >= tt[ksts] {
 									pts = append(
 										pts,
 										&pb.Point{
@@ -458,11 +469,30 @@ func (wal *WAL) Load() <-chan []*pb.Point {
 											Ksid:  ksid,
 											Tsid:  tsid,
 										})
+
+									mtx.Lock()
+									mEncoders, ok := seriesMap[ksts]
+									mtx.Unlock()
+									if !ok {
+										mEncoders = make(map[int64]*tsz.Encoder)
+										enc := tsz.NewEncoder(blkid)
+										mEncoders[blkid] = enc
+										mtx.Lock()
+										seriesMap[ksts] = mEncoders
+										mtx.Unlock()
+
+									}
+									enc, ok := mEncoders[blkid]
+
+									if enc == nil {
+										enc = tsz.NewEncoder(blkid)
+										mEncoders[blkid] = enc
+									}
+
+									enc.Encode(pD, pV)
 								}
 							}
 						}
-
-						ptsChan <- pts
 
 					case *DeleteRangeWALEntry:
 						log.Info("DeleteRangeWALEntry")
@@ -480,6 +510,16 @@ func (wal *WAL) Load() <-chan []*pb.Point {
 					zap.Error(err),
 				)
 				return
+			}
+		}
+
+		log.Debug("wal map size", zap.Int("seriesMap", len(seriesMap)))
+
+		for ksts, mEnc := range seriesMap {
+			log.Debug("loading series blocks", zap.String("ksts", ksts))
+			for i, enc := range mEnc {
+				pts, _ := enc.Close()
+				ptsChan <- LoadPoints{KSTS: ksts, Points: pts, BlockID: i}
 			}
 		}
 
