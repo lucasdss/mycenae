@@ -301,7 +301,7 @@ func (t *serie) update(p *pb.Point) gobol.Error {
 
 	blk.Add(p)
 
-	gerr := t.persist.Write(t.ksid, t.tsid, blkID, blk.GetPoints())
+	gerr := t.persist.Write(t.ksid, t.tsid, blkID, blk.Close())
 	if gerr != nil {
 		return gerr
 	}
