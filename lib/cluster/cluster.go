@@ -12,11 +12,16 @@ import (
 	"github.com/uol/mycenae/lib/gorilla"
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
+	"github.com/uol/mycenae/lib/tsstats"
 	"github.com/uol/mycenae/lib/wal"
 	"go.uber.org/zap"
 )
 
-var logger *zap.Logger
+var (
+	logger *zap.Logger
+	stats *tsstats.StatsTS
+)
+
 
 type Config struct {
 	Consul ConsulConfig
@@ -41,11 +46,14 @@ type state struct {
 
 func New(
 	log *zap.Logger,
+	sts *tsstats.StatsTS,
 	sto *gorilla.Storage,
 	m *meta.Meta,
 	conf *Config,
 	walConf *wal.Settings,
 ) (*Cluster, gobol.Error) {
+
+	stats = sts
 
 	if sto == nil {
 		return nil, errInit("New", errors.New("storage can't be nil"))
