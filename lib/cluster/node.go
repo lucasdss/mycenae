@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"sync"
 
 	"golang.org/x/time/rate"
@@ -36,7 +35,7 @@ type node struct {
 	wal      *wal.WAL
 }
 
-func newNode(address string, port int, conf *Config, walConf *wal.Settings) (*node, gobol.Error) {
+func newNode(address string, port int, conf *Config) (*node, gobol.Error) {
 
 	//cred, err := newClientTLSFromFile(conf.Consul.CA, conf.Consul.Cert, conf.Consul.Key, "*")
 	cred, err := credentials.NewClientTLSFromFile(conf.Consul.Cert, "localhost.consul.macs.intranet")
@@ -48,15 +47,6 @@ func newNode(address string, port int, conf *Config, walConf *wal.Settings) (*no
 	if err != nil {
 		return nil, errInit("newNode", err)
 	}
-
-	wSettings := &wal.Settings{
-		PathWAL:       filepath.Join(walConf.PathWAL, address),
-		SyncInterval:  walConf.SyncInterval,
-		MaxBufferSize: walConf.MaxBufferSize,
-		MaxConcWrite:  walConf.MaxConcWrite,
-	}
-
-	wal, err := wal.New(wSettings, logger)
 
 	logger.Debug(
 		"new node",
@@ -71,7 +61,6 @@ func newNode(address string, port int, conf *Config, walConf *wal.Settings) (*no
 		port:     port,
 		conf:     conf,
 		conn:     conn,
-		wal:      wal,
 		ptsCh:    make(chan []*pb.Point, 5),
 		metaCh:   make(chan []*pb.Meta, 5),
 		wLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.9, conf.GrpcBurstServerConn),

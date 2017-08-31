@@ -19,9 +19,8 @@ import (
 
 var (
 	logger *zap.Logger
-	stats *tsstats.StatsTS
+	stats  *tsstats.StatsTS
 )
-
 
 type Config struct {
 	Consul ConsulConfig
@@ -37,6 +36,8 @@ type Config struct {
 	GrpcMaxServerConn   int64
 	GrpcBurstServerConn int
 	MaxListenerConn     int
+
+	WAL *wal.Settings
 }
 
 type state struct {
@@ -50,7 +51,6 @@ func New(
 	sto *gorilla.Storage,
 	m *meta.Meta,
 	conf *Config,
-	walConf *wal.Settings,
 ) (*Cluster, gobol.Error) {
 
 	stats = sts
@@ -99,19 +99,18 @@ func New(
 	}
 
 	clr := &Cluster{
-		c:           c,
-		s:           sto,
-		m:           m,
-		walSettings: walConf,
-		ch:          consistentHash.New(),
-		cfg:         conf,
-		apply:       conf.ApplyWait,
-		nodes:       map[string]*node{},
-		toAdd:       map[string]state{},
-		tag:         conf.Consul.Tag,
-		self:        s,
-		port:        conf.Port,
-		server:      server,
+		c:      c,
+		s:      sto,
+		m:      m,
+		ch:     consistentHash.New(),
+		cfg:    conf,
+		apply:  conf.ApplyWait,
+		nodes:  map[string]*node{},
+		toAdd:  map[string]state{},
+		tag:    conf.Consul.Tag,
+		self:   s,
+		port:   conf.Port,
+		server: server,
 	}
 
 	clr.ch.Add(s)
@@ -122,13 +121,12 @@ func New(
 }
 
 type Cluster struct {
-	s           *gorilla.Storage
-	c           *consul
-	m           *meta.Meta
-	walSettings *wal.Settings
-	ch          *consistentHash.ConsistentHash
-	cfg         *Config
-	apply       int64
+	s     *gorilla.Storage
+	c     *consul
+	m     *meta.Meta
+	ch    *consistentHash.ConsistentHash
+	cfg   *Config
+	apply int64
 
 	server   *server
 	stopServ chan struct{}
@@ -390,7 +388,7 @@ func (c *Cluster) getNodes() {
 							continue
 						}
 
-						n, err := newNode(srv.Node.Address, c.port, c.cfg, c.walSettings)
+						n, err := newNode(srv.Node.Address, c.port, c.cfg)
 						if err != nil {
 							logger.Error("", zap.Error(err))
 							continue
