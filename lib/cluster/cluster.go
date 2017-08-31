@@ -232,26 +232,32 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 		if gerr != nil {
 			log.Error(gerr.Error(), zap.Error(gerr))
 		}
-		return pts, nil
+		if len(pts) > 0 {
+			return pts, nil
+		}
 	}
 
 	c.nMutex.RLock()
 	n := c.nodes[singleNode]
 	c.nMutex.RUnlock()
 
-	log.Debug(
-		"forwarding read",
-		zap.String("addr", n.address),
-		zap.Int("port", n.port),
-	)
-
 	var pts []*pb.Point
 	var gerr gobol.Error
-	pts, gerr = n.read(ksid, tsid, start, end)
-	if gerr != nil {
-		log.Error(gerr.Error(), zap.Error(gerr))
-	} else {
-		return pts, gerr
+
+	if n != nil {
+
+		log.Debug(
+			"forwarding read",
+			zap.String("addr", n.address),
+			zap.Int("port", n.port),
+		)
+
+		pts, gerr = n.read(ksid, tsid, start, end)
+		if gerr != nil {
+			log.Error(gerr.Error(), zap.Error(gerr))
+		} else {
+			return pts, gerr
+		}
 	}
 
 	nodes, err := c.Classifier([]byte(tsid))

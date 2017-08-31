@@ -359,6 +359,15 @@ func (n *node) replay() {
 						continue
 					}
 
+					logger.Debug(
+						"points replayed",
+						zap.String("package", "cluster"),
+						zap.String("struct", "node"),
+						zap.String("func", "replay"),
+						zap.Int("count", len(pts)),
+						zap.String("logfile", segmentFile),
+					)
+
 					if i+1 == count {
 						continue
 					}
