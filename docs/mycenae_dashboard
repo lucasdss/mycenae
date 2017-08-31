@@ -186,7 +186,7 @@
 					"refId": "A"
 				}, {
 					"aggregator": "sum",
-					"alias": "$tag_keyspace",
+					"alias": "",
 					"currentFilterGroupBy": false,
 					"currentFilterKey": "",
 					"currentFilterType": "literal_or",
@@ -1444,7 +1444,7 @@
 			"titleSize": "h6"
 		}, {
 			"collapse": false,
-			"height": 250,
+			"height": "250px",
 			"panels": [{
 				"aliasColors": {},
 				"bars": false,
@@ -1711,7 +1711,7 @@
 			"titleSize": "h6"
 		}, {
 			"collapse": false,
-			"height": 250,
+			"height": "250px",
 			"panels": [{
 				"aliasColors": {},
 				"bars": false,
@@ -1959,6 +1959,305 @@
 				"title": "SELECT TS_NUMBER_STAMP",
 				"tooltip": {
 					"msResolution": true,
+					"shared": true,
+					"sort": 0,
+					"value_type": "cumulative"
+				},
+				"type": "graph",
+				"xaxis": {
+					"mode": "time",
+					"name": null,
+					"show": true,
+					"values": []
+				},
+				"yaxes": [
+					{
+						"format": "short",
+						"label": null,
+						"logBase": 1,
+						"max": null,
+						"min": null,
+						"show": true
+					},
+					{
+						"format": "short",
+						"label": null,
+						"logBase": 1,
+						"max": null,
+						"min": null,
+						"show": true
+					}
+				]
+			}
+		],
+		"repeat": null,
+		"repeatIteration": null,
+		"repeatRowId": null,
+		"showTitle": false,
+		"title": "Dashboard Row",
+		"titleSize": "h6"
+	},
+	{
+		"collapse": false,
+		"height": "250px",
+		"panels": [
+			{
+				"aliasColors": {},
+				"bars": false,
+				"datasource": "stats",
+				"fill": 1,
+				"id": 45,
+				"legend": {
+					"avg": false,
+					"current": false,
+					"max": false,
+					"min": false,
+					"show": false,
+					"total": false,
+					"values": false
+				},
+				"lines": true,
+				"linewidth": 1,
+				"links": [],
+				"nullPointMode": "null",
+				"percentage": false,
+				"pointradius": 5,
+				"points": false,
+				"renderer": "flot",
+				"seriesOverrides": [],
+				"span": 4,
+				"stack": false,
+				"steppedLine": false,
+				"targets": [
+					{
+						"aggregator": "sum",
+						"currentFilterGroupBy": false,
+						"currentFilterKey": "",
+						"currentFilterType": "literal_or",
+						"currentFilterValue": "",
+						"downsampleAggregator": "avg",
+						"downsampleFillPolicy": "none",
+						"downsampleInterval": "30s",
+						"filters": [
+							{
+								"filter": "*",
+								"groupBy": true,
+								"tagk": "host",
+								"type": "wildcard"
+							},
+							{
+								"filter": "*",
+								"groupBy": true,
+								"tagk": "status",
+								"type": "wildcard"
+							}
+						],
+						"metric": "wal.write.count",
+						"refId": "A"
+					}
+				],
+				"thresholds": [],
+				"timeFrom": null,
+				"timeShift": null,
+				"title": "WAL write count",
+				"tooltip": {
+					"shared": true,
+					"sort": 0,
+					"value_type": "individual"
+				},
+				"type": "graph",
+				"xaxis": {
+					"mode": "time",
+					"name": null,
+					"show": true,
+					"values": []
+				},
+				"yaxes": [
+					{
+						"format": "short",
+						"label": null,
+						"logBase": 1,
+						"max": null,
+						"min": null,
+						"show": true
+					},
+					{
+						"format": "short",
+						"label": null,
+						"logBase": 1,
+						"max": null,
+						"min": null,
+						"show": true
+					}
+				]
+			},
+			{
+				"aliasColors": {},
+				"bars": false,
+				"datasource": "stats",
+				"fill": 1,
+				"id": 46,
+				"legend": {
+					"avg": false,
+					"current": false,
+					"max": false,
+					"min": false,
+					"show": false,
+					"total": false,
+					"values": false
+				},
+				"lines": true,
+				"linewidth": 1,
+				"links": [],
+				"nullPointMode": "null",
+				"percentage": false,
+				"pointradius": 5,
+				"points": false,
+				"renderer": "flot",
+				"seriesOverrides": [],
+				"span": 4,
+				"stack": false,
+				"steppedLine": false,
+				"targets": [
+					{
+						"aggregator": "sum",
+						"currentFilterGroupBy": false,
+						"currentFilterKey": "",
+						"currentFilterType": "literal_or",
+						"currentFilterValue": "",
+						"downsampleAggregator": "avg",
+						"downsampleFillPolicy": "none",
+						"downsampleInterval": "30s",
+						"filters": [
+							{
+								"filter": "*",
+								"groupBy": true,
+								"tagk": "host",
+								"type": "wildcard"
+							},
+							{
+								"filter": "*",
+								"groupBy": true,
+								"tagk": "segment",
+								"type": "wildcard"
+							}
+						],
+						"metric": "wal.segment.size",
+						"refId": "A"
+					}
+				],
+				"thresholds": [],
+				"timeFrom": null,
+				"timeShift": null,
+				"title": "WAL segment size",
+				"tooltip": {
+					"shared": true,
+					"sort": 0,
+					"value_type": "individual"
+				},
+				"type": "graph",
+				"xaxis": {
+					"mode": "time",
+					"name": null,
+					"show": true,
+					"values": []
+				},
+				"yaxes": [
+					{
+						"format": "short",
+						"label": null,
+						"logBase": 1,
+						"max": null,
+						"min": null,
+						"show": true
+					},
+					{
+						"format": "short",
+						"label": null,
+						"logBase": 1,
+						"max": null,
+						"min": null,
+						"show": true
+					}
+				]
+			},
+			{
+				"aliasColors": {},
+				"bars": false,
+				"datasource": "stats",
+				"editable": true,
+				"error": false,
+				"fill": 1,
+				"grid": {},
+				"id": 47,
+				"legend": {
+					"avg": false,
+					"current": false,
+					"max": false,
+					"min": false,
+					"show": false,
+					"total": false,
+					"values": false
+				},
+				"lines": true,
+				"linewidth": 1,
+				"links": [],
+				"nullPointMode": "null",
+				"percentage": false,
+				"pointradius": 1,
+				"points": true,
+				"renderer": "flot",
+				"seriesOverrides": [],
+				"span": 4,
+				"stack": false,
+				"steppedLine": false,
+				"targets": [
+					{
+						"aggregator": "sum",
+						"alias": "",
+						"currentFilterGroupBy": false,
+						"currentFilterKey": "",
+						"currentFilterType": "literal_or",
+						"currentFilterValue": "",
+						"downsampleAggregator": "avg",
+						"downsampleFillPolicy": "null",
+						"downsampleInterval": "1m",
+						"filters": [
+							{
+								"filter": "*",
+								"groupBy": true,
+								"tagk": "path",
+								"type": "wildcard"
+							},
+							{
+								"filter": "*",
+								"groupBy": true,
+								"tagk": "host",
+								"type": "wildcard"
+							},
+							{
+								"filter": "*",
+								"groupBy": true,
+								"tagk": "status",
+								"type": "wildcard"
+							},
+							{
+								"filter": "gRPC",
+								"groupBy": true,
+								"tagk": "protocol",
+								"type": "literal_or"
+							}
+						],
+						"metric": "request.count",
+						"refId": "A"
+					}
+				],
+				"thresholds": [],
+				"timeFrom": null,
+				"timeShift": null,
+				"title": "gRPC REQUESTS RECEIVED PER NODE",
+				"tooltip": {
+					"msResolution": false,
 					"shared": true,
 					"sort": 0,
 					"value_type": "cumulative"
