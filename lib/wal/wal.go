@@ -9,17 +9,20 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
 
 	tsz "github.com/uol/go-tsz"
 	pb "github.com/uol/mycenae/lib/proto"
+	"github.com/uol/mycenae/lib/tsstats"
 	"github.com/uol/mycenae/lib/utils"
 )
 
 var (
 	logger *zap.Logger
+	stats  *tsstats.StatsTS
 )
 
 const (
@@ -74,6 +77,30 @@ type tt struct {
 	table map[string]int64
 }
 
+// Set wal stats
+func (wal *WAL) SetStats(sts *tsstats.StatsTS) {
+	stats = sts
+}
+
+func (wal *WAL) runStatistics() {
+
+	go func() {
+		ticker := time.NewTicker(20 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				statsCountWrite(map[string]string{"status": "ok"}, float64(atomic.LoadInt64(&wal.stats.WriteOK)))
+				atomic.StoreInt64(&wal.stats.WriteOK, 0)
+				statsCountWrite(map[string]string{"status": "err"}, float64(atomic.LoadInt64(&wal.stats.WriteErr)))
+				atomic.StoreInt64(&wal.stats.WriteErr, 0)
+
+				statsSegmentSize(map[string]string{"segment": "old"}, float64(atomic.LoadInt64(&wal.stats.OldBytes)))
+				statsSegmentSize(map[string]string{"segment": "current"}, float64(atomic.LoadInt64(&wal.stats.CurrentBytes)))
+			}
+		}
+	}()
+}
+
 // Start dispatchs a goroutine with a ticker
 // to save and sync points in disk
 func (wal *WAL) Start() {
@@ -90,6 +117,7 @@ func (wal *WAL) Start() {
 	wal.checkpoint()
 	wal.cleanup()
 
+	wal.runStatistics()
 }
 
 func (wal *WAL) Stop() {
