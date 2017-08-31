@@ -39,7 +39,7 @@ func newSerie(persist depot.Persistence, ksid, tsid string) *serie {
 		lastWrite:  time.Now().Unix(),
 		lastAccess: time.Now().Unix(),
 		persist:    persist,
-		blocks:     [12]*block{},
+		blocks:     [utils.MaxBlocks]*block{},
 	}
 
 	s.init()
@@ -89,14 +89,14 @@ func (t *serie) addPoint(p *pb.Point) gobol.Error {
 	defer t.mtx.Unlock()
 	now := time.Now().Unix()
 
-	delta := int(p.GetDate() - t.blocks[t.index].id)
+	delta := p.GetDate() - t.blocks[t.index].id
 
 	log := gblog.With(
 		zap.String("ksid", t.ksid),
 		zap.String("tsid", t.tsid),
 		zap.Int("index", t.index),
 		zap.Int64("blkid", t.blocks[t.index].id),
-		zap.Int("delta", delta),
+		zap.Int64("delta", delta),
 		zap.String("package", "gorilla"),
 		zap.String("func", "serie/addPoint"),
 	)
