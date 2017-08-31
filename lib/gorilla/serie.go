@@ -2,11 +2,9 @@ package gorilla
 
 import (
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
-	"github.com/uol/go-tsz"
 	pb "github.com/uol/mycenae/lib/proto"
 
 	"github.com/uol/gobol"
@@ -481,9 +479,10 @@ func (t *serie) readPersistence(start, end int64) ([]*pb.Point, gobol.Error) {
 
 		if len(pByte) >= headerSize {
 
-			p, _, err := t.decode(pByte, blkid)
+			blk := &block{}
+			p, err := blk.decode(pByte)
 			if err != nil {
-				return nil, err
+				return nil, errTsz("serie/readPersistence", t.ksid, t.tsid, blkid, err)
 			}
 
 			for i, np := range p {
@@ -504,82 +503,6 @@ func (t *serie) readPersistence(start, end int64) ([]*pb.Point, gobol.Error) {
 	}
 
 	return pts, nil
-
-}
-
-func (t *serie) encode(points []*pb.Point, id int64) ([]byte, gobol.Error) {
-
-	log := gblog.With(
-		zap.String("package", "storage/serie"),
-		zap.String("func", "encode"),
-		zap.String("ksid", t.ksid),
-		zap.String("tsid", t.tsid),
-		zap.Int64("blkid", id),
-	)
-
-	enc := tsz.NewEncoder(id)
-	var count int
-
-	for _, pt := range points {
-		if pt != nil {
-			enc.Encode(pt.Date, pt.Value)
-			count++
-		}
-	}
-
-	// tsz.Encoder.Close() always returns nil
-	pts, _ := enc.Close()
-
-	log.Debug(
-		"finished tsz encoding",
-		zap.Int("blockSize", len(pts)),
-		zap.Int("count", count),
-	)
-
-	return pts, nil
-}
-
-func (t *serie) decode(points []byte, id int64) ([bucketSize]*pb.Point, int, gobol.Error) {
-	dec := tsz.NewDecoder(points)
-
-	var pts [bucketSize]*pb.Point
-	var d int64
-	var v float32
-	var count int
-
-	log := gblog.With(
-		zap.String("package", "storage"),
-		zap.String("func", "serie/decode"),
-		zap.String("ksid", t.ksid),
-		zap.String("tsid", t.tsid),
-		zap.Int64("blkid", id),
-		zap.Int("blockSize", len(points)),
-	)
-
-	for dec.Scan(&d, &v) {
-		delta := d - id
-		if delta >= 0 && delta < bucketSize {
-			pts[delta] = &pb.Point{Date: d, Value: v}
-			count++
-		}
-	}
-
-	err := dec.Close()
-	if err != nil && err != io.EOF {
-		log.Error(
-			err.Error(),
-			zap.Error(err),
-			zap.Int("count", count),
-		)
-		return [bucketSize]*pb.Point{}, 0, errTsz("serie/decode", t.ksid, t.tsid, 0, err)
-	}
-
-	log.Debug(
-		"finished tsz decoding",
-		zap.Int("count", count),
-	)
-
-	return pts, count, nil
 
 }
 
