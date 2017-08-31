@@ -479,7 +479,7 @@ func (t *serie) readPersistence(start, end int64) ([]*pb.Point, gobol.Error) {
 
 		if len(pByte) >= headerSize {
 
-			blk := &block{}
+			blk := &block{id: blkid}
 			p, err := blk.decode(pByte)
 			if err != nil {
 				return nil, errTsz("serie/readPersistence", t.ksid, t.tsid, blkid, err)
