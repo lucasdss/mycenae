@@ -13,7 +13,6 @@ import (
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
 	"github.com/uol/mycenae/lib/tsstats"
-	"github.com/uol/mycenae/lib/wal"
 	"go.uber.org/zap"
 )
 
@@ -37,7 +36,7 @@ type Config struct {
 	GrpcBurstServerConn int
 	MaxListenerConn     int
 
-	WAL *wal.Settings
+	LogPath string
 }
 
 type state struct {

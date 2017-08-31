@@ -602,6 +602,10 @@ func segmentFileNames(dir string) ([]string, error) {
 	return names, nil
 }
 
+func SegmentFileNames(dir string) ([]string, error) {
+	return segmentFileNames(dir)
+}
+
 // newSegmentFile will close the current segment file and open a new one, updating bookkeeping info on the log.
 func (l *WAL) newSegmentFile() error {
 	l.currentSegmentID++
