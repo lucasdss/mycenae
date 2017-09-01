@@ -1,14 +1,18 @@
 package cluster
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/uol/gobol"
 )
 
@@ -129,6 +133,7 @@ func newConsul(conf ConsulConfig) (*consul, gobol.Error) {
 		serviceAPI: fmt.Sprintf("%s/v1/catalog/service/%s", address, conf.Service),
 		agentAPI:   fmt.Sprintf("%s/v1/agent/self", address),
 		healthAPI:  fmt.Sprintf("%s/v1/health/service/%s", address, conf.Service),
+		uptimeAPI:  fmt.Sprintf("%s/v1/kv/%s", address, conf.Service),
 		token:      conf.Token,
 	}, nil
 }
@@ -139,6 +144,7 @@ type consul struct {
 	serviceAPI string
 	agentAPI   string
 	healthAPI  string
+	uptimeAPI  string
 }
 
 func (c *consul) getNodes() ([]Health, gobol.Error) {
@@ -193,4 +199,82 @@ func (c *consul) getSelf() (string, gobol.Error) {
 	}
 
 	return self.Config.NodeID, nil
+}
+
+type KV struct {
+	Value string `json:"Value"`
+}
+
+func (c *consul) Uptime(node string) (int64, error) {
+
+	url := fmt.Sprintf("%s/%s", c.uptimeAPI, node)
+
+	var uptime int64
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return uptime, errRequest("Uptime", http.StatusInternalServerError, err)
+	}
+	req.Header.Add("X-Consul-Token", c.token)
+
+	resp, err := c.c.Do(req)
+	if err != nil {
+		return uptime, errRequest("Uptime", http.StatusInternalServerError, err)
+	}
+
+	if resp.StatusCode >= 300 {
+		return uptime, errRequest("Uptime", resp.StatusCode, errors.New(resp.Status))
+	}
+
+	dec := json.NewDecoder(resp.Body)
+
+	body := []KV{}
+
+	err = dec.Decode(&body)
+	if err != nil {
+		return uptime, errRequest("Uptime", http.StatusInternalServerError, err)
+	}
+
+	if len(body) == 0 || len(body) > 1 {
+		return uptime, errRequest("Uptime", http.StatusInternalServerError, errors.New("wrong number of objects from kv"))
+	}
+
+	data, err := base64.StdEncoding.DecodeString(body[0].Value)
+	if err != nil {
+		return uptime, errRequest("Uptime", http.StatusInternalServerError, err)
+	}
+
+	uptime, err = strconv.ParseInt(string(data), 10, 64)
+
+	if err != nil {
+		return uptime, errRequest("Uptime", http.StatusInternalServerError, err)
+	}
+
+	return uptime, nil
+
+}
+
+func (c *consul) setUptime(node string) gobol.Error {
+
+	uptime := strconv.FormatInt(time.Now().Unix(), 10)
+	data := bytes.NewBufferString(uptime)
+
+	url := fmt.Sprintf("%s/%s", c.uptimeAPI, node)
+
+	req, err := http.NewRequest("PUT", url, data)
+	if err != nil {
+		return errRequest("setUptime", http.StatusInternalServerError, err)
+	}
+	req.Header.Add("X-Consul-Token", c.token)
+
+	resp, err := c.c.Do(req)
+	if err != nil {
+		return errRequest("setUptime", http.StatusInternalServerError, err)
+	}
+
+	if resp.StatusCode >= 300 {
+		return errRequest("setUptime", resp.StatusCode, err)
+	}
+
+	return nil
+
 }

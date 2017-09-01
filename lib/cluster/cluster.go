@@ -106,6 +106,7 @@ func New(
 		apply:  conf.ApplyWait,
 		nodes:  map[string]*node{},
 		toAdd:  map[string]state{},
+		uptime: map[string]int64{},
 		tag:    conf.Consul.Tag,
 		self:   s,
 		port:   conf.Port,
@@ -133,6 +134,8 @@ type Cluster struct {
 	nodes  map[string]*node
 	nMutex sync.RWMutex
 	toAdd  map[string]state
+	uptime map[string]int64
+	upMtx  sync.RWMutex
 
 	tag  string
 	self string
@@ -219,56 +222,49 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 
 	log := logger.With(
 		zap.String("package", "cluster"),
+		zap.String("struct", "Cluster"),
 		zap.String("func", "Read"),
+		zap.String("ksid", ksid),
+		zap.String("tsid", tsid),
+		zap.Int64("start", start),
+		zap.Int64("end", end),
 	)
-
-	singleNode, err := c.ch.Get([]byte(tsid))
-	if err != nil {
-		return nil, errRequest("Write", http.StatusInternalServerError, err)
-	}
-	if singleNode == c.self {
-		log.Debug("reading from local node")
-		pts, gerr := c.s.Read(ksid, tsid, start, end)
-		if gerr != nil {
-			log.Error(gerr.Error(), zap.Error(gerr))
-		}
-		if len(pts) > 0 {
-			return pts, nil
-		}
-	}
-
-	c.nMutex.RLock()
-	n := c.nodes[singleNode]
-	c.nMutex.RUnlock()
-
-	var pts []*pb.Point
-	var gerr gobol.Error
-
-	if n != nil {
-
-		log.Debug(
-			"forwarding read",
-			zap.String("addr", n.address),
-			zap.Int("port", n.port),
-		)
-
-		pts, gerr = n.read(ksid, tsid, start, end)
-		if gerr != nil {
-			log.Error(gerr.Error(), zap.Error(gerr))
-		} else {
-			return pts, gerr
-		}
-	}
 
 	nodes, err := c.Classifier([]byte(tsid))
 	if err != nil {
 		return nil, errRequest("Read", http.StatusInternalServerError, err)
 	}
 
-	for _, node := range nodes {
-		if node == singleNode {
-			continue
+	n0 := nodes[0]
+	n1 := nodes[1]
+
+	c.upMtx.RLock()
+	uptime0 := c.uptime[n0]
+	uptime1 := c.uptime[n1]
+	c.upMtx.RUnlock()
+
+	if uptime0 > 0 && uptime1 > 0 {
+		if uptime1 < uptime0 {
+			nodes = []string{n1, n0}
 		}
+	} else if uptime1 > 0 && uptime1 < uptime0 {
+		nodes = []string{n1, n0}
+	}
+
+	var pts []*pb.Point
+	var gerr gobol.Error
+	for _, node := range nodes {
+
+		if node == c.self {
+			pts, gerr = c.s.Read(ksid, tsid, start, end)
+			if gerr != nil {
+				log.Error(gerr.Error(), zap.Error(gerr))
+				continue
+			}
+
+			return pts, nil
+		}
+
 		c.nMutex.RLock()
 		n := c.nodes[node]
 		c.nMutex.RUnlock()
@@ -283,6 +279,7 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 
 		log.Debug(
 			"forwarding read as fallback",
+			zap.String("node", node),
 			zap.String("addr", n.address),
 			zap.Int("port", n.port),
 		)
@@ -367,8 +364,9 @@ func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) (<-chan *pb.MetaFound, e
 }
 
 func (c *Cluster) getNodes() {
-	logger := logger.With(
+	log := logger.With(
 		zap.String("package", "cluster"),
+		zap.String("struct", "Cluster"),
 		zap.String("func", "getNodes"),
 	)
 
@@ -393,9 +391,9 @@ func (c *Cluster) getNodes() {
 							continue
 						}
 
-						n, err := newNode(srv.Node.Address, c.port, c.cfg)
-						if err != nil {
-							logger.Error("", zap.Error(err))
+						n, gerr := newNode(srv.Node.Address, c.port, c.cfg)
+						if gerr != nil {
+							log.Error("", zap.Error(gerr))
 							continue
 						}
 
@@ -423,6 +421,15 @@ func (c *Cluster) getNodes() {
 							zap.Int("port", c.port),
 						)
 
+						uptime, err := c.c.Uptime(srv.Node.ID)
+						if err != nil {
+							log.Error(err.Error(), zap.Error(err))
+						} else {
+							c.upMtx.Lock()
+							c.uptime[srv.Node.ID] = uptime
+							c.upMtx.Unlock()
+						}
+
 					}
 				}
 			}
@@ -437,11 +444,22 @@ func (c *Cluster) getNodes() {
 			for _, check := range srv.Checks {
 				if check.ServiceID == srv.Service.ID && check.Status == "passing" && id == srv.Node.ID {
 					found = true
+					uptime, err := c.c.Uptime(srv.Node.ID)
+					if err != nil {
+						log.Error(err.Error(), zap.Error(err))
+					} else {
+						c.upMtx.Lock()
+						c.uptime[srv.Node.ID] = uptime
+						c.upMtx.Unlock()
+					}
 				}
 			}
 		}
 		if !found {
 			del = append(del, id)
+			c.upMtx.Lock()
+			c.uptime[id] = 0
+			c.upMtx.Unlock()
 		}
 	}
 
