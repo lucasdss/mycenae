@@ -243,11 +243,8 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 	uptime1 := c.uptime[n1]
 	c.upMtx.RUnlock()
 
-	if uptime0 > 0 && uptime1 > 0 {
-		if uptime1 < uptime0 {
-			nodes = []string{n1, n0}
-		}
-	} else if uptime1 > 0 && uptime1 < uptime0 {
+	prefered := sortNodes(map[string]int64{n0: uptime0, n1: uptime1})
+	if prefered == n1 {
 		nodes = []string{n1, n0}
 	}
 
@@ -497,4 +494,25 @@ func (c *Cluster) getNodes() {
 func (c *Cluster) Stop() {
 	c.stopServ <- struct{}{}
 	c.server.grpcServer.Stop()
+}
+
+func sortNodes(m map[string]int64) string {
+	var node string
+	var x int64
+	for name, uptime := range m {
+		if x == 0 {
+			x = uptime
+			node = name
+			continue
+		}
+
+		if uptime > 0 && uptime < x {
+			x = uptime
+			node = name
+			continue
+		}
+	}
+
+	return node
+
 }

@@ -306,87 +306,109 @@ func (n *node) send2wal(pts []*pb.Point) {
 	}
 }
 
-func (n *node) replay() {
+func (n *node) replayWorker() {
 
+	/*
+		log := logger.With(
+			zap.String("package", "cluster"),
+			zap.String("struct", "node"),
+			zap.String("func", "replay"),
+		)
+	*/
+
+	go func() {
+		n.replay()
+
+		ticker := time.NewTicker(time.Minute)
+		lrt := time.Now()
+
+		for {
+
+			select {
+			case <-ticker.C:
+
+				lwt := n.wal.LastWriteTime()
+				if lwt.After(lrt) {
+					errCount := n.replay()
+					if errCount == 0 {
+						lrt = time.Now()
+					}
+				}
+
+			}
+
+		}
+
+	}()
+}
+
+func (n *node) replay() int {
 	log := logger.With(
 		zap.String("package", "cluster"),
 		zap.String("struct", "node"),
 		zap.String("func", "replay"),
 	)
 
-	go func() {
-		ticker := time.NewTicker(time.Minute)
+	var errCount int
 
-		for {
+	names, err := wal.SegmentFileNames(n.wal.Path())
+	if err != nil {
+		log.Error(
+			err.Error(),
+			zap.Error(err),
+		)
+		errCount++
+		return errCount
+	}
 
-			lrt := time.Now()
+	count := len(names)
 
-			<-ticker.C
-
-			lwt := n.wal.LastWriteTime()
-
-			if lwt.After(lrt) {
-				names, err := wal.SegmentFileNames(n.wal.Path())
-				if err != nil {
-					log.Error(
-						"error getting list of files",
-						zap.Error(err),
-					)
-
-				}
-
-				count := len(names)
-				for i, segmentFile := range names {
-					pts, err := n.wal.Replay(segmentFile)
-					if err != nil {
-						log.Error(
-							err.Error(),
-							zap.Error(err),
-						)
-					}
-
-					timeout := time.Duration(len(pts)) * time.Second
-					err = n.writePoints(timeout, pts)
-					if err != nil {
-						logger.Error(
-							"replaying points",
-							zap.String("package", "cluster"),
-							zap.String("struct", "node"),
-							zap.String("func", "replay"),
-							zap.String("error", err.Error()),
-							zap.Error(err),
-						)
-						continue
-					}
-
-					logger.Debug(
-						"points replayed",
-						zap.String("package", "cluster"),
-						zap.String("struct", "node"),
-						zap.String("func", "replay"),
-						zap.Int("count", len(pts)),
-						zap.String("logfile", segmentFile),
-					)
-
-					if i+1 == count {
-						continue
-					}
-
-					err = n.wal.Remove([]string{segmentFile})
-					if err != nil {
-						logger.Error(
-							"removing replay log",
-							zap.String("package", "cluster"),
-							zap.String("struct", "node"),
-							zap.String("func", "replay"),
-							zap.String("error", err.Error()),
-							zap.Error(err),
-						)
-						continue
-					}
-				}
-			}
+	for i, segmentFile := range names {
+		pts, err := n.wal.Replay(segmentFile)
+		if err != nil {
+			log.Error(
+				err.Error(),
+				zap.Error(err),
+			)
+			errCount++
+			continue
 		}
 
-	}()
+		timeout := time.Minute
+		err = n.writePoints(timeout, pts)
+		if err != nil {
+			log.Error(
+				"replaying points",
+				zap.String("error", err.Error()),
+				zap.Error(err),
+			)
+			errCount++
+			continue
+		}
+
+		logger.Debug(
+			"points replayed",
+			zap.Int("count", len(pts)),
+			zap.String("logfile", segmentFile),
+		)
+
+		if i+1 == count {
+			continue
+		}
+
+		err = n.wal.Remove([]string{segmentFile})
+		if err != nil {
+			logger.Error(
+				"removing replay log",
+				zap.String("package", "cluster"),
+				zap.String("struct", "node"),
+				zap.String("func", "replay"),
+				zap.String("error", err.Error()),
+				zap.Error(err),
+			)
+			errCount++
+		}
+	}
+
+	return errCount
 }
