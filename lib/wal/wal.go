@@ -14,7 +14,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/prometheus/common/log"
 	tsz "github.com/uol/go-tsz"
 	pb "github.com/uol/mycenae/lib/proto"
 	"github.com/uol/mycenae/lib/tsstats"
@@ -628,6 +627,12 @@ func (wal *WAL) Replay(filename string) ([]*pb.Point, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	log := logger.With(
+		zap.String("package", "wal"),
+		zap.String("func", "Replay"),
+		zap.String("struct", "WAL"),
+	)
 
 	// Log some information about the segments.
 	stat, err := os.Stat(f.Name())

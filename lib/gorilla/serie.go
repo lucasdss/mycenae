@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/common/log"
 	pb "github.com/uol/mycenae/lib/proto"
 
 	"github.com/uol/gobol"
@@ -545,16 +544,19 @@ func (t *serie) Merge(blkid int64, pts []byte) error {
 
 	index := utils.GetIndex(blkid)
 
+	log := gblog.With(
+		zap.String("package", "gorilla"),
+		zap.String("struct", "serie"),
+		zap.String("func", "Merge"),
+		zap.String("ksid", t.ksid),
+		zap.String("tsid", t.tsid),
+		zap.Int64("blkid", blkid),
+		zap.Int("index", index),
+	)
+
 	if t.blocks[index] == nil {
-		gblog.Debug(
-			"initializing block",
-			zap.String("package", "gorilla"),
-			zap.String("func", "serie/Merge"),
-			zap.String("ksid", t.ksid),
-			zap.String("tsid", t.tsid),
-			zap.Int64("blkid", blkid),
-			zap.Int("index", index),
-		)
+		log.Debug("initializing block")
+
 		pByte, gerr := t.persist.Read(t.ksid, t.tsid, blkid)
 		if gerr != nil {
 			log.Error(
@@ -567,15 +569,7 @@ func (t *serie) Merge(blkid int64, pts []byte) error {
 	}
 
 	if t.blocks[index].id == blkid {
-		gblog.Debug(
-			"merging points",
-			zap.String("package", "gorilla"),
-			zap.String("func", "serie/Merge"),
-			zap.String("ksid", t.ksid),
-			zap.String("tsid", t.tsid),
-			zap.Int64("blkid", blkid),
-			zap.Int("index", index),
-		)
+		gblog.Debug("merging points")
 
 		return t.blocks[index].Merge(pts)
 
