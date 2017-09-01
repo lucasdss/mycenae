@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/common/log"
 	pb "github.com/uol/mycenae/lib/proto"
 
 	"github.com/uol/gobol"
@@ -554,8 +555,15 @@ func (t *serie) Merge(blkid int64, pts []byte) error {
 			zap.Int64("blkid", blkid),
 			zap.Int("index", index),
 		)
-		t.blocks[index] = &block{id: blkid, points: pts}
-		return nil
+		pByte, gerr := t.persist.Read(t.ksid, t.tsid, blkid)
+		if gerr != nil {
+			log.Error(
+				gerr.Error(),
+				zap.Error(gerr),
+			)
+			return gerr
+		}
+		t.blocks[index] = &block{id: blkid, points: pByte}
 	}
 
 	if t.blocks[index].id == blkid {
@@ -569,9 +577,8 @@ func (t *serie) Merge(blkid int64, pts []byte) error {
 			zap.Int("index", index),
 		)
 
-		err := t.blocks[index].Merge(pts)
+		return t.blocks[index].Merge(pts)
 
-		return err
 	}
 
 	return fmt.Errorf("block in memory (%v) does not match block id (%v) to be merged", t.blocks[index].id, blkid)

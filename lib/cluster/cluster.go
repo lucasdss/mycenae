@@ -250,6 +250,13 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 
 	var pts []*pb.Point
 	var gerr gobol.Error
+
+	log.Debug(
+		"reading serie order",
+		zap.String("node0", nodes[0]),
+		zap.String("node1", nodes[1]),
+	)
+
 	for _, node := range nodes {
 
 		if node == c.self {
@@ -472,7 +479,10 @@ func (c *Cluster) getNodes() {
 				c.nMutex.Unlock()
 
 				delete(c.toAdd, id)
-				reShard = true
+
+				c.upMtx.Lock()
+				c.uptime[id] = 0
+				c.upMtx.Unlock()
 
 				logger.Debug("removed node")
 			}
