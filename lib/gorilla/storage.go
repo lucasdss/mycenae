@@ -19,6 +19,16 @@ var (
 	headerSize = utils.HeaderSize
 )
 
+type Gorilla interface {
+	Start()
+	ListSeries() []Meta
+	Delete(m Meta) <-chan []*pb.Point
+	Write(p *pb.Point) gobol.Error
+	WAL(ksts string, blockID int64, pts []byte) error
+	Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error)
+	Stop()
+}
+
 // Storage keeps all timeseries in memory
 // after a while the serie will be saved at cassandra
 // if the time range is not in memory it must query cassandra

@@ -47,8 +47,8 @@ type state struct {
 func New(
 	log *zap.Logger,
 	sts *tsstats.StatsTS,
-	sto *gorilla.Storage,
-	m *meta.Meta,
+	sto gorilla.Gorilla,
+	m meta.MetaData,
 	conf *Config,
 ) (*Cluster, gobol.Error) {
 
@@ -78,7 +78,7 @@ func New(
 		return nil, gerr
 	}
 
-	s, gerr := c.getSelf()
+	s, gerr := c.Self()
 	if gerr != nil {
 		log.Error("", zap.Error(gerr))
 		return nil, gerr
@@ -115,15 +115,15 @@ func New(
 
 	clr.ch.Add(s)
 	clr.getNodes()
-	go clr.checkCluster(ci)
+	clr.checkCluster(ci)
 
 	return clr, nil
 }
 
 type Cluster struct {
-	s     *gorilla.Storage
-	c     *consul
-	m     *meta.Meta
+	s     gorilla.Gorilla
+	c     Consul
+	m     meta.MetaData
 	ch    *consistentHash.ConsistentHash
 	cfg   *Config
 	apply int64
@@ -144,23 +144,19 @@ type Cluster struct {
 
 func (c *Cluster) checkCluster(interval time.Duration) {
 
-	ticker := time.NewTicker(interval)
+	go func() {
+		ticker := time.NewTicker(interval)
 
-	for {
-		select {
-		case <-ticker.C:
-			c.getNodes()
-		case <-c.stopServ:
-			logger.Debug("stopping", zap.String("package", "cluster"), zap.String("func", "checkCluster"))
-			return
+		for {
+			select {
+			case <-ticker.C:
+				c.getNodes()
+			case <-c.stopServ:
+				logger.Debug("stopping", zap.String("package", "cluster"), zap.String("func", "checkCluster"))
+				return
+			}
 		}
-	}
-
-}
-
-func (c *Cluster) replay(pts *pb.Point) error {
-
-	return nil
+	}()
 
 }
 
@@ -375,7 +371,7 @@ func (c *Cluster) getNodes() {
 		zap.String("func", "getNodes"),
 	)
 
-	srvs, err := c.c.getNodes()
+	srvs, err := c.c.Nodes()
 	if err != nil {
 		logger.Error("", zap.Error(err))
 	}

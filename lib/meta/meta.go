@@ -27,6 +27,12 @@ var (
 	stats *tsstats.StatsTS
 )
 
+type MetaData interface {
+	Handle(pkt *pb.Meta) bool
+	SaveTxtMeta(packet *pb.Meta)
+	CheckTSID(esType, id string) (bool, gobol.Error)
+}
+
 type Meta struct {
 	boltc    *bcache.Bcache
 	validKey *regexp.Regexp
