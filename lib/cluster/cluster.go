@@ -235,28 +235,29 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 		return nil, errRequest("Read", http.StatusInternalServerError, err)
 	}
 
-	n0 := nodes[0]
-	n1 := nodes[1]
+	if len(nodes) > 1 {
+		n0 := nodes[0]
+		n1 := nodes[1]
 
-	c.upMtx.RLock()
-	uptime0 := c.uptime[n0]
-	uptime1 := c.uptime[n1]
-	c.upMtx.RUnlock()
+		c.upMtx.RLock()
+		uptime0 := c.uptime[n0]
+		uptime1 := c.uptime[n1]
+		c.upMtx.RUnlock()
 
-	prefered := sortNodes(map[string]int64{n0: uptime0, n1: uptime1})
-	if prefered == n1 {
-		nodes = []string{n1, n0}
+		prefered := sortNodes(map[string]int64{n0: uptime0, n1: uptime1})
+		if prefered == n1 {
+			nodes = []string{n1, n0}
+		}
+
+		log.Debug(
+			"reading serie order",
+			zap.String("node0", nodes[0]),
+			zap.String("node1", nodes[1]),
+		)
 	}
 
 	var pts []*pb.Point
 	var gerr gobol.Error
-
-	log.Debug(
-		"reading serie order",
-		zap.String("node0", nodes[0]),
-		zap.String("node1", nodes[1]),
-	)
-
 	for _, node := range nodes {
 
 		if node == c.self {
