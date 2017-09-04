@@ -73,12 +73,6 @@ func newServer(conf *Config, strg *gorilla.Storage, m *meta.Meta) (*server, erro
 		}
 	}(s, conf)
 
-	/*
-		for i := 0; i < int(conf.GrpcMaxServerConn); i++ {
-			s.worker()
-		}
-	*/
-
 	return s, nil
 }
 

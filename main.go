@@ -166,7 +166,7 @@ func main() {
 		log.Debug("finished loading points")
 	}()
 
-	cluster, err := cluster.New(tsLogger, tssts, strg, meta, settings.Cluster, settings.WAL)
+	cluster, err := cluster.New(tsLogger, tssts, strg, meta, settings.Cluster)
 	if err != nil {
 		tsLogger.Fatal("", zap.Error(err))
 	}

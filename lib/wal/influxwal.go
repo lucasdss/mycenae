@@ -130,6 +130,10 @@ type WAL struct {
 	wg       sync.WaitGroup
 	settings *Settings
 	tt       tt
+
+	syncInterval       time.Duration
+	cleanupInterval    time.Duration
+	checkPointInterval time.Duration
 }
 
 // NewWAL initializes a new WAL at the given directory.
@@ -158,10 +162,6 @@ func New(settings *Settings, l *zap.Logger) (*WAL, error) {
 		return nil, err
 	}
 
-	settings.syncInterval = si
-	settings.checkPointInterval = ckpti
-	settings.cleanupInterval = cli
-
 	wal := &WAL{
 
 		path: settings.PathWAL,
@@ -180,6 +180,10 @@ func New(settings *Settings, l *zap.Logger) (*WAL, error) {
 		writeCh:  make(chan *pb.Point, settings.MaxBufferSize),
 		syncCh:   make(chan []pb.Point, settings.MaxConcWrite),
 		tt:       tt{table: make(map[string]int64)},
+
+		syncInterval:       si,
+		checkPointInterval: ckpti,
+		cleanupInterval:    cli,
 	}
 
 	wal.get, wal.give = wal.recycler()
@@ -596,6 +600,10 @@ func segmentFileNames(dir string) ([]string, error) {
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+func SegmentFileNames(dir string) ([]string, error) {
+	return segmentFileNames(dir)
 }
 
 // newSegmentFile will close the current segment file and open a new one, updating bookkeeping info on the log.

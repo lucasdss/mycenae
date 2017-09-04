@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 
@@ -15,6 +16,7 @@ import (
 
 	"github.com/uol/gobol"
 	pb "github.com/uol/mycenae/lib/proto"
+	"github.com/uol/mycenae/lib/utils"
 	"github.com/uol/mycenae/lib/wal"
 	"go.uber.org/zap"
 )
@@ -36,7 +38,7 @@ type node struct {
 	wal      *wal.WAL
 }
 
-func newNode(address string, port int, conf *Config, walConf *wal.Settings) (*node, gobol.Error) {
+func newNode(address string, port int, conf *Config) (*node, gobol.Error) {
 
 	//cred, err := newClientTLSFromFile(conf.Consul.CA, conf.Consul.Cert, conf.Consul.Key, "*")
 	cred, err := credentials.NewClientTLSFromFile(conf.Consul.Cert, "localhost.consul.macs.intranet")
@@ -49,15 +51,6 @@ func newNode(address string, port int, conf *Config, walConf *wal.Settings) (*no
 		return nil, errInit("newNode", err)
 	}
 
-	wSettings := &wal.Settings{
-		PathWAL:       filepath.Join(walConf.PathWAL, address),
-		SyncInterval:  walConf.SyncInterval,
-		MaxBufferSize: walConf.MaxBufferSize,
-		MaxConcWrite:  walConf.MaxConcWrite,
-	}
-
-	wal, err := wal.New(wSettings, logger)
-
 	logger.Debug(
 		"new node",
 		zap.String("package", "cluster"),
@@ -66,49 +59,52 @@ func newNode(address string, port int, conf *Config, walConf *wal.Settings) (*no
 		zap.Int("port", port),
 	)
 
+	ws := &wal.Settings{
+		PathWAL:            filepath.Join(conf.LogPath, address),
+		SyncInterval:       "1s",
+		CheckPointInterval: "1s",
+		CleanupInterval:    "1m",
+	}
+
+	w, err := wal.New(ws, logger)
+	if err != nil {
+		return nil, errInit("newNode", err)
+	}
+
+	if err := w.Open(); err != nil {
+		return nil, errInit("newNode", err)
+	}
+
 	node := &node{
 		address:  address,
 		port:     port,
 		conf:     conf,
 		conn:     conn,
-		wal:      wal,
 		ptsCh:    make(chan []*pb.Point, 5),
 		metaCh:   make(chan []*pb.Meta, 5),
 		wLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.9, conf.GrpcBurstServerConn),
 		rLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
 		mLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
 		client:   pb.NewTimeseriesClient(conn),
+		wal:      w,
 	}
+
+	node.replay()
 
 	return node, nil
 }
 
-func (n *node) write(pts []*pb.Point) error {
+func (n *node) writePoints(timeout time.Duration, pts []*pb.Point) error {
 
-	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if err := n.wLimiter.Wait(ctx); err != nil {
-		logger.Error(
-			"write limit exceeded",
-			zap.String("package", "cluster"),
-			zap.String("func", "write"),
-			zap.String("error", err.Error()),
-		)
-		// send to wal
-		//n.wal.Add(p *proto.Point)
 		return err
 	}
 
 	stream, err := n.client.Write(ctx)
 	if err != nil {
-		logger.Error(
-			"failed to get stream from server",
-			zap.String("package", "cluster"),
-			zap.String("func", "write"),
-			zap.Error(err),
-		)
-		// send to wal
 		return err
 	}
 
@@ -138,26 +134,34 @@ func (n *node) write(pts []*pb.Point) error {
 		}
 
 		if err != nil && err != io.EOF {
-			logger.Error(
-				"too many attempts, unable to write to stream",
-				zap.String("package", "cluster"),
-				zap.String("func", "write"),
-				zap.Error(err),
-			)
+			return err
 		}
 	}
+
 	_, err = stream.CloseAndRecv()
 	if err != nil && err != io.EOF {
-		logger.Error(
-			"problem writing to stream",
-			zap.String("package", "cluster"),
-			zap.String("func", "write"),
-			zap.Error(err),
-		)
+		return err
 	}
 
 	return nil
+}
 
+func (n *node) write(pts []*pb.Point) error {
+
+	err := n.writePoints(n.conf.gRPCtimeout, pts)
+	if err != nil {
+		logger.Error(
+			"sending points to replay log",
+			zap.String("package", "cluster"),
+			zap.String("func", "write"),
+			zap.String("error", err.Error()),
+			zap.Error(err),
+		)
+		n.send2wal(pts)
+		return err
+	}
+
+	return nil
 }
 
 func (n *node) read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error) {
@@ -279,4 +283,132 @@ func (n *node) close() {
 			zap.Error(err),
 		)
 	}
+}
+
+func (n *node) send2wal(pts []*pb.Point) {
+	valuesMap := make(map[string][]wal.Value)
+
+	for _, p := range pts {
+		ksts := string(utils.KSTS(p.GetKsid(), p.GetTsid()))
+		valuesMap[ksts] = append(valuesMap[ksts], wal.NewFloatValue(p.GetDate(), float64(p.GetValue())))
+	}
+
+	segID, err := n.wal.WriteMulti(valuesMap)
+	if err != nil {
+		logger.Error(
+			err.Error(),
+			zap.String("package", "cluster"),
+			zap.String("struct", "node"),
+			zap.String("func", "send2wal"),
+			zap.Error(err),
+			zap.Int64("segID", segID),
+		)
+	}
+}
+
+func (n *node) replayWorker() {
+
+	/*
+		log := logger.With(
+			zap.String("package", "cluster"),
+			zap.String("struct", "node"),
+			zap.String("func", "replay"),
+		)
+	*/
+
+	go func() {
+		n.replay()
+
+		ticker := time.NewTicker(time.Minute)
+		lrt := time.Now()
+
+		for {
+
+			select {
+			case <-ticker.C:
+
+				lwt := n.wal.LastWriteTime()
+				if lwt.After(lrt) {
+					errCount := n.replay()
+					if errCount == 0 {
+						lrt = time.Now()
+					}
+				}
+
+			}
+
+		}
+
+	}()
+}
+
+func (n *node) replay() int {
+	log := logger.With(
+		zap.String("package", "cluster"),
+		zap.String("struct", "node"),
+		zap.String("func", "replay"),
+	)
+
+	var errCount int
+
+	names, err := wal.SegmentFileNames(n.wal.Path())
+	if err != nil {
+		log.Error(
+			err.Error(),
+			zap.Error(err),
+		)
+		errCount++
+		return errCount
+	}
+
+	count := len(names)
+
+	for i, segmentFile := range names {
+		pts, err := n.wal.Replay(segmentFile)
+		if err != nil {
+			log.Error(
+				err.Error(),
+				zap.Error(err),
+			)
+			errCount++
+			continue
+		}
+
+		timeout := time.Minute
+		err = n.writePoints(timeout, pts)
+		if err != nil {
+			log.Error(
+				"replaying points",
+				zap.String("error", err.Error()),
+				zap.Error(err),
+			)
+			errCount++
+			continue
+		}
+
+		logger.Debug(
+			"points replayed",
+			zap.Int("count", len(pts)),
+			zap.String("logfile", segmentFile),
+		)
+
+		if i+1 == count {
+			continue
+		}
+
+		err = n.wal.Remove([]string{segmentFile})
+		if err != nil {
+			logger.Error(
+				"removing replay log",
+				zap.String("package", "cluster"),
+				zap.String("struct", "node"),
+				zap.String("func", "replay"),
+				zap.String("error", err.Error()),
+				zap.Error(err),
+			)
+			errCount++
+		}
+	}
+
+	return errCount
 }

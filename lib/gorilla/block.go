@@ -96,8 +96,6 @@ func (b *block) Add(p *pb.Point) {
 }
 
 func (b *block) close() []byte {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
 	log := gblog.With(
 		zap.String("package", "storage/block"),
 		zap.String("func", "close"),
@@ -215,7 +213,19 @@ func (b *block) SetPoints(pts []byte) {
 }
 
 func (b *block) GetPoints() []byte {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
 
+	if b.enc != nil {
+		return b.enc.Get()
+	}
+
+	return b.points
+}
+
+func (b *block) Close() []byte {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
 	return b.close()
 }
 
@@ -269,6 +279,7 @@ func (b *block) SendToDepot() bool {
 func (b *block) ToDepot(tdp bool) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
+	b.close()
 	b.toDepot = tdp
 }
 

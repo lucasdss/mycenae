@@ -59,12 +59,9 @@ type WAL struct {
 type Settings struct {
 	PathWAL         string
 	SyncInterval    string
-	syncInterval    time.Duration
 	CleanupInterval string
-	cleanupInterval time.Duration
 
 	CheckPointInterval string
-	checkPointInterval time.Duration
 	CheckPointPath     string
 
 	MaxBufferSize int
@@ -147,7 +144,7 @@ func (wal *WAL) Stop() {
 func (wal *WAL) worker() {
 	go func() {
 		maxBufferSize := wal.settings.MaxBufferSize
-		si := wal.settings.syncInterval
+		si := wal.syncInterval
 		ticker := time.NewTicker(500 * time.Millisecond)
 		buffer := make([]pb.Point, maxBufferSize)
 		buffTimer := time.Now()
@@ -236,7 +233,7 @@ func (wal *WAL) checkpoint() {
 
 	go func() {
 
-		ticker := time.NewTicker(wal.settings.checkPointInterval)
+		ticker := time.NewTicker(wal.checkPointInterval)
 		fileName := filepath.Join(wal.settings.CheckPointPath, checkPointName)
 
 		for {
@@ -353,19 +350,7 @@ func (wal *WAL) syncWorker() {
 
 			for _, p := range buffer {
 				ksts := string(utils.KSTS(p.GetKsid(), p.GetTsid()))
-
 				valuesMap[ksts] = append(valuesMap[ksts], NewFloatValue(p.GetDate(), float64(p.GetValue())))
-
-				/*
-					logger.Debug(
-						"values to be writen",
-						zap.Int64("date", p.GetDate()),
-						zap.Float32("value", p.GetValue()),
-						zap.Any("values", valuesMap[ksts]),
-						zap.Int("sizeValues", len(valuesMap)),
-						zap.Int("count", count),
-					)
-				*/
 			}
 
 			segID, err := wal.WriteMulti(valuesMap)
@@ -584,7 +569,7 @@ func (wal *WAL) loadCheckpoint() (int64, map[string]int64, error) {
 func (wal *WAL) cleanup() {
 
 	go func() {
-		ticker := time.NewTicker(wal.settings.cleanupInterval)
+		ticker := time.NewTicker(wal.cleanupInterval)
 		for {
 			select {
 			case <-ticker.C:
@@ -634,4 +619,89 @@ func (wal *WAL) cleanup() {
 
 	}()
 
+}
+
+func (wal *WAL) Replay(filename string) ([]*pb.Point, error) {
+
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0666)
+	if err != nil {
+		return nil, err
+	}
+
+	log := logger.With(
+		zap.String("package", "wal"),
+		zap.String("func", "Replay"),
+		zap.String("struct", "WAL"),
+	)
+
+	// Log some information about the segments.
+	stat, err := os.Stat(f.Name())
+	if err != nil {
+		return nil, err
+	}
+	log.Info(
+		"reading file",
+		zap.String("file", f.Name()),
+		zap.Int64("size", stat.Size()),
+	)
+
+	r := NewWALSegmentReader(f)
+	defer r.Close()
+
+	pts := []*pb.Point{}
+	for r.Next() {
+		entry, err := r.Read()
+		if err != nil {
+			n := r.Count()
+			log.Info("file corrupt, truncating",
+				zap.String("file", f.Name()),
+				zap.Int64("position", n),
+			)
+			if err := f.Truncate(n); err != nil {
+				return nil, err
+			}
+			break
+		}
+
+		switch t := entry.(type) {
+		case *WriteWALEntry:
+
+			for ksts, values := range t.Values {
+				x := strings.Split(ksts, "|")
+				ksid := x[0]
+				tsid := x[1]
+
+				if len(ksid) < 1 || len(tsid) < 1 {
+					continue
+				}
+
+				for _, v := range values {
+
+					pD := v.UnixNano()
+					pV := float32(v.Value().(float64))
+
+					if pD > 0 {
+						pts = append(
+							pts,
+							&pb.Point{
+								Date:  pD,
+								Value: pV,
+								Ksid:  ksid,
+								Tsid:  tsid,
+							})
+
+					}
+				}
+			}
+
+		case *DeleteRangeWALEntry:
+			log.Info("DeleteRangeWALEntry")
+
+		case *DeleteWALEntry:
+			log.Info("DeleteWALEntry")
+
+		}
+	}
+
+	return pts, nil
 }

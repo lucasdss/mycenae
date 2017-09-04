@@ -13,15 +13,13 @@ import (
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
 	"github.com/uol/mycenae/lib/tsstats"
-	"github.com/uol/mycenae/lib/wal"
 	"go.uber.org/zap"
 )
 
 var (
 	logger *zap.Logger
-	stats *tsstats.StatsTS
+	stats  *tsstats.StatsTS
 )
-
 
 type Config struct {
 	Consul ConsulConfig
@@ -37,6 +35,8 @@ type Config struct {
 	GrpcMaxServerConn   int64
 	GrpcBurstServerConn int
 	MaxListenerConn     int
+
+	LogPath string
 }
 
 type state struct {
@@ -50,7 +50,6 @@ func New(
 	sto *gorilla.Storage,
 	m *meta.Meta,
 	conf *Config,
-	walConf *wal.Settings,
 ) (*Cluster, gobol.Error) {
 
 	stats = sts
@@ -99,19 +98,19 @@ func New(
 	}
 
 	clr := &Cluster{
-		c:           c,
-		s:           sto,
-		m:           m,
-		walSettings: walConf,
-		ch:          consistentHash.New(),
-		cfg:         conf,
-		apply:       conf.ApplyWait,
-		nodes:       map[string]*node{},
-		toAdd:       map[string]state{},
-		tag:         conf.Consul.Tag,
-		self:        s,
-		port:        conf.Port,
-		server:      server,
+		c:      c,
+		s:      sto,
+		m:      m,
+		ch:     consistentHash.New(),
+		cfg:    conf,
+		apply:  conf.ApplyWait,
+		nodes:  map[string]*node{},
+		toAdd:  map[string]state{},
+		uptime: map[string]int64{},
+		tag:    conf.Consul.Tag,
+		self:   s,
+		port:   conf.Port,
+		server: server,
 	}
 
 	clr.ch.Add(s)
@@ -122,13 +121,12 @@ func New(
 }
 
 type Cluster struct {
-	s           *gorilla.Storage
-	c           *consul
-	m           *meta.Meta
-	walSettings *wal.Settings
-	ch          *consistentHash.ConsistentHash
-	cfg         *Config
-	apply       int64
+	s     *gorilla.Storage
+	c     *consul
+	m     *meta.Meta
+	ch    *consistentHash.ConsistentHash
+	cfg   *Config
+	apply int64
 
 	server   *server
 	stopServ chan struct{}
@@ -136,6 +134,8 @@ type Cluster struct {
 	nodes  map[string]*node
 	nMutex sync.RWMutex
 	toAdd  map[string]state
+	uptime map[string]int64
+	upMtx  sync.RWMutex
 
 	tag  string
 	self string
@@ -222,50 +222,53 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 
 	log := logger.With(
 		zap.String("package", "cluster"),
+		zap.String("struct", "Cluster"),
 		zap.String("func", "Read"),
+		zap.String("ksid", ksid),
+		zap.String("tsid", tsid),
+		zap.Int64("start", start),
+		zap.Int64("end", end),
 	)
-
-	singleNode, err := c.ch.Get([]byte(tsid))
-	if err != nil {
-		return nil, errRequest("Write", http.StatusInternalServerError, err)
-	}
-	if singleNode == c.self {
-		log.Debug("reading from local node")
-		pts, gerr := c.s.Read(ksid, tsid, start, end)
-		if gerr != nil {
-			log.Error(gerr.Error(), zap.Error(gerr))
-		}
-		return pts, nil
-	}
-
-	c.nMutex.RLock()
-	n := c.nodes[singleNode]
-	c.nMutex.RUnlock()
-
-	log.Debug(
-		"forwarding read",
-		zap.String("addr", n.address),
-		zap.Int("port", n.port),
-	)
-
-	var pts []*pb.Point
-	var gerr gobol.Error
-	pts, gerr = n.read(ksid, tsid, start, end)
-	if gerr != nil {
-		log.Error(gerr.Error(), zap.Error(gerr))
-	} else {
-		return pts, gerr
-	}
 
 	nodes, err := c.Classifier([]byte(tsid))
 	if err != nil {
 		return nil, errRequest("Read", http.StatusInternalServerError, err)
 	}
 
+	n0 := nodes[0]
+	n1 := nodes[1]
+
+	c.upMtx.RLock()
+	uptime0 := c.uptime[n0]
+	uptime1 := c.uptime[n1]
+	c.upMtx.RUnlock()
+
+	prefered := sortNodes(map[string]int64{n0: uptime0, n1: uptime1})
+	if prefered == n1 {
+		nodes = []string{n1, n0}
+	}
+
+	var pts []*pb.Point
+	var gerr gobol.Error
+
+	log.Debug(
+		"reading serie order",
+		zap.String("node0", nodes[0]),
+		zap.String("node1", nodes[1]),
+	)
+
 	for _, node := range nodes {
-		if node == singleNode {
-			continue
+
+		if node == c.self {
+			pts, gerr = c.s.Read(ksid, tsid, start, end)
+			if gerr != nil {
+				log.Error(gerr.Error(), zap.Error(gerr))
+				continue
+			}
+
+			return pts, nil
 		}
+
 		c.nMutex.RLock()
 		n := c.nodes[node]
 		c.nMutex.RUnlock()
@@ -280,6 +283,7 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 
 		log.Debug(
 			"forwarding read as fallback",
+			zap.String("node", node),
 			zap.String("addr", n.address),
 			zap.Int("port", n.port),
 		)
@@ -364,8 +368,9 @@ func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) (<-chan *pb.MetaFound, e
 }
 
 func (c *Cluster) getNodes() {
-	logger := logger.With(
+	log := logger.With(
 		zap.String("package", "cluster"),
+		zap.String("struct", "Cluster"),
 		zap.String("func", "getNodes"),
 	)
 
@@ -390,9 +395,9 @@ func (c *Cluster) getNodes() {
 							continue
 						}
 
-						n, err := newNode(srv.Node.Address, c.port, c.cfg, c.walSettings)
-						if err != nil {
-							logger.Error("", zap.Error(err))
+						n, gerr := newNode(srv.Node.Address, c.port, c.cfg)
+						if gerr != nil {
+							log.Error("", zap.Error(gerr))
 							continue
 						}
 
@@ -420,6 +425,15 @@ func (c *Cluster) getNodes() {
 							zap.Int("port", c.port),
 						)
 
+						uptime, err := c.c.Uptime(srv.Node.ID)
+						if err != nil {
+							log.Error(err.Error(), zap.Error(err))
+						} else {
+							c.upMtx.Lock()
+							c.uptime[srv.Node.ID] = uptime
+							c.upMtx.Unlock()
+						}
+
 					}
 				}
 			}
@@ -434,11 +448,22 @@ func (c *Cluster) getNodes() {
 			for _, check := range srv.Checks {
 				if check.ServiceID == srv.Service.ID && check.Status == "passing" && id == srv.Node.ID {
 					found = true
+					uptime, err := c.c.Uptime(srv.Node.ID)
+					if err != nil {
+						log.Error(err.Error(), zap.Error(err))
+					} else {
+						c.upMtx.Lock()
+						c.uptime[srv.Node.ID] = uptime
+						c.upMtx.Unlock()
+					}
 				}
 			}
 		}
 		if !found {
 			del = append(del, id)
+			c.upMtx.Lock()
+			c.uptime[id] = 0
+			c.upMtx.Unlock()
 		}
 	}
 
@@ -454,7 +479,10 @@ func (c *Cluster) getNodes() {
 				c.nMutex.Unlock()
 
 				delete(c.toAdd, id)
-				reShard = true
+
+				c.upMtx.Lock()
+				c.uptime[id] = 0
+				c.upMtx.Unlock()
 
 				logger.Debug("removed node")
 			}
@@ -476,4 +504,25 @@ func (c *Cluster) getNodes() {
 func (c *Cluster) Stop() {
 	c.stopServ <- struct{}{}
 	c.server.grpcServer.Stop()
+}
+
+func sortNodes(m map[string]int64) string {
+	var node string
+	var x int64
+	for name, uptime := range m {
+		if x == 0 {
+			x = uptime
+			node = name
+			continue
+		}
+
+		if uptime > 0 && uptime < x {
+			x = uptime
+			node = name
+			continue
+		}
+	}
+
+	return node
+
 }
