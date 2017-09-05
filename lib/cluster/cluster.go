@@ -97,6 +97,11 @@ func New(
 		return nil, errInit("New", err)
 	}
 
+	uptime, err := c.Uptime(s)
+	if err != nil {
+		return nil, errInit("New", err)
+	}
+
 	clr := &Cluster{
 		c:      c,
 		s:      sto,
@@ -104,9 +109,9 @@ func New(
 		ch:     consistentHash.New(),
 		cfg:    conf,
 		apply:  conf.ApplyWait,
-		nodes:  map[string]*node{},
+		nodes:  map[string]Client{},
 		toAdd:  map[string]state{},
-		uptime: map[string]int64{},
+		uptime: map[string]int64{s: uptime},
 		tag:    conf.Consul.Tag,
 		self:   s,
 		port:   conf.Port,
@@ -128,10 +133,10 @@ type Cluster struct {
 	cfg   *Config
 	apply int64
 
-	server   *server
+	server   GrpcServer
 	stopServ chan struct{}
 
-	nodes  map[string]*node
+	nodes  map[string]Client
 	nMutex sync.RWMutex
 	toAdd  map[string]state
 	uptime map[string]int64
@@ -199,7 +204,7 @@ func (c *Cluster) Write(nodeID string, pts []*pb.Point) gobol.Error {
 
 	// Add WAL for future replay
 	if node != nil {
-		err := node.write(pts)
+		err := node.Write(pts)
 		if err != nil {
 			logger.Error(
 				"unable to write remotely",
@@ -247,8 +252,11 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 
 		log.Debug(
 			"reading serie order",
-			zap.String("node0", nodes[0]),
-			zap.String("node1", nodes[1]),
+			zap.String("prefered", prefered),
+			zap.String("node0", n0),
+			zap.Int64("uptime_node0", uptime0),
+			zap.String("node1", n1),
+			zap.Int64("uptime_node1", uptime1),
 		)
 	}
 
@@ -278,14 +286,7 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 			continue
 		}
 
-		log.Debug(
-			"forwarding read as fallback",
-			zap.String("node", node),
-			zap.String("addr", n.address),
-			zap.Int("port", n.port),
-		)
-
-		pts, gerr = n.read(ksid, tsid, start, end)
+		pts, gerr = n.Read(ksid, tsid, start, end)
 		if gerr != nil {
 			log.Error(gerr.Error(), zap.Error(gerr))
 			continue
@@ -354,13 +355,13 @@ func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) (<-chan *pb.MetaFound, e
 
 	logger.Debug(
 		"forwarding meta read",
-		zap.String("addr", node.address),
-		zap.Int("port", node.port),
+		zap.String("addr", node.Address()),
+		zap.Int("port", node.Port()),
 		zap.String("package", "cluster"),
 		zap.String("func", "Meta"),
 	)
 
-	return node.meta(metas)
+	return node.Meta(metas)
 
 }
 
@@ -387,50 +388,54 @@ func (c *Cluster) getNodes() {
 		for _, tag := range srv.Service.Tags {
 			if tag == c.tag {
 				for _, check := range srv.Checks {
-					if check.ServiceID == srv.Service.ID && check.Status == "passing" {
-						if _, ok := c.nodes[srv.Node.ID]; ok {
-							continue
-						}
+					if check.ServiceID == srv.Service.ID {
+						if check.Status == "passing" {
+							uptime, err := c.c.Uptime(srv.Node.ID)
+							if err != nil {
+								log.Error(err.Error(), zap.Error(err))
+							} else {
+								c.upMtx.Lock()
+								c.uptime[srv.Node.ID] = uptime
+								c.upMtx.Unlock()
+							}
 
-						n, gerr := newNode(srv.Node.Address, c.port, c.cfg)
-						if gerr != nil {
-							log.Error("", zap.Error(gerr))
-							continue
-						}
+							if _, ok := c.nodes[srv.Node.ID]; ok {
+								continue
+							}
 
-						logger.Debug(
-							"adding node",
-							zap.String("nodeIP", srv.Node.Address),
-							zap.String("nodeID", srv.Node.ID),
-							zap.String("status", check.Status),
-							zap.Int("port", c.port),
-						)
+							n, gerr := newNode(srv.Node.Address, c.port, c.cfg)
+							if gerr != nil {
+								log.Error("", zap.Error(gerr))
+								continue
+							}
 
-						c.ch.Add(srv.Node.ID)
+							logger.Debug(
+								"adding node",
+								zap.String("nodeIP", srv.Node.Address),
+								zap.String("nodeID", srv.Node.ID),
+								zap.String("status", check.Status),
+								zap.Int("port", c.port),
+							)
 
-						c.nMutex.Lock()
-						c.nodes[srv.Node.ID] = n
-						c.nMutex.Unlock()
+							c.ch.Add(srv.Node.ID)
 
-						reShard = true
+							c.nMutex.Lock()
+							c.nodes[srv.Node.ID] = n
+							c.nMutex.Unlock()
 
-						logger.Debug(
-							"node has been added",
-							zap.String("nodeIP", srv.Node.Address),
-							zap.String("nodeID", srv.Node.ID),
-							zap.String("status", check.Status),
-							zap.Int("port", c.port),
-						)
+							logger.Debug(
+								"node has been added",
+								zap.String("nodeIP", srv.Node.Address),
+								zap.String("nodeID", srv.Node.ID),
+								zap.String("status", check.Status),
+								zap.Int("port", c.port),
+							)
 
-						uptime, err := c.c.Uptime(srv.Node.ID)
-						if err != nil {
-							log.Error(err.Error(), zap.Error(err))
 						} else {
 							c.upMtx.Lock()
-							c.uptime[srv.Node.ID] = uptime
+							c.uptime[srv.Node.ID] = 0
 							c.upMtx.Unlock()
 						}
-
 					}
 				}
 			}
@@ -445,14 +450,6 @@ func (c *Cluster) getNodes() {
 			for _, check := range srv.Checks {
 				if check.ServiceID == srv.Service.ID && check.Status == "passing" && id == srv.Node.ID {
 					found = true
-					uptime, err := c.c.Uptime(srv.Node.ID)
-					if err != nil {
-						log.Error(err.Error(), zap.Error(err))
-					} else {
-						c.upMtx.Lock()
-						c.uptime[srv.Node.ID] = uptime
-						c.upMtx.Unlock()
-					}
 				}
 			}
 		}
@@ -478,7 +475,7 @@ func (c *Cluster) getNodes() {
 				delete(c.toAdd, id)
 
 				c.upMtx.Lock()
-				c.uptime[id] = 0
+				delete(c.uptime, id)
 				c.upMtx.Unlock()
 
 				logger.Debug("removed node")
@@ -500,7 +497,7 @@ func (c *Cluster) getNodes() {
 //Stop cluster
 func (c *Cluster) Stop() {
 	c.stopServ <- struct{}{}
-	c.server.grpcServer.Stop()
+	c.server.Stop()
 }
 
 func sortNodes(m map[string]int64) string {

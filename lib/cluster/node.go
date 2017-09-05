@@ -21,6 +21,14 @@ import (
 	"go.uber.org/zap"
 )
 
+type Client interface {
+	Write(pts []*pb.Point) error
+	Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error)
+	Meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error)
+	Address() string
+	Port() int
+}
+
 type node struct {
 	address string
 	port    int
@@ -38,7 +46,7 @@ type node struct {
 	wal      *wal.WAL
 }
 
-func newNode(address string, port int, conf *Config) (*node, gobol.Error) {
+func newNode(address string, port int, conf *Config) (Client, gobol.Error) {
 
 	//cred, err := newClientTLSFromFile(conf.Consul.CA, conf.Consul.Cert, conf.Consul.Key, "*")
 	cred, err := credentials.NewClientTLSFromFile(conf.Consul.Cert, "localhost.consul.macs.intranet")
@@ -94,6 +102,14 @@ func newNode(address string, port int, conf *Config) (*node, gobol.Error) {
 	return node, nil
 }
 
+func (n *node) Address() string {
+	return n.address
+}
+
+func (n *node) Port() int {
+	return n.port
+}
+
 func (n *node) writePoints(timeout time.Duration, pts []*pb.Point) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -146,7 +162,7 @@ func (n *node) writePoints(timeout time.Duration, pts []*pb.Point) error {
 	return nil
 }
 
-func (n *node) write(pts []*pb.Point) error {
+func (n *node) Write(pts []*pb.Point) error {
 
 	err := n.writePoints(n.conf.gRPCtimeout, pts)
 	if err != nil {
@@ -164,7 +180,7 @@ func (n *node) write(pts []*pb.Point) error {
 	return nil
 }
 
-func (n *node) read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error) {
+func (n *node) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
 	defer cancel()
@@ -194,7 +210,7 @@ func (n *node) read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Err
 
 }
 
-func (n *node) meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
+func (n *node) Meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
 
