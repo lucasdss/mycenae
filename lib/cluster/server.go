@@ -27,6 +27,13 @@ import (
 	"google.golang.org/grpc/tap"
 )
 
+type GrpcServer interface {
+	Write(stream pb.Timeseries_WriteServer) error
+	Read(q *pb.Query, stream pb.Timeseries_ReadServer) error
+	GetMeta(stream pb.Timeseries_GetMetaServer) error
+	Stop()
+}
+
 type server struct {
 	storage    gorilla.Gorilla
 	meta       meta.MetaData
@@ -42,7 +49,7 @@ type workerMsg struct {
 	p       *pb.Point
 }
 
-func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (*server, error) {
+func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (GrpcServer, error) {
 
 	s := &server{
 		storage:    strg,
@@ -74,6 +81,10 @@ func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (*server, er
 	}(s, conf)
 
 	return s, nil
+}
+
+func (s *server) Stop() {
+	s.grpcServer.Stop()
 }
 
 func (s *server) connect(conf *Config) (*grpc.Server, net.Listener, error) {
