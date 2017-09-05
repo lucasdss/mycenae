@@ -16,6 +16,12 @@ import (
 	"github.com/uol/gobol"
 )
 
+type Consul interface {
+	Nodes() ([]Health, gobol.Error)
+	Self() (string, gobol.Error)
+	Uptime(node string) (int64, error)
+}
+
 type ConsulConfig struct {
 	//Consul agent adrress without the scheme
 	Address string
@@ -95,7 +101,7 @@ type Conf struct {
 	NodeID string `json:"NodeID"`
 }
 
-func newConsul(conf ConsulConfig) (*consul, gobol.Error) {
+func newConsul(conf ConsulConfig) (Consul, gobol.Error) {
 
 	cert, err := tls.LoadX509KeyPair(conf.Cert, conf.Key)
 	if err != nil {
@@ -124,7 +130,7 @@ func newConsul(conf ConsulConfig) (*consul, gobol.Error) {
 
 	address := fmt.Sprintf("%s://%s:%d", conf.Protocol, conf.Address, conf.Port)
 
-	return &consul{
+	c := &consul{
 		c: &http.Client{
 			Transport: tr,
 			Timeout:   time.Second,
@@ -135,11 +141,25 @@ func newConsul(conf ConsulConfig) (*consul, gobol.Error) {
 		healthAPI:  fmt.Sprintf("%s/v1/health/service/%s", address, conf.Service),
 		uptimeAPI:  fmt.Sprintf("%s/v1/kv/%s", address, conf.Service),
 		token:      conf.Token,
-	}, nil
+	}
+
+	s, err := c.Self()
+	if err != nil {
+		return nil, errInit("newConsul", err)
+	}
+	c.serlf = s
+
+	if gerr := c.setUptime(s); gerr != nil {
+		return nil, gerr
+	}
+
+	return c, nil
+
 }
 
 type consul struct {
 	c          *http.Client
+	serlf      string
 	token      string
 	serviceAPI string
 	agentAPI   string
@@ -147,7 +167,7 @@ type consul struct {
 	uptimeAPI  string
 }
 
-func (c *consul) getNodes() ([]Health, gobol.Error) {
+func (c *consul) Nodes() ([]Health, gobol.Error) {
 
 	req, err := http.NewRequest("GET", c.healthAPI, nil)
 	if err != nil {
@@ -172,7 +192,11 @@ func (c *consul) getNodes() ([]Health, gobol.Error) {
 	return srvs, nil
 }
 
-func (c *consul) getSelf() (string, gobol.Error) {
+func (c *consul) Self() (string, gobol.Error) {
+
+	if len(c.serlf) > 1 {
+		return c.serlf, nil
+	}
 
 	req, err := http.NewRequest("GET", c.agentAPI, nil)
 	if err != nil {

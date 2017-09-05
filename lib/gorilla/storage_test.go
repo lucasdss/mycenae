@@ -1,4 +1,4 @@
-package gorilla
+package gorilla_test
 
 import (
 	"math/rand"

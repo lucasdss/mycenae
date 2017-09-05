@@ -28,8 +28,8 @@ import (
 )
 
 type server struct {
-	storage    *gorilla.Storage
-	meta       *meta.Meta
+	storage    gorilla.Gorilla
+	meta       meta.MetaData
 	grpcServer *grpc.Server
 	wLimiter   *rate.Limiter
 	rLimiter   *rate.Limiter
@@ -42,7 +42,7 @@ type workerMsg struct {
 	p       *pb.Point
 }
 
-func newServer(conf *Config, strg *gorilla.Storage, m *meta.Meta) (*server, error) {
+func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (*server, error) {
 
 	s := &server{
 		storage:    strg,
