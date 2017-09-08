@@ -67,7 +67,7 @@ func (b *block) Add(p *pb.Point) {
 			err := b.newEncoder(b.points, p.GetDate(), p.GetValue())
 			if err != nil {
 				log.Error(
-					err.Error(),
+					"",
 					zap.Error(err),
 				)
 			}
@@ -87,7 +87,7 @@ func (b *block) Add(p *pb.Point) {
 	err := b.newEncoder(pBytes, p.GetDate(), p.GetValue())
 	if err != nil {
 		log.Error(
-			"problem to transcode tsz",
+			"",
 			zap.Error(err),
 			zap.Int("blockSize", len(pBytes)),
 		)
@@ -96,48 +96,26 @@ func (b *block) Add(p *pb.Point) {
 }
 
 func (b *block) close() []byte {
-	log := gblog.With(
-		zap.String("package", "storage/block"),
-		zap.String("func", "close"),
-		zap.Int64("blkid", b.id),
-	)
-
 	if b.enc != nil {
 		pts, _ := b.enc.Close()
 		b.points = pts
 		b.enc = nil
-
-		log.Debug(
-			"points array closed",
-			zap.Int("size", len(pts)),
-		)
-
 	}
 
 	return b.points
-
-}
-
-func (b *block) NewEncoder(pByte []byte, date int64, value float32) error {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-	return b.newEncoder(pByte, date, value)
 }
 
 func (b *block) newEncoder(pByte []byte, date int64, value float32) error {
-	log := gblog.With(
-		zap.String("struct", "storage/block"),
-		zap.String("func", "newEncoder"),
-		zap.Int64("blkid", b.id),
-	)
 
 	var points [bucketSize]*pb.Point
 	if len(pByte) >= headerSize {
-
 		pts, err := b.decode(pByte)
 		if err != nil {
-			log.Error(
-				err.Error(),
+			gblog.Error(
+				"",
+				zap.String("struct", "storage/block"),
+				zap.String("func", "newEncoder"),
+				zap.Int64("blkid", b.id),
 				zap.Error(err),
 			)
 			return err
@@ -149,18 +127,8 @@ func (b *block) newEncoder(pByte []byte, date int64, value float32) error {
 
 	blkid := utils.BlockID(date)
 	if blkid != b.id {
-		log.Error(
-			"block id divergency",
-			zap.Int64("point_blkid", blkid),
-			zap.Int64("delta", delta),
-		)
-		return fmt.Errorf("block id divergency, delta %v", delta)
+		return fmt.Errorf("block id divergent, delta %v", delta)
 	}
-
-	log.Debug(
-		"point delta",
-		zap.Int64("delta", delta),
-	)
 
 	points[delta] = &pb.Point{Date: date, Value: value}
 

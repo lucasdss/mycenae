@@ -71,25 +71,27 @@ func (so *savingObj) add(ksts []byte, m *pb.Meta) {
 	so.mm[string(ksts)] = nil
 }
 
-func (so *savingObj) del(key *string) {
+func (so *savingObj) del(key string) {
 	so.mtx.Lock()
 	defer so.mtx.Unlock()
-	delete(so.mm, *key)
+	delete(so.mm, key)
 }
 
-func (so *savingObj) iter() <-chan string {
-	c := make(chan string)
-	go func() {
-		so.mtx.RLock()
-		for k := range so.mm {
-			so.mtx.RUnlock()
-			c <- k
-			so.mtx.RLock()
+func (so *savingObj) iter() []string {
+	var m []string
+
+	so.mtx.RLock()
+	var count int
+	for k := range so.mm {
+		m = append(m, k)
+		if count > 1000 {
+			break
 		}
-		so.mtx.RUnlock()
-		close(c)
-	}()
-	return c
+		count++
+	}
+	so.mtx.RUnlock()
+
+	return m
 }
 
 type Settings struct {
@@ -157,7 +159,7 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 		for {
 			select {
 			case <-ticker.C:
-				for ksts := range meta.sm.iter() {
+				for _, ksts := range meta.sm.iter() {
 					//found, gerr := meta.boltc.GetTsNumber(ksts, meta.CheckTSID)
 					found, gerr := meta.CheckTSID("meta", ksts)
 					if gerr != nil {
@@ -183,9 +185,8 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 							zap.Error(gerr),
 						)
 					}
-					meta.sm.del(&ksts)
+					meta.sm.del(ksts)
 					time.Sleep(headInterval)
-
 				}
 			}
 		}
@@ -295,6 +296,9 @@ func (meta *Meta) readMeta(bulk *bytes.Buffer) error {
 
 		if bulk.Len() >= meta.settings.MaxMetaBulkSize || meta.metaPayload.Len() == 0 {
 			break
+		}
+		if meta.metaPayload.Len() <= 124 {
+			meta.metaPayload.Reset()
 		}
 	}
 

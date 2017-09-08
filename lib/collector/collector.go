@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -48,6 +49,11 @@ func New(
 	gblog = log
 	stats = sts
 
+	metaValidationTimeout, err := time.ParseDuration(set.MetaValidationTimeout)
+	if err != nil {
+		return nil, err
+	}
+
 	collect := &Collector{
 		boltc:   bc,
 		cluster: cluster,
@@ -56,13 +62,14 @@ func New(
 			esearch: es,
 			cass:    cass,
 		},
-		validKey:   regexp.MustCompile(`^[0-9A-Za-z-._%&#;/]+$`),
-		validKSID:  regexp.MustCompile(`^[0-9a-z_]+$`),
-		settings:   set,
-		concPoints: make(chan struct{}, set.MaxConcurrentPoints),
-		wLimiter:   wLimiter,
-		metas:      make(map[string][]*pb.Meta),
-		limiter:    ksLimiter{limite: make(map[string]*limiter.RateLimit)},
+		validKey:              regexp.MustCompile(`^[0-9A-Za-z-._%&#;/]+$`),
+		validKSID:             regexp.MustCompile(`^[0-9a-z_]+$`),
+		settings:              set,
+		concPoints:            make(chan struct{}, set.MaxConcurrentPoints),
+		wLimiter:              wLimiter,
+		metas:                 make(map[string][]*pb.Meta),
+		limiter:               ksLimiter{limite: make(map[string]*limiter.RateLimit)},
+		metaValidationTimeout: metaValidationTimeout,
 	}
 
 	return collect, nil
@@ -87,6 +94,7 @@ type Collector struct {
 	limiter                ksLimiter
 	metas                  map[string][]*pb.Meta
 	mtxMetas               sync.RWMutex
+	metaValidationTimeout  time.Duration
 }
 
 type ksLimiter struct {
@@ -193,6 +201,16 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 				return
 			}
 
+			var np []byte
+			if len(nodePoint) > 1 {
+				n0 := nodePoint[0]
+				n1 := nodePoint[1]
+				np = make([]byte, len(n0)+len(n1)+1)
+				copy(np, n0)
+				copy(np[len(n0):], "|")
+				copy(np[len(n0)+1:], n1)
+			}
+
 			nodeMeta, gerr := collect.cluster.MetaClassifier([]byte(m.GetKsid()))
 			if gerr != nil {
 				mtx.Lock()
@@ -203,9 +221,7 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 
 			mtx.Lock()
 			keyspaces[ks] = nil
-			for _, np := range nodePoint {
-				pts[np] = append(pts[np], packet)
-			}
+			pts[string(np)] = append(pts[string(np)], packet)
 			if !collect.boltc.Get(utils.KSTS(m.GetKsid(), m.GetTsid())) {
 				metas[nodeMeta] = append(metas[nodeMeta], m)
 			}
@@ -243,22 +259,37 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 		if gerr := l.Reserve(); gerr != nil {
 			return RestErrors{}, gerr
 		}
+
 	}
 
 	for n, points := range pts {
 		//gblog.Debug("saving map", zap.String("node", n), zap.Any("points", points))
-		collect.cluster.Write(n, points)
-	}
-
-	for n, m := range metas {
-		collect.metaHandler(n, m)
+		wg.Add(1)
+		go func(n string, points []*pb.Point) {
+			defer wg.Done()
+			nodes := strings.Split(n, "|")
+			collect.cluster.Write(nodes, points)
+		}(n, points)
 	}
 
 	go func() {
-		for ks := range keyspaces {
-			statsProcTime(ks, time.Since(start))
+		timeout := time.After(collect.metaValidationTimeout)
+		metaCh := make(chan struct{}, 1)
+		for n, m := range metas {
+			metaCh <- struct{}{}
+			select {
+			case <-timeout:
+				return
+			case <-metaCh:
+				collect.metaHandler(n, m)
+			}
 		}
 	}()
+
+	wg.Wait()
+	for ks := range keyspaces {
+		statsProcTime(ks, time.Since(start))
+	}
 
 	return returnPoints, nil
 }

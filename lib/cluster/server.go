@@ -201,16 +201,6 @@ func (s *server) Write(stream pb.Timeseries_WriteServer) error {
 
 	case <-ctx.Done():
 
-		if err := stream.SendAndClose(&pb.TSResponse{}); err != nil {
-			logger.Error(
-				"unable to send close stream whan ctx calls Done()",
-				zap.String("func", "server/Write"),
-				zap.String("package", "cluster"),
-				zap.Error(err),
-			)
-
-		}
-
 		return ctx.Err()
 	}
 

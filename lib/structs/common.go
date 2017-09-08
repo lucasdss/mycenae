@@ -36,6 +36,7 @@ type Settings struct {
 	Burst                      int
 	CompactionStrategy         string
 	Meta                       *meta.Settings
+	MetaValidationTimeout      string
 	HTTPserver                 SettingsHTTP
 	UDPserver                  SettingsUDP
 	UDPserverV2                SettingsUDP

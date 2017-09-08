@@ -248,6 +248,7 @@ func (n *node) Meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
 					zap.String("func", "node/meta"),
 					zap.Error(err),
 				)
+				break
 			}
 		}
 
@@ -278,7 +279,7 @@ func (n *node) Meta(metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
 					zap.String("func", "node/meta"),
 					zap.Error(err),
 				)
-				continue
+				break
 			}
 
 			c <- mf
