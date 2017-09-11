@@ -203,8 +203,14 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 
 			var np []byte
 			if len(nodePoint) > 1 {
+
 				n0 := nodePoint[0]
 				n1 := nodePoint[1]
+				if n1 > n0 {
+					n0 = n1
+					n1 = nodePoint[0]
+				}
+
 				np = make([]byte, len(n0)+len(n1)+1)
 				copy(np, n0)
 				copy(np[len(n0):], "|")
@@ -287,9 +293,11 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 	}()
 
 	wg.Wait()
-	for ks := range keyspaces {
-		statsProcTime(ks, time.Since(start))
-	}
+	go func() {
+		for ks := range keyspaces {
+			statsProcTime(ks, time.Since(start))
+		}
+	}()
 
 	return returnPoints, nil
 }
