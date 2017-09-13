@@ -1,6 +1,7 @@
 package gorilla
 
 import (
+	"math/rand"
 	"sync"
 	"time"
 
@@ -26,6 +27,8 @@ type Gorilla interface {
 	Write(p *pb.Point) gobol.Error
 	WAL(ksts string, blockID int64, pts []byte) error
 	Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error)
+	ToDepot(metas []Meta)
+	Cleanup(metas []Meta)
 	Stop()
 }
 
@@ -33,13 +36,14 @@ type Gorilla interface {
 // after a while the serie will be saved at cassandra
 // if the time range is not in memory it must query cassandra
 type Storage struct {
-	persist depot.Persistence
-	stop    chan chan struct{}
-	tsmap   map[string]*serie
-	localTS localTSmap
-	dump    chan struct{}
-	wal     *wal.WAL
-	mtx     sync.RWMutex
+	persist      depot.Persistence
+	stop         chan chan struct{}
+	tsmap        map[string]*serie
+	localTS      localTSmap
+	dump         chan struct{}
+	wal          *wal.WAL
+	mtx          sync.RWMutex
+	saveInterval int64
 }
 
 type localTSmap struct {
@@ -59,18 +63,24 @@ func New(
 	sts *tsstats.StatsTS,
 	persist depot.Persistence,
 	w *wal.WAL,
+	saveInterval int64,
 ) *Storage {
 
 	stats = sts
 	gblog = lgr
 
+	if saveInterval == 0 {
+		saveInterval = 1800
+	}
+
 	return &Storage{
-		stop:    make(chan chan struct{}),
-		tsmap:   make(map[string]*serie),
-		localTS: localTSmap{tsmap: make(map[string]Meta)},
-		dump:    make(chan struct{}),
-		wal:     w,
-		persist: persist,
+		stop:         make(chan chan struct{}),
+		tsmap:        make(map[string]*serie),
+		localTS:      localTSmap{tsmap: make(map[string]Meta)},
+		dump:         make(chan struct{}),
+		wal:          w,
+		persist:      persist,
+		saveInterval: saveInterval,
 	}
 }
 
@@ -104,24 +114,8 @@ func (s *Storage) Stop() {
 // must be compressed and saved in cassandra.
 func (s *Storage) Start() {
 	go func() {
-		ticker := time.NewTicker(time.Minute)
-
 		for {
 			select {
-			case <-ticker.C:
-				now := time.Now().Unix()
-
-				for _, serie := range s.ListSeries() {
-					delta := now - serie.LastCheck
-					if delta > 1800 {
-						// we need a way to persist ts older than 2h
-						// after 26h the serie must be out of memory
-						s.updateLastCheck(&serie)
-						if s.getSerie(serie.KSID, serie.TSID).toDepot() {
-							s.deleteSerie(serie.KSID, serie.TSID)
-						}
-					}
-				}
 			case stpC := <-s.stop:
 
 				u := make(map[string]int64)
@@ -132,7 +126,7 @@ func (s *Storage) Start() {
 					go func(id string, ls *serie, wg *sync.WaitGroup) {
 						defer wg.Done()
 
-						blkid, err := ls.stop()
+						blkid, err := ls.Stop()
 						if err != nil {
 							gblog.Error(
 								"unable to save serie",
@@ -171,12 +165,42 @@ func (s *Storage) ListSeries() []Meta {
 	return m
 }
 
+func (s *Storage) Cleanup(metas []Meta) {
+	now := time.Now().Unix()
+	for _, serie := range metas {
+		delta := now - serie.LastCheck
+		if delta > s.saveInterval {
+			// we need a way to persist ts older than 2h
+			// after 26h the serie must be out of memory
+			s.updateLastCheck(&serie)
+			if s.getSerie(serie.KSID, serie.TSID).Cleanup() {
+				s.deleteSerie(serie.KSID, serie.TSID)
+			}
+		}
+	}
+}
+
+func (s *Storage) ToDepot(metas []Meta) {
+	now := time.Now().Unix()
+
+	for _, serie := range s.ListSeries() {
+		delta := now - serie.LastCheck
+		if delta > s.saveInterval {
+			// we need a way to persist ts older than 2h
+			// after 26h the serie must be out of memory
+			s.updateLastCheck(&serie)
+			if s.getSerie(serie.KSID, serie.TSID).toDepot() {
+				s.deleteSerie(serie.KSID, serie.TSID)
+			}
+		}
+	}
+}
+
 func (s *Storage) updateLastCheck(serie *Meta) {
 
 	id := s.id(serie.KSID, serie.TSID)
 	s.localTS.mtx.Lock()
 	defer s.localTS.mtx.Unlock()
-
 	serie.LastCheck = time.Now().Unix()
 	s.localTS.tsmap[id] = *serie
 }
@@ -248,7 +272,7 @@ func (s *Storage) getSerie(ksid, tsid string) *serie {
 		s.localTS.tsmap[id] = Meta{
 			KSID:      ksid,
 			TSID:      tsid,
-			LastCheck: time.Now().Unix(),
+			LastCheck: time.Now().Unix() + rand.Int63n(s.saveInterval),
 		}
 		s.localTS.mtx.Unlock()
 

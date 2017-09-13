@@ -1,7 +1,9 @@
 package gorilla
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -206,7 +208,8 @@ func (t *serie) toDepot() bool {
 		zap.Int64("delta", delta),
 		zap.Bool("cleanup", cleanup),
 		zap.String("package", "gorilla"),
-		zap.String("func", "serie/toDepot"),
+		zap.String("struct", "serie"),
+		zap.String("func", "toDepot"),
 	)
 
 	var saving bool
@@ -246,7 +249,53 @@ func (t *serie) toDepot() bool {
 	return false
 }
 
-func (t *serie) stop() (int64, gobol.Error) {
+func (t *serie) Cleanup() bool {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
+	ksid := t.ksid
+	tsid := t.tsid
+	idx := t.index
+	lw := t.lastWrite
+	la := t.lastAccess
+	cleanup := t.cleanup
+
+	now := time.Now().Unix()
+
+	log := gblog.With(
+		zap.String("ksid", ksid),
+		zap.String("tsid", tsid),
+		zap.Int64("lastWrite", lw),
+		zap.Int64("lastAccess", la),
+		zap.Int("index", idx),
+		zap.Bool("cleanup", cleanup),
+		zap.String("package", "gorilla"),
+		zap.String("struct", "serie"),
+		zap.String("func", "Cleanup"),
+	)
+
+	if cleanup {
+		if now-la >= utils.Hour {
+			log.Info("cleanup serie")
+			for i := 0; i < utils.MaxBlocks; i++ {
+				if idx != i {
+					t.blocks[i] = nil
+				}
+			}
+			t.cleanup = false
+		}
+	}
+
+	if now-la >= utils.Hour && now-lw >= utils.Hour {
+		log.Info("serie must leave memory")
+		return true
+	}
+
+	return false
+
+}
+
+func (t *serie) Stop() (int64, gobol.Error) {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
 
@@ -510,8 +559,12 @@ func (t *serie) store(index int) gobol.Error {
 	t.mtxDepot.Lock()
 	defer t.mtxDepot.Unlock()
 
-	bktid := t.blocks[index].id
-	pts := t.blocks[index].GetPoints()
+	if t.blocks[index] == nil {
+		return errBasic("store", "unable to save nil block", http.StatusInternalServerError, errors.New("block is nil"))
+	}
+	blk := t.blocks[index]
+	bktid := blk.id
+	pts := blk.GetPoints()
 
 	if len(pts) >= headerSize {
 		log := gblog.With(
@@ -530,7 +583,7 @@ func (t *serie) store(index int) gobol.Error {
 			log.Error(err.Error(), zap.Error(err))
 			return err
 		}
-		t.blocks[index].ToDepot(false)
+		blk.ToDepot(false)
 
 		log.Debug("block persisted")
 	}

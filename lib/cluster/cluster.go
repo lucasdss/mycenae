@@ -121,6 +121,7 @@ func New(
 	clr.ch.Add(s)
 	clr.getNodes()
 	clr.checkCluster(ci)
+	clr.savePrefered()
 
 	return clr, nil
 }
@@ -538,5 +539,62 @@ func sortNodes(m map[string]int64) string {
 	}
 
 	return node
+
+}
+
+func (c *Cluster) savePrefered() {
+
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		for {
+			select {
+			case <-ticker.C:
+				// prefered
+				var pm []gorilla.Meta
+				// regular
+				var rm []gorilla.Meta
+				for _, m := range c.s.ListSeries() {
+					nodes, err := c.Classifier([]byte(m.TSID))
+					if err != nil {
+						logger.Error(
+							"",
+							zap.String("package", "cluster"),
+							zap.String("struct", "cluster"),
+							zap.String("func", "savePrefered"),
+							zap.Error(err),
+						)
+						return
+					}
+
+					if len(nodes) > 1 {
+						n0 := nodes[0]
+						n1 := nodes[1]
+
+						c.upMtx.RLock()
+						uptime0 := c.uptime[n0]
+						uptime1 := c.uptime[n1]
+						c.upMtx.RUnlock()
+
+						prefered := sortNodes(map[string]int64{n0: uptime0, n1: uptime1})
+
+						if prefered == c.self {
+							// send serie to depot
+							pm = append(pm, m)
+						} else {
+							rm = append(rm, m)
+						}
+					}
+				}
+
+				if len(pm) > 0 {
+					c.s.ToDepot(pm)
+				}
+				if len(rm) > 0 {
+					go c.s.Cleanup(rm)
+				}
+
+			}
+		}
+	}()
 
 }

@@ -37,6 +37,7 @@ type Settings struct {
 	CompactionStrategy         string
 	Meta                       *meta.Settings
 	MetaValidationTimeout      string
+	PersistInterval            int64
 	HTTPserver                 SettingsHTTP
 	UDPserver                  SettingsUDP
 	UDPserverV2                SettingsUDP

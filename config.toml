@@ -51,6 +51,11 @@ MaxConcurrentPoints = 1000
 
 CompactionStrategy = "TimeWindowCompactionStrategy"
 
+# time in seconds the series must be persisted
+PersistInterval  = 1800
+
+# timeout for meta validation accross the cluster
+MetaValidationTimeout = "5s"
 
 [meta]
 # Number, in bytes of bulk playload

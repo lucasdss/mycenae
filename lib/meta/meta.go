@@ -58,6 +58,12 @@ type savingObj struct {
 	mtx sync.RWMutex
 }
 
+func (so *savingObj) len() int {
+	so.mtx.RLock()
+	defer so.mtx.RUnlock()
+	return len(so.mm)
+}
+
 func (so *savingObj) get(ksts []byte) (*pb.Meta, bool) {
 	so.mtx.RLock()
 	defer so.mtx.RUnlock()
@@ -84,7 +90,7 @@ func (so *savingObj) iter() []string {
 	var count int
 	for k := range so.mm {
 		m = append(m, k)
-		if count > 1000 {
+		if count > 100 {
 			break
 		}
 		count++
@@ -147,7 +153,7 @@ func New(
 		zap.Int("MetaBufferSize", set.MetaBufferSize),
 	)
 
-	go m.metaCoordinator(d, hd)
+	m.metaCoordinator(d, hd)
 
 	return m, nil
 }
@@ -192,91 +198,104 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 		}
 	}()
 
-	ticker := time.NewTicker(saveInterval)
+	go func() {
+		ticker := time.NewTicker(saveInterval)
 
-	for {
-		select {
-		case <-ticker.C:
+		for {
+			select {
+			case <-ticker.C:
 
-			if meta.metaPayload.Len() != 0 {
+				if meta.metaPayload.Len() != 0 {
 
-				meta.concBulk <- struct{}{}
+					meta.concBulk <- struct{}{}
 
-				bulk := &bytes.Buffer{}
+					bulk := &bytes.Buffer{}
 
-				err := meta.readMeta(bulk)
-				if err != nil {
-					gblog.Error(
-						"",
-						zap.String("func", "metaCoordinator"),
-						zap.Error(err),
-					)
-					continue
+					err := meta.readMeta(bulk)
+					if err != nil {
+						gblog.Error(
+							"",
+							zap.String("func", "metaCoordinator"),
+							zap.Error(err),
+						)
+						continue
+					}
+
+					go meta.saveBulk(bulk)
+
+					if meta.sm.len() == 0 {
+						meta.metaPayload.Reset()
+					}
 				}
 
-				go meta.saveBulk(bulk)
+			case p := <-meta.metaPntChan:
 
-			}
-
-		case p := <-meta.metaPntChan:
-
-			gerr := meta.generateBulk(p, true)
-			if gerr != nil {
-				gblog.Error(
-					gerr.Error(),
-					zap.String("func", "metaCoordinator/SaveBulkES"),
-				)
-			}
-
-			if meta.metaPayload.Len() > meta.settings.MaxMetaBulkSize {
-
-				meta.concBulk <- struct{}{}
-
-				bulk := &bytes.Buffer{}
-
-				err := meta.readMeta(bulk)
-				if err != nil {
+				gerr := meta.generateBulk(p, true)
+				if gerr != nil {
 					gblog.Error(
-						"",
-						zap.String("func", "metaCoordinator"),
-						zap.Error(err),
+						gerr.Error(),
+						zap.String("func", "metaCoordinator/SaveBulkES"),
 					)
-					continue
 				}
 
-				go meta.saveBulk(bulk)
-			}
+				if meta.metaPayload.Len() > meta.settings.MaxMetaBulkSize {
 
-		case p := <-meta.metaTxtChan:
+					meta.concBulk <- struct{}{}
 
-			gerr := meta.generateBulk(p, false)
-			if gerr != nil {
-				gblog.Error(
-					gerr.Error(),
-					zap.String("func", "metaCoordinator/SaveBulkES"),
-				)
-			}
+					bulk := &bytes.Buffer{}
 
-			if meta.metaPayload.Len() > meta.settings.MaxMetaBulkSize {
+					err := meta.readMeta(bulk)
+					if err != nil {
+						gblog.Error(
+							"",
+							zap.String("func", "metaCoordinator"),
+							zap.Error(err),
+						)
+						continue
+					}
 
-				meta.concBulk <- struct{}{}
+					go meta.saveBulk(bulk)
 
-				bulk := &bytes.Buffer{}
-
-				err := meta.readMeta(bulk)
-				if err != nil {
-					gblog.Error(
-						"",
-						zap.String("func", "metaCoordinator"),
-						zap.Error(err),
-					)
-					continue
+					if meta.sm.len() == 0 {
+						meta.metaPayload.Reset()
+					}
 				}
 
-				go meta.saveBulk(bulk)
+			case p := <-meta.metaTxtChan:
+
+				gerr := meta.generateBulk(p, false)
+				if gerr != nil {
+					gblog.Error(
+						gerr.Error(),
+						zap.String("func", "metaCoordinator/SaveBulkES"),
+					)
+				}
+
+				if meta.metaPayload.Len() > meta.settings.MaxMetaBulkSize {
+
+					meta.concBulk <- struct{}{}
+
+					bulk := &bytes.Buffer{}
+
+					err := meta.readMeta(bulk)
+					if err != nil {
+						gblog.Error(
+							"",
+							zap.String("func", "metaCoordinator"),
+							zap.Error(err),
+						)
+						continue
+					}
+
+					go meta.saveBulk(bulk)
+
+					if meta.sm.len() == 0 {
+						meta.metaPayload.Reset()
+					}
+				}
 			}
 		}
-	}
+	}()
 }
 
 func (meta *Meta) readMeta(bulk *bytes.Buffer) error {
