@@ -123,7 +123,7 @@ func main() {
 		tsLogger.Fatal("", zap.Error(err))
 	}
 
-	strg := gorilla.New(tsLogger, tssts, d, w)
+	strg := gorilla.New(tsLogger, tssts, d, w, settings.PersistInterval)
 	strg.Start()
 
 	meta, err := meta.New(tsLogger, tssts, es, bc, settings.Meta)

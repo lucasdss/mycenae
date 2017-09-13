@@ -279,7 +279,8 @@ func (c *consul) Uptime(node string) (int64, error) {
 
 func (c *consul) setUptime(node string) gobol.Error {
 
-	uptime := strconv.FormatInt(time.Now().Unix(), 10)
+	uptime := strconv.FormatInt(time.Now().UnixNano(), 10)
+
 	data := bytes.NewBufferString(uptime)
 
 	url := fmt.Sprintf("%s/%s", c.uptimeAPI, node)

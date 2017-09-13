@@ -121,6 +121,7 @@ func New(
 	clr.ch.Add(s)
 	clr.getNodes()
 	clr.checkCluster(ci)
+	clr.savePrefered()
 
 	return clr, nil
 }
@@ -178,41 +179,64 @@ func (c *Cluster) Classifier(tsid []byte) ([]string, gobol.Error) {
 	return nodes, nil
 }
 
-func (c *Cluster) Write(nodeID string, pts []*pb.Point) gobol.Error {
+func (c *Cluster) Write(nodes []string, pts []*pb.Point) gobol.Error {
 
-	if nodeID == c.self {
-		go func() {
-			for _, p := range pts {
-				gerr := c.s.Write(p)
-				if gerr != nil {
-					logger.Error(
-						"unable to write locally",
-						zap.String("package", "cluster"),
-						zap.String("func", "Write"),
-						zap.Error(gerr),
-					)
-				}
-			}
-		}()
+	if len(nodes) > 1 {
+		n0 := nodes[0]
+		n1 := nodes[1]
 
-		return nil
+		c.upMtx.RLock()
+		uptime0 := c.uptime[n0]
+		uptime1 := c.uptime[n1]
+		c.upMtx.RUnlock()
+
+		prefered := sortNodes(map[string]int64{n0: uptime0, n1: uptime1})
+		if prefered == n1 {
+			nodes = []string{n1, n0}
+		}
+
 	}
 
-	c.nMutex.RLock()
-	node := c.nodes[nodeID]
-	c.nMutex.RUnlock()
+	for i, node := range nodes {
 
-	// Add WAL for future replay
-	if node != nil {
-		err := node.Write(pts)
-		if err != nil {
-			logger.Error(
-				"unable to write remotely",
-				zap.String("package", "cluster"),
-				zap.String("func", "Write"),
-				zap.String("node", nodeID),
-				zap.Error(err),
-			)
+		if node == c.self {
+			go func() {
+				for _, p := range pts {
+					gerr := c.s.Write(p)
+					if gerr != nil {
+						logger.Error(
+							"unable to write locally",
+							zap.String("package", "cluster"),
+							zap.String("func", "Write"),
+							zap.Error(gerr),
+						)
+					}
+				}
+			}()
+
+			continue
+		}
+
+		c.nMutex.RLock()
+		client := c.nodes[node]
+		c.nMutex.RUnlock()
+
+		// Add WAL for future replay
+		if client != nil {
+			if i > 0 {
+				go client.Write(pts)
+				continue
+			}
+			err := client.Write(pts)
+			if err != nil {
+				logger.Error(
+					"unable to write remotely",
+					zap.String("package", "cluster"),
+					zap.String("func", "Write"),
+					zap.String("node", node),
+					zap.Error(err),
+				)
+			}
 		}
 	}
 
@@ -353,16 +377,13 @@ func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) (<-chan *pb.MetaFound, e
 	node := c.nodes[nodeID]
 	c.nMutex.RUnlock()
 
-	logger.Debug(
-		"forwarding meta read",
-		zap.String("addr", node.Address()),
-		zap.Int("port", node.Port()),
-		zap.String("package", "cluster"),
-		zap.String("func", "Meta"),
-	)
+	if node != nil {
+		return node.Meta(metas)
+	}
 
-	return node.Meta(metas)
-
+	ch := make(chan *pb.MetaFound)
+	defer close(ch)
+	return ch, nil
 }
 
 func (c *Cluster) getNodes() {
@@ -518,5 +539,62 @@ func sortNodes(m map[string]int64) string {
 	}
 
 	return node
+
+}
+
+func (c *Cluster) savePrefered() {
+
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		for {
+			select {
+			case <-ticker.C:
+				// prefered
+				var pm []gorilla.Meta
+				// regular
+				var rm []gorilla.Meta
+				for _, m := range c.s.ListSeries() {
+					nodes, err := c.Classifier([]byte(m.TSID))
+					if err != nil {
+						logger.Error(
+							"",
+							zap.String("package", "cluster"),
+							zap.String("struct", "cluster"),
+							zap.String("func", "savePrefered"),
+							zap.Error(err),
+						)
+						return
+					}
+
+					if len(nodes) > 1 {
+						n0 := nodes[0]
+						n1 := nodes[1]
+
+						c.upMtx.RLock()
+						uptime0 := c.uptime[n0]
+						uptime1 := c.uptime[n1]
+						c.upMtx.RUnlock()
+
+						prefered := sortNodes(map[string]int64{n0: uptime0, n1: uptime1})
+
+						if prefered == c.self {
+							// send serie to depot
+							pm = append(pm, m)
+						} else {
+							rm = append(rm, m)
+						}
+					}
+				}
+
+				if len(pm) > 0 {
+					c.s.ToDepot(pm)
+				}
+				if len(rm) > 0 {
+					go c.s.Cleanup(rm)
+				}
+
+			}
+		}
+	}()
 
 }
