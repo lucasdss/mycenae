@@ -201,7 +201,8 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 				return
 			}
 
-			var np []byte
+			np := []byte(nodePoint[0])
+
 			if len(nodePoint) > 1 {
 
 				n0 := nodePoint[0]
