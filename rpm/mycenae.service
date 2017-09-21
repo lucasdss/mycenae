@@ -2,11 +2,13 @@
 Description=Mycenae timeseries database
 
 [Service]
-Type=simple
-ExecStart=/opt/mycenae/bin/mycenae -config=/etc/opt/mycenae/mycenae.toml
-KillMode=process
+WorkingDirectory=/usr/local/bin/
+Type=forking
+ExecStart=/bin/bash mycenaeStart.sh
+ExecStop=/bin/bash mycenaeStop.sh
 User=mycenae
 Group=mycenae
+KillMode=process
 
 [Install]
 Alias=mycenae.service
