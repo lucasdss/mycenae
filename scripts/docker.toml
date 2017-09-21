@@ -24,14 +24,17 @@ WriteConsisteny = [
 
 CompactionStrategy = "TimeWindowCompactionStrategy"
 
-# MaxKeyspaceWriteRequests is the max number of concurrent 
+# MaxKeyspaceWriteRequests is the max number of concurrent
 # timeseries being processed for each keyspace
 MaxKeyspaceWriteRequests  = 5
 
-# BurstKeyspaceWriteRequests is the max number of waitting 
+# BurstKeyspaceWriteRequests is the max number of waitting
 # timeseries to be processed for each keyspace.
 # Every request above this number will receive a http code 429.
 BurstKeyspaceWriteRequests = 20
+
+# time in seconds the series must be persisted
+PersistInterval = 1800
 
 # MaxConcurrentTimeseries CANNOT BE BIGGER THAN MaxConcurrentReads
 # Max number of concurrent timeseries being processed
@@ -43,12 +46,6 @@ MaxConcurrentReads = 100
 # Max number of timeseries allowed to be queried
 MaxTimeseries = 5000
 
-# time in seconds the series must be persisted
-PersistInterval  = 1800
-
-# timeout for meta validation accross the cluster
-MetaValidationTimeout = "15s"
-
 # Warning number of timeseries
 LogQueryTSthreshold = 1000
 
@@ -57,26 +54,19 @@ BoltPath = "/tmp/mycenae/cache.db"
 # Max number of concurrent points being processed
 MaxConcurrentPoints = 1000
 
-# Max number of concurrent bulk requests to elasticsearch
-MaxConcurrentBulks = 1
-
-# Number, in bytes of bulk playload
-MaxMetaBulkSize = 1000000
-
-# Number of points in buffer
-MetaBufferSize = 100000
-
-MetaSaveInterval = "1s"
 MaxRateLimit = 2000
 Burst = 10000
 
+# timeout for meta validation accross the cluster
+MetaValidationTimeout = "15s"
+
 [meta]
-  # Number, in bytes of bulk playload
-  MaxMetaBulkSize = 1000000
-  # Max number of concurrent bulk requests to elasticsearch
-  MaxConcurrentBulks = 1
-  # Max number of concurrent points being processed
-  MaxConcurrentPoints = 1000
+ # Number, in bytes of bulk playload
+ MaxMetaBulkSize = 1000000
+ # Max number of concurrent bulk requests to elasticsearch
+ MaxConcurrentBulks = 1
+ # Max number of concurrent points being processed
+ MaxConcurrentPoints = 1000
   # Number of points in buffer
   MetaBufferSize = 100000
   MetaSaveInterval = "1s"
@@ -90,6 +80,7 @@ Burst = 10000
   grpcMaxServerConn = 3000
   grpcBurstServerConn = 3000
   MaxListenerConn = 10240
+  LogPath = "/tmp/mycenae/replay"
   [cluster.consul]
     address = "localhost"
     protocol = "http"
@@ -100,7 +91,6 @@ Burst = 10000
     service = "mycenae"
     tag = "http"
     token = "866239fd-5129-92d2-4a09-3e7355f7bf38"
-
 
 [Depot]
   MaxConcurrent = 10000
@@ -121,14 +111,13 @@ Burst = 10000
 [WAL]
   CheckPointInterval = "10s"
   CleanupInterval = "1h"
-	SyncInterval = "1s"
+  SyncInterval = "1s"
 
-  MaxBufferSize = 10000	
+  MaxBufferSize = 10000
   MaxConcWrite  = 4
 
-	CheckPointPath = "/tmp/mycenae/wal"
+  CheckPointPath = "/tmp/mycenae/wal"
   PathWAL = "/tmp/mycenae/wal"
-
 
 [TTL]
   max = 90
@@ -150,24 +139,6 @@ Burst = 10000
   logLevel = "DEBUG"
   environment = "PROD"
 
-[logs.general.file]
-  writeTo = true
-  [logs.general.file.settings]
-    symlink = true
-    logLevel = "DEBUG"
-    rotationPeriod = "daily"
-    timeFormat = "2006-01-02_15:04:03"
-    path = "/tmp/mycenae/mycenae.log"
-
-[logs.stats.file]
-  writeTo = true
-  [logs.stats.file.settings]
-    symlink = true
-    logLevel = "DEBUG"
-    rotationPeriod = "daily"
-    timeFormat = "2006-01-02_15:04:03"
-    path = "/tmp/mycenae/mycenae-stats.log"
-
 [stats]
   address = "0.0.0.0"
   port = "4243"
@@ -188,3 +159,4 @@ Burst = 10000
     type = "weighted"
     seed = "ELASTIC_HOST:9200"
     timeout = 15
+    limit = 4096
