@@ -4,7 +4,7 @@
 %define binaryname mycenae
 %define projectname mycenae
 Name:      %{projectname}
-Version:   2.2.build_time
+Version:   3.0.build_time
 Release:   1
 
 Packager:  UOL - Universo Online S.A.
@@ -50,6 +50,8 @@ install -m 755 -d "%{buildroot}"/lib/systemd/system
 install -m 755 ${buildtmp}/rpm/%{projectname}.service "%{buildroot}"/lib/systemd/system/%{projectname}.service
 install -m 755 -d "%{buildroot}"/var/run/%{projectname}
 install -m 755 -d "%{buildroot}"/var/lib/%{projectname}
+install -m 755 ${buildtmp}/rpm/%{binaryname}Start.sh "%{buildroot}"/usr/local/bin
+install -m 755 ${buildtmp}/rpm/%{binaryname}Stop.sh "%{buildroot}"/usr/local/bin
 
 #------------------------------------------------------------------------------
 # P R E - I N S T A L L  S C R I P T
@@ -110,6 +112,8 @@ fi
 %attr(0755, root, root) /lib/systemd/system/%{projectname}.service
 %dir /var/lib/%{projectname}
 %attr(0755, %{binaryname}, %{binaryname}) /var/lib/%{projectname}
+%attr(0755, root, root) /usr/local/bin/%{binaryname}Start.sh
+%attr(0755, root, root) /usr/local/bin/%{binaryname}Stop.sh
 
 #------------------------------------------------------------------------------
 # C H A N G E L O G
