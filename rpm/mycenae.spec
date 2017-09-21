@@ -50,6 +50,7 @@ install -m 755 -d "%{buildroot}"/lib/systemd/system
 install -m 755 ${buildtmp}/rpm/%{projectname}.service "%{buildroot}"/lib/systemd/system/%{projectname}.service
 install -m 755 -d "%{buildroot}"/var/run/%{projectname}
 install -m 755 -d "%{buildroot}"/var/lib/%{projectname}
+install -m 755 -d "%{buildroot}"/usr/local/bin
 install -m 755 ${buildtmp}/rpm/%{binaryname}Start.sh "%{buildroot}"/usr/local/bin
 install -m 755 ${buildtmp}/rpm/%{binaryname}Stop.sh "%{buildroot}"/usr/local/bin
 
