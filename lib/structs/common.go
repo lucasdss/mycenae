@@ -31,6 +31,7 @@ type Settings struct {
 	BurstKeyspaceWriteRequests int
 	MaxConcurrentReads         int
 	MaxConcurrentPoints        int
+	MaxConcurrentUDPPoints     int
 	LogQueryTSthreshold        int
 	MaxRateLimit               int
 	Burst                      int

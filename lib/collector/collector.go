@@ -46,10 +46,15 @@ func New(
 	wLimiter *limiter.RateLimit,
 ) (*Collector, error) {
 
-	gblog = log
+	gblog = log.With(zap.String("package", "collector"))
 	stats = sts
 
 	metaValidationTimeout, err := time.ParseDuration(set.MetaValidationTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	udpLimiter, err := limiter.New(set.MaxConcurrentUDPPoints, set.MaxConcurrentPoints, log)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +75,7 @@ func New(
 		metas:                 make(map[string][]*pb.Meta),
 		limiter:               ksLimiter{limite: make(map[string]*limiter.RateLimit)},
 		metaValidationTimeout: metaValidationTimeout,
+		udpLimiter:            udpLimiter,
 	}
 
 	return collect, nil
@@ -91,6 +97,7 @@ type Collector struct {
 	saving                 int64
 	shutdown               bool
 	wLimiter               *limiter.RateLimit
+	udpLimiter             *limiter.RateLimit
 	limiter                ksLimiter
 	metas                  map[string][]*pb.Meta
 	mtxMetas               sync.RWMutex
@@ -153,6 +160,45 @@ func (collect *Collector) Stop() {
 			return
 		}
 	}
+}
+
+func (collect *Collector) HandlePointUDP(point gorilla.TSDBpoint) gobol.Error {
+
+	start := time.Now()
+	ks := "invalid"
+	defer statsProcTime(ks, time.Since(start))
+
+	if collect.isKSIDValid(point.Tags["ksid"]) {
+		ks = point.Tags["ksid"]
+	}
+
+	packet := &pb.Point{}
+	m := &pb.Meta{}
+
+	gerr := collect.makePoint(packet, m, &point)
+	if gerr != nil {
+		statsUDPerror(ks, "number")
+		return gerr
+	}
+
+	nodePoint, gerr := collect.cluster.Classifier([]byte(packet.GetTsid()))
+	if gerr != nil {
+		statsUDPerror(ks, "number")
+		return gerr
+	}
+
+	nodeMeta, gerr := collect.cluster.MetaClassifier([]byte(m.GetKsid()))
+	if gerr != nil {
+		statsUDPerror(ks, "number")
+		return gerr
+	}
+
+	//atomic.AddInt64(&collect.receivedSinceLastProbe, 1)
+	statsUDP(ks, "number")
+	collect.cluster.Write(nodePoint, []*pb.Point{packet})
+	collect.metaHandler(nodeMeta, []*pb.Meta{m})
+
+	return nil
 }
 
 func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, gobol.Error) {
@@ -229,7 +275,7 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 			mtx.Lock()
 			keyspaces[ks] = nil
 			pts[string(np)] = append(pts[string(np)], packet)
-			if !collect.boltc.Get(utils.KSTS(m.GetKsid(), m.GetTsid())) {
+			if !collect.boltc.Get(string(utils.KSTS(m.GetKsid(), m.GetTsid()))) {
 				metas[nodeMeta] = append(metas[nodeMeta], m)
 			}
 			mtx.Unlock()
@@ -320,42 +366,28 @@ func (collect *Collector) metaHandler(nodeID string, metas []*pb.Meta) {
 		return
 	}
 
+	gblog.Debug(
+		"processing meta using gRPC",
+		zap.String("struct", "CollectorV2"),
+		zap.String("func", "metaHandler"),
+		zap.String("node", nodeID),
+		zap.Int("count", len(metas)),
+	)
+
+	err := collect.cluster.Meta(nodeID, metas)
+	if err != nil {
+		gblog.Error(
+			err.Error(),
+			zap.String("struct", "CollectorV2"),
+			zap.String("func", "metaHandler"),
+			zap.Error(err),
+		)
+		return
+	}
+
 	for _, m := range metas {
-		ksts := utils.KSTS(m.GetKsid(), m.GetTsid())
-		if !collect.boltc.Get(ksts) {
-
-			gblog.Debug(
-				"processing meta using gRPC",
-				zap.String("struct", "CollectorV2"),
-				zap.String("func", "metaHandler"),
-				zap.String("node", nodeID),
-				zap.Int("count", len(metas)),
-			)
-
-			ch, err := collect.cluster.Meta(nodeID, metas)
-			if err != nil {
-				gblog.Error(
-					err.Error(),
-					zap.String("struct", "CollectorV2"),
-					zap.String("func", "metaHandler"),
-					zap.Error(err),
-				)
-				break
-			}
-			for mf := range ch {
-				if mf.GetOk() {
-					if gerr := collect.boltc.Set(mf.GetKsts()); gerr != nil {
-						gblog.Error(
-							gerr.Error(),
-							zap.String("struct", "CollectorV2"),
-							zap.String("func", "HandlePoint"),
-							zap.Error(gerr),
-						)
-						continue
-					}
-				}
-			}
-		}
+		ksts := string(utils.KSTS(m.GetKsid(), m.GetTsid()))
+		collect.boltc.Set(ksts)
 	}
 
 }

@@ -116,28 +116,21 @@ func (bc *Bcache) GetTsText(key string, CheckTSID func(esType, id string) (bool,
 	return bc.getTSID("metatext", "text", key, CheckTSID)
 }
 
-func (bc *Bcache) Get(ksts []byte) bool {
+func (bc *Bcache) Get(ksts string) bool {
 
 	bc.tsmtx.Lock()
-	_, ok := bc.tsmap.Get(string(ksts))
+	_, ok := bc.tsmap.Get(ksts)
 	bc.tsmtx.Unlock()
 
 	return ok
 
 }
 
-func (bc *Bcache) Set(key string) gobol.Error {
-
-	gerr := bc.persist.Put([]byte("number"), []byte(key), []byte{})
-	if gerr != nil {
-		return gerr
-	}
+func (bc *Bcache) Set(key string) {
 
 	bc.tsmtx.Lock()
 	bc.tsmap.Add(key, nil)
 	bc.tsmtx.Unlock()
-
-	return nil
 
 }
 
@@ -151,37 +144,34 @@ func (bc *Bcache) getTSID(esType, bucket, key string, CheckTSID func(esType, id 
 		return true, nil
 	}
 
-	go func() {
-		v, gerr := bc.persist.Get([]byte(bucket), []byte(key))
-		if gerr != nil {
-			return
-		}
-		if v != nil {
-			bc.tsmtx.Lock()
-			bc.tsmap.Add(key, nil)
-			bc.tsmtx.Unlock()
-
-			return
-		}
-
-		found, gerr := CheckTSID(esType, key)
-		if gerr != nil {
-			return
-		}
-		if !found {
-			return
-		}
-
-		gerr = bc.persist.Put([]byte(bucket), []byte(key), []byte{})
-		if gerr != nil {
-			return
-		}
-
+	v, gerr := bc.persist.Get([]byte(bucket), []byte(key))
+	if gerr != nil {
+		return false, gerr
+	}
+	if v != nil {
 		bc.tsmtx.Lock()
 		bc.tsmap.Add(key, nil)
 		bc.tsmtx.Unlock()
-		return
-	}()
 
-	return false, nil
+		return true, nil
+	}
+
+	found, gerr := CheckTSID(esType, key)
+	if gerr != nil {
+		return false, gerr
+	}
+	if !found {
+		return false, nil
+	}
+
+	gerr = bc.persist.Put([]byte(bucket), []byte(key), []byte{})
+	if gerr != nil {
+		return false, gerr
+	}
+
+	bc.tsmtx.Lock()
+	bc.tsmap.Add(key, nil)
+	bc.tsmtx.Unlock()
+	return true, nil
+
 }

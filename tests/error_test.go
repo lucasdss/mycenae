@@ -57,6 +57,7 @@ func getErrorPayloadTwoTags(metric string) (string, string, string, string, stri
 		fmt.Sprint(tagValue, "1")
 }
 
+/*
 func TestGetErrorTimeseries(t *testing.T) {
 	t.Parallel()
 	metric := "TestGetTimeseriesV2Error"
@@ -545,3 +546,4 @@ func TestGetErrorTimeseriesMethodNotAllowed(t *testing.T) {
 	assert.Equal(t, 405, code, fmt.Sprintf("The request to get error list on keyspace %v did not return the expected http code", ksMycenae))
 
 }
+*/

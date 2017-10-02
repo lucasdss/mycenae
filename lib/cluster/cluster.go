@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -179,7 +180,7 @@ func (c *Cluster) Classifier(tsid []byte) ([]string, gobol.Error) {
 	return nodes, nil
 }
 
-func (c *Cluster) Write(nodes []string, pts []*pb.Point) gobol.Error {
+func (c *Cluster) Write(nodes []string, pts []*pb.Point) {
 
 	if len(nodes) > 1 {
 		n0 := nodes[0]
@@ -194,7 +195,6 @@ func (c *Cluster) Write(nodes []string, pts []*pb.Point) gobol.Error {
 		if prefered == n1 {
 			nodes = []string{n1, n0}
 		}
-
 	}
 
 	for i, node := range nodes {
@@ -240,7 +240,6 @@ func (c *Cluster) Write(nodes []string, pts []*pb.Point) gobol.Error {
 		}
 	}
 
-	return nil
 }
 
 func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error) {
@@ -371,7 +370,7 @@ func (c *Cluster) SelfID() string {
 	return c.self
 }
 
-func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
+func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) error {
 
 	c.nMutex.RLock()
 	node := c.nodes[nodeID]
@@ -381,9 +380,7 @@ func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) (<-chan *pb.MetaFound, e
 		return node.Meta(metas)
 	}
 
-	ch := make(chan *pb.MetaFound)
-	defer close(ch)
-	return ch, nil
+	return fmt.Errorf("node %s not found", nodeID)
 }
 
 func (c *Cluster) getNodes() {
