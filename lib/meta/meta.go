@@ -27,7 +27,7 @@ var (
 )
 
 type MetaData interface {
-	Handle(pkt *pb.Meta) bool
+	Handle(pkt *pb.Meta)
 	SaveTxtMeta(packet *pb.Meta)
 	CheckTSID(esType, id string) (bool, gobol.Error)
 }
@@ -274,17 +274,15 @@ func (meta *Meta) readMeta(bulk *bytes.Buffer) error {
 	return nil
 }
 
-func (meta *Meta) Handle(pkt *pb.Meta) bool {
+func (meta *Meta) Handle(pkt *pb.Meta) {
 
 	ksts := string(utils.KSTS(pkt.GetKsid(), pkt.GetTsid()))
 	if meta.boltc.Get(ksts) {
-		return true
+		return
 	}
 
 	meta.boltc.Set(ksts)
 	meta.metaPntChan <- pkt
-
-	return true
 }
 
 func (meta *Meta) SaveTxtMeta(packet *pb.Meta) {

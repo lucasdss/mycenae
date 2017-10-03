@@ -59,6 +59,7 @@ func main() {
 		log.Fatal("ERROR - Starting logger: ", err)
 	}
 	tsLogger = tsLogger.WithOptions(zap.AddStacktrace(zap.PanicLevel))
+	tsLogger = tsLogger.With(zap.String("app", "mycenae"))
 
 	go func() {
 		log.Println(http.ListenAndServe("0.0.0.0:6666", nil))

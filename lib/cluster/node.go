@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/prometheus/common/log"
 	"github.com/uol/gobol"
 	pb "github.com/uol/mycenae/lib/proto"
 	"github.com/uol/mycenae/lib/utils"
@@ -221,7 +222,8 @@ func (n *node) Meta(metas []*pb.Meta) error {
 		logger.Error(
 			"meta request limit",
 			zap.String("package", "cluster"),
-			zap.String("func", "node/meta"),
+			zap.String("struct", "node"),
+			zap.String("func", "Meta"),
 			zap.Error(err),
 		)
 		return err
@@ -232,7 +234,8 @@ func (n *node) Meta(metas []*pb.Meta) error {
 		logger.Error(
 			"meta gRPC problem",
 			zap.String("package", "cluster"),
-			zap.String("func", "node/meta"),
+			zap.String("struct", "node"),
+			zap.String("func", "Meta"),
 			zap.Error(err),
 		)
 		return err
@@ -249,7 +252,8 @@ func (n *node) Meta(metas []*pb.Meta) error {
 		}
 	}
 
-	err = stream.CloseSend()
+	log.Debug("all meta send", zap.Int("count", len(metas)))
+	_, err = stream.CloseAndRecv()
 	if err != nil {
 		logger.Error(
 			"meta gRPC CloseSend problem",

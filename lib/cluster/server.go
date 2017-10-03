@@ -212,7 +212,8 @@ func (s *server) Read(q *pb.Query, stream pb.Timeseries_ReadServer) error {
 
 	log := logger.With(
 		zap.String("package", "cluster"),
-		zap.String("func", "server/Read"),
+		zap.String("struct", "server"),
+		zap.String("func", "Read"),
 		zap.String("ksid", q.GetKsid()),
 		zap.String("tsid", q.GetTsid()),
 		zap.Int64("start", q.GetStart()),
@@ -220,10 +221,11 @@ func (s *server) Read(q *pb.Query, stream pb.Timeseries_ReadServer) error {
 	)
 
 	ctx := stream.Context()
-	_, ok := ctx.Deadline()
+	d, ok := ctx.Deadline()
 	if !ok {
 		return errors.New("missing ctx with timeout")
 	}
+	log = log.With(zap.Time("deadline", d))
 
 	cErr := make(chan error, 1)
 	cPts := make(chan []*pb.Point, 1)
@@ -282,33 +284,26 @@ func (s *server) WriteMeta(stream pb.Timeseries_WriteMetaServer) error {
 	}
 	log = log.With(zap.Time("deadline", d))
 
-	c := make(chan error, 1)
+	var c int
+	for {
+		m, err := stream.Recv()
+		if err == io.EOF {
+			return stream.SendAndClose(&pb.MetaFound{})
+		}
+		if err != nil {
+			log.Error(err.Error())
+			return err
+		}
+		c++
 
-	go func() {
-		defer close(c)
-
-		for {
-			m, err := stream.Recv()
-			if err == io.EOF {
-				c <- nil
-				return
-			}
-			if err != nil {
-				c <- err
-				return
-			}
+		select {
+		case <-ctx.Done():
+			log.Debug("finished", zap.Error(ctx.Err()))
+			return ctx.Err()
+		default:
 			go s.meta.Handle(m)
 		}
-	}()
-
-	select {
-	case err := <-c:
-		//log.Error(err.Error(), zap.Error(err))
-		return err
-
-	case <-ctx.Done():
-		//log.Error("grpc communication problem/timeout", zap.Error(ctx.Err()))
-		return ctx.Err()
+		log.Debug("meta received", zap.Int("count", c))
 	}
 
 }
@@ -354,23 +349,17 @@ func serverInterceptor(
 ) error {
 
 	start := time.Now()
+	defer statsProcTime(info.FullMethod, time.Since(start))
+
 	err := handler(srv, ss)
 	status, ok := status.FromError(err)
 	if !ok {
 		return err
 	}
-
 	statsProcCount(info.FullMethod, strconv.Itoa(int(status.Code())))
 	if err != nil {
-		logger.Error(
-			"invoke grpc server",
-			zap.String("method", info.FullMethod),
-			zap.Duration("duration", time.Since(start)),
-			zap.Error(err),
-		)
 		return err
 	}
-	statsProcTime(info.FullMethod, time.Since(start))
 
 	return nil
 }
