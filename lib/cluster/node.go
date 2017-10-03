@@ -44,9 +44,28 @@ type node struct {
 	rLimiter *rate.Limiter
 	mLimiter *rate.Limiter
 	wal      *wal.WAL
+
+	wTimeout time.Duration
+	rTimeout time.Duration
+	mTimeout time.Duration
 }
 
 func newNode(address string, port int, conf *Config) (Client, gobol.Error) {
+
+	wTimeout, err := time.ParseDuration(conf.GrpcWriteTimeout)
+	if err != nil {
+		return nil, errInit("New", err)
+	}
+
+	rTimeout, err := time.ParseDuration(conf.GrpcReadTimeout)
+	if err != nil {
+		return nil, errInit("New", err)
+	}
+
+	mTimeout, err := time.ParseDuration(conf.GrpcMetaTimeout)
+	if err != nil {
+		return nil, errInit("New", err)
+	}
 
 	//cred, err := newClientTLSFromFile(conf.Consul.CA, conf.Consul.Cert, conf.Consul.Key, "*")
 	/*
@@ -98,6 +117,9 @@ func newNode(address string, port int, conf *Config) (Client, gobol.Error) {
 		mLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
 		client:   pb.NewTimeseriesClient(conn),
 		wal:      w,
+		wTimeout: wTimeout,
+		rTimeout: rTimeout,
+		mTimeout: mTimeout,
 	}
 
 	node.replay()
@@ -167,7 +189,7 @@ func (n *node) writePoints(timeout time.Duration, pts []*pb.Point) error {
 
 func (n *node) Write(pts []*pb.Point) error {
 
-	err := n.writePoints(n.conf.gRPCtimeout, pts)
+	err := n.writePoints(n.wTimeout, pts)
 	if err != nil {
 		logger.Error(
 			"sending points to replay log",
@@ -185,16 +207,16 @@ func (n *node) Write(pts []*pb.Point) error {
 
 func (n *node) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), n.rTimeout)
 	defer cancel()
 
 	if err := n.rLimiter.Wait(ctx); err != nil {
-		return []*pb.Point{}, errRequest("node/read", http.StatusInternalServerError, err)
+		return []*pb.Point{}, errRequest("node/Read", http.StatusInternalServerError, err)
 	}
 
 	stream, err := n.client.Read(ctx, &pb.Query{Ksid: ksid, Tsid: tsid, Start: start, End: end})
 	if err != nil {
-		return []*pb.Point{}, errRequest("node/read", http.StatusInternalServerError, err)
+		return []*pb.Point{}, errRequest("node/Read", http.StatusInternalServerError, err)
 	}
 
 	var pts []*pb.Point
@@ -205,7 +227,14 @@ func (n *node) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Err
 			return pts, nil
 		}
 		if err != nil {
-			return pts, errRequest("node/write", http.StatusInternalServerError, err)
+			logger.Error(
+				"reading points problem",
+				zap.String("package", "cluster"),
+				zap.String("struct", "node"),
+				zap.String("func", "Read"),
+				zap.Error(err),
+			)
+			return pts, errRequest("node/Read", http.StatusInternalServerError, err)
 		}
 
 		pts = append(pts, p)
@@ -215,7 +244,7 @@ func (n *node) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Err
 
 func (n *node) Meta(metas []*pb.Meta) error {
 
-	ctx, cancel := context.WithTimeout(context.Background(), n.conf.gRPCtimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), n.mTimeout)
 	defer cancel()
 
 	if err := n.mLimiter.Wait(ctx); err != nil {

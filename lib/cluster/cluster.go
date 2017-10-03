@@ -31,8 +31,9 @@ type Config struct {
 	//Time, in seconds, to wait before applying cluster changes to consistency hashing
 	ApplyWait int64
 
-	GrpcTimeout         string
-	gRPCtimeout         time.Duration
+	GrpcWriteTimeout    string
+	GrpcReadTimeout     string
+	GrpcMetaTimeout     string
 	GrpcMaxServerConn   int64
 	GrpcBurstServerConn int
 	MaxListenerConn     int
@@ -64,14 +65,6 @@ func New(
 		log.Error("", zap.Error(err))
 		return nil, errInit("New", err)
 	}
-
-	gRPCtimeout, err := time.ParseDuration(conf.GrpcTimeout)
-	if err != nil {
-		log.Error("", zap.Error(err))
-		return nil, errInit("New", err)
-	}
-
-	conf.gRPCtimeout = gRPCtimeout
 
 	c, gerr := newConsul(conf.Consul)
 	if gerr != nil {
@@ -311,7 +304,7 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 
 		pts, gerr = n.Read(ksid, tsid, start, end)
 		if gerr != nil {
-			log.Error(gerr.Error(), zap.Error(gerr))
+			log.Error(gerr.Message(), zap.Error(gerr))
 			continue
 		}
 

@@ -14,11 +14,11 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/uol/mycenae/lib/gorilla"
+	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
-	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -37,10 +37,9 @@ type server struct {
 	storage    gorilla.Gorilla
 	meta       meta.MetaData
 	grpcServer *grpc.Server
-	wLimiter   *rate.Limiter
-	rLimiter   *rate.Limiter
-	mLimiter   *rate.Limiter
-	limiter    *rate.Limiter
+	wLimiter   *limiter.RateLimit
+	rLimiter   *limiter.RateLimit
+	mLimiter   *limiter.RateLimit
 }
 
 type workerMsg struct {
@@ -50,13 +49,26 @@ type workerMsg struct {
 
 func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (GrpcServer, error) {
 
+	w, gerr := limiter.New(int(conf.GrpcMaxServerConn/10)*8, int(conf.GrpcBurstServerConn/10)*8, logger)
+	if gerr != nil {
+		return nil, gerr
+	}
+	r, gerr := limiter.New(int(conf.GrpcMaxServerConn/10), int(conf.GrpcBurstServerConn/10), logger)
+	if gerr != nil {
+		return nil, gerr
+	}
+
+	ml, gerr := limiter.New(int(conf.GrpcMaxServerConn/10), int(conf.GrpcBurstServerConn/10), logger)
+	if gerr != nil {
+		return nil, gerr
+	}
+
 	s := &server{
 		storage:  strg,
 		meta:     m,
-		wLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.8, conf.GrpcBurstServerConn),
-		rLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
-		mLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
-		limiter:  rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn), conf.GrpcBurstServerConn),
+		wLimiter: w,
+		rLimiter: r,
+		mLimiter: ml,
 	}
 
 	go func(s *server, conf *Config) {
@@ -93,16 +105,17 @@ func (s *server) connect(conf *Config) (*grpc.Server, net.Listener, error) {
 	}
 	lis = netutil.LimitListener(lis, conf.MaxListenerConn)
 
-	logger.Debug(
-		"loading server keys",
-		zap.String("cert", conf.Consul.Cert),
-		zap.String("key", conf.Consul.Key),
-	)
 	/*
-		c, err := credentials.NewServerTLSFromFile(conf.Consul.Cert, conf.Consul.Key)
-		if err != nil {
-			return nil, nil, err
-		}
+
+		logger.Debug(
+			"loading server keys",
+			zap.String("cert", conf.Consul.Cert),
+			zap.String("key", conf.Consul.Key),
+		)
+			c, err := credentials.NewServerTLSFromFile(conf.Consul.Cert, conf.Consul.Key)
+			if err != nil {
+				return nil, nil, err
+			}
 	*/
 
 	maxStream := uint32(conf.GrpcBurstServerConn) + uint32(conf.GrpcMaxServerConn)
@@ -122,7 +135,7 @@ func (s *server) connect(conf *Config) (*grpc.Server, net.Listener, error) {
 
 func (s *server) rateLimiter(ctx context.Context, info *tap.Info) (context.Context, error) {
 
-	var limiter *rate.Limiter
+	var limiter *limiter.RateLimit
 	switch info.FullMethodName {
 	case "/proto.Timeseries/Write":
 		limiter = s.wLimiter
@@ -131,11 +144,18 @@ func (s *server) rateLimiter(ctx context.Context, info *tap.Info) (context.Conte
 	case "/proto.Timeseries/WriteMeta":
 		limiter = s.mLimiter
 	default:
-		limiter = s.limiter
+		limiter = s.wLimiter
 	}
 
-	if !limiter.Allow() {
-		return nil, errors.New("too many requests, grpc server busy")
+	if err := limiter.Reserve(); err != nil {
+		logger.Error(
+			err.Message(),
+			zap.Error(err),
+			zap.String("package", "cluster"),
+			zap.String("struct", "server"),
+			zap.String("func", "rateLimiter"),
+		)
+		return nil, err
 	}
 
 	return ctx, nil
