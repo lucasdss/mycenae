@@ -11,6 +11,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rip"
+	"go.uber.org/zap"
 
 	"github.com/uol/mycenae/lib/parser"
 	"github.com/uol/mycenae/lib/structs"
@@ -340,7 +341,13 @@ func (plot *Plot) getTimeseries(
 
 		if total > plot.LogQueryThreshold {
 			statsQueryThreshold(keyspace)
-			gblog.Sugar().Warnf("TS THRESHOLD EXEECED: %+v", query)
+			gblog.Warn(
+				"ts threshold exeeced",
+				zap.String("package", "plot"),
+				zap.String("struct", "Plot"),
+				zap.String("func", "getTimeseries"),
+				zap.Any("query", query),
+			)
 		}
 
 		if total > plot.MaxTimeseries {

@@ -13,7 +13,6 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/prometheus/common/log"
 	"github.com/uol/gobol"
 	pb "github.com/uol/mycenae/lib/proto"
 	"github.com/uol/mycenae/lib/utils"
@@ -281,7 +280,7 @@ func (n *node) Meta(metas []*pb.Meta) error {
 		}
 	}
 
-	log.Debug("all meta send", zap.Int("count", len(metas)))
+	logger.Debug("all meta send", zap.Int("count", len(metas)))
 	_, err = stream.CloseAndRecv()
 	if err != nil {
 		logger.Error(
@@ -409,7 +408,7 @@ func (n *node) replay() int {
 			continue
 		}
 
-		logger.Debug(
+		log.Debug(
 			"points replayed",
 			zap.Int("count", len(pts)),
 			zap.String("logfile", segmentFile),
@@ -421,7 +420,7 @@ func (n *node) replay() int {
 
 		err = n.wal.Remove([]string{segmentFile})
 		if err != nil {
-			logger.Error(
+			log.Error(
 				"removing replay log",
 				zap.String("package", "cluster"),
 				zap.String("struct", "node"),
