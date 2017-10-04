@@ -11,7 +11,10 @@ func newBolt(path string) (*persistence, gobol.Error) {
 
 	var err error
 
-	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 5 * time.Second})
+	db, err := bolt.Open(path, 0600, &bolt.Options{
+		Timeout:         time.Second,
+		InitialMmapSize: 1e+8,
+	})
 	if err != nil {
 		return nil, errPersist("New", err)
 	}

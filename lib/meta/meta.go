@@ -7,7 +7,6 @@ import (
 	"io"
 	"regexp"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -28,7 +27,7 @@ var (
 )
 
 type MetaData interface {
-	Handle(pkt *pb.Meta) bool
+	Handle(pkt *pb.Meta)
 	SaveTxtMeta(packet *pb.Meta)
 	CheckTSID(esType, id string) (bool, gobol.Error)
 }
@@ -45,59 +44,15 @@ type Meta struct {
 	metaTxtChan chan *pb.Meta
 	metaPayload *bytes.Buffer
 
-	sm *savingObj
+	metas []*pb.Meta
 
 	receivedSinceLastProbe int64
 	errorsSinceLastProbe   int64
 	saving                 int64
 	shutdown               bool
-}
-
-type savingObj struct {
-	mm  map[string]*pb.Meta
-	mtx sync.RWMutex
-}
-
-func (so *savingObj) len() int {
-	so.mtx.RLock()
-	defer so.mtx.RUnlock()
-	return len(so.mm)
-}
-
-func (so *savingObj) get(ksts []byte) (*pb.Meta, bool) {
-	so.mtx.RLock()
-	defer so.mtx.RUnlock()
-	v, ok := so.mm[string(ksts)]
-	return v, ok
-}
-
-func (so *savingObj) add(ksts []byte, m *pb.Meta) {
-	so.mtx.Lock()
-	defer so.mtx.Unlock()
-	so.mm[string(ksts)] = nil
-}
-
-func (so *savingObj) del(key string) {
-	so.mtx.Lock()
-	defer so.mtx.Unlock()
-	delete(so.mm, key)
-}
-
-func (so *savingObj) iter() []string {
-	var m []string
-
-	so.mtx.RLock()
-	var count int
-	for k := range so.mm {
-		m = append(m, k)
-		if count > 100 {
-			break
-		}
-		count++
-	}
-	so.mtx.RUnlock()
-
-	return m
+	headInterval           time.Duration
+	maxHead                int
+	concHead               chan struct{}
 }
 
 type Settings struct {
@@ -141,7 +96,10 @@ func New(
 		persist: persistence{
 			esearch: es,
 		},
-		sm: &savingObj{mm: make(map[string]*pb.Meta)},
+		metas:        []*pb.Meta{},
+		headInterval: hd,
+		maxHead:      10 * set.MaxConcurrentBulks,
+		concHead:     make(chan struct{}, 10*set.MaxConcurrentBulks),
 	}
 
 	gblog.Debug(
@@ -159,44 +117,6 @@ func New(
 }
 
 func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.Duration) {
-
-	go func() {
-		ticker := time.NewTicker(saveInterval)
-		for {
-			select {
-			case <-ticker.C:
-				for _, ksts := range meta.sm.iter() {
-					//found, gerr := meta.boltc.GetTsNumber(ksts, meta.CheckTSID)
-					found, gerr := meta.CheckTSID("meta", ksts)
-					if gerr != nil {
-						gblog.Error(
-							gerr.Error(),
-							zap.String("func", "metaCoordinator"),
-							zap.Error(gerr),
-						)
-						continue
-					}
-					if !found {
-						if pkt, ok := meta.sm.get([]byte(ksts)); ok {
-							meta.metaPntChan <- pkt
-							time.Sleep(headInterval)
-							continue
-						}
-					}
-
-					if gerr := meta.boltc.Set(ksts); gerr != nil {
-						gblog.Error(
-							gerr.Error(),
-							zap.String("func", "metaCoordinator"),
-							zap.Error(gerr),
-						)
-					}
-					meta.sm.del(ksts)
-					time.Sleep(headInterval)
-				}
-			}
-		}
-	}()
 
 	go func() {
 		ticker := time.NewTicker(saveInterval)
@@ -222,10 +142,6 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 					}
 
 					go meta.saveBulk(bulk)
-
-					if meta.sm.len() == 0 {
-						meta.metaPayload.Reset()
-					}
 				}
 
 			case p := <-meta.metaPntChan:
@@ -237,6 +153,7 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 						zap.String("func", "metaCoordinator/SaveBulkES"),
 					)
 				}
+				meta.metas = append(meta.metas, p)
 
 				if meta.metaPayload.Len() > meta.settings.MaxMetaBulkSize {
 
@@ -255,10 +172,6 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 					}
 
 					go meta.saveBulk(bulk)
-
-					if meta.sm.len() == 0 {
-						meta.metaPayload.Reset()
-					}
 				}
 
 			case p := <-meta.metaTxtChan:
@@ -289,13 +202,50 @@ func (meta *Meta) metaCoordinator(saveInterval time.Duration, headInterval time.
 
 					go meta.saveBulk(bulk)
 
-					if meta.sm.len() == 0 {
-						meta.metaPayload.Reset()
-					}
 				}
 			}
 		}
 	}()
+}
+
+func (meta *Meta) head() {
+
+	if len(meta.concHead) >= meta.maxHead {
+		gblog.Warn(
+			"max number of goroutines for head achived",
+			zap.String("package", "meta"),
+			zap.String("struct", "Meta"),
+			zap.String("func", "head"),
+			zap.Int("max", meta.maxHead),
+		)
+		return
+	}
+
+	meta.concHead <- struct{}{}
+
+	go func() {
+		mts := meta.metas
+		meta.metas = []*pb.Meta{}
+		for _, m := range mts {
+			ksts := string(utils.KSTS(m.GetKsid(), m.GetTsid()))
+			found, gerr := meta.CheckTSID("meta", ksts)
+			if gerr != nil {
+				gblog.Error(
+					gerr.Error(),
+					zap.String("package", "meta"),
+					zap.String("struct", "Meta"),
+					zap.String("func", "head"),
+					zap.Error(gerr),
+				)
+			}
+			if !found {
+				meta.metaPntChan <- m
+			}
+			time.Sleep(meta.headInterval)
+		}
+		<-meta.concHead
+	}()
+
 }
 
 func (meta *Meta) readMeta(bulk *bytes.Buffer) error {
@@ -324,33 +274,15 @@ func (meta *Meta) readMeta(bulk *bytes.Buffer) error {
 	return nil
 }
 
-func (meta *Meta) Handle(pkt *pb.Meta) bool {
+func (meta *Meta) Handle(pkt *pb.Meta) {
 
-	ksts := utils.KSTS(pkt.GetKsid(), pkt.GetTsid())
+	ksts := string(utils.KSTS(pkt.GetKsid(), pkt.GetTsid()))
 	if meta.boltc.Get(ksts) {
-		/*
-			gblog.Debug(
-				"point already in cache",
-				zap.String("package", "meta"),
-				zap.String("func", "Handle"),
-				zap.String("ksts", *ksts),
-			)
-		*/
-		return true
+		return
 	}
 
-	if _, ok := meta.sm.get(ksts); !ok {
-		gblog.Debug(
-			"adding point in save map",
-			zap.String("package", "meta"),
-			zap.String("func", "Handle"),
-			zap.String("ksts", string(ksts)),
-		)
-		meta.sm.add(ksts, pkt)
-		meta.metaPntChan <- pkt
-	}
-
-	return false
+	meta.boltc.Set(ksts)
+	meta.metaPntChan <- pkt
 }
 
 func (meta *Meta) SaveTxtMeta(packet *pb.Meta) {
@@ -545,6 +477,7 @@ func (meta *Meta) saveBulk(boby io.Reader) {
 	}
 
 	<-meta.concBulk
+	meta.head()
 }
 
 func (meta *Meta) CheckTSID(esType, id string) (bool, gobol.Error) {

@@ -14,12 +14,11 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/uol/mycenae/lib/gorilla"
+	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
-	"github.com/uol/mycenae/lib/utils"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
-	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -30,7 +29,7 @@ import (
 type GrpcServer interface {
 	Write(stream pb.Timeseries_WriteServer) error
 	Read(q *pb.Query, stream pb.Timeseries_ReadServer) error
-	GetMeta(stream pb.Timeseries_GetMetaServer) error
+	WriteMeta(stream pb.Timeseries_WriteMetaServer) error
 	Stop()
 }
 
@@ -38,10 +37,9 @@ type server struct {
 	storage    gorilla.Gorilla
 	meta       meta.MetaData
 	grpcServer *grpc.Server
-	wLimiter   *rate.Limiter
-	rLimiter   *rate.Limiter
-	limiter    *rate.Limiter
-	workerChan chan workerMsg
+	wLimiter   *limiter.RateLimit
+	rLimiter   *limiter.RateLimit
+	mLimiter   *limiter.RateLimit
 }
 
 type workerMsg struct {
@@ -51,13 +49,26 @@ type workerMsg struct {
 
 func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (GrpcServer, error) {
 
+	w, gerr := limiter.New(int(conf.GrpcMaxServerConn/10)*8, int(conf.GrpcBurstServerConn/10)*8, logger)
+	if gerr != nil {
+		return nil, gerr
+	}
+	r, gerr := limiter.New(int(conf.GrpcMaxServerConn/10), int(conf.GrpcBurstServerConn/10), logger)
+	if gerr != nil {
+		return nil, gerr
+	}
+
+	ml, gerr := limiter.New(int(conf.GrpcMaxServerConn/10), int(conf.GrpcBurstServerConn/10), logger)
+	if gerr != nil {
+		return nil, gerr
+	}
+
 	s := &server{
-		storage:    strg,
-		meta:       m,
-		wLimiter:   rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.9, conf.GrpcBurstServerConn),
-		rLimiter:   rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
-		limiter:    rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn), conf.GrpcBurstServerConn),
-		workerChan: make(chan workerMsg, conf.GrpcMaxServerConn),
+		storage:  strg,
+		meta:     m,
+		wLimiter: w,
+		rLimiter: r,
+		mLimiter: ml,
 	}
 
 	go func(s *server, conf *Config) {
@@ -94,20 +105,23 @@ func (s *server) connect(conf *Config) (*grpc.Server, net.Listener, error) {
 	}
 	lis = netutil.LimitListener(lis, conf.MaxListenerConn)
 
-	logger.Debug(
-		"loading server keys",
-		zap.String("cert", conf.Consul.Cert),
-		zap.String("key", conf.Consul.Key),
-	)
-	c, err := credentials.NewServerTLSFromFile(conf.Consul.Cert, conf.Consul.Key)
-	if err != nil {
-		return nil, nil, err
-	}
+	/*
+
+		logger.Debug(
+			"loading server keys",
+			zap.String("cert", conf.Consul.Cert),
+			zap.String("key", conf.Consul.Key),
+		)
+			c, err := credentials.NewServerTLSFromFile(conf.Consul.Cert, conf.Consul.Key)
+			if err != nil {
+				return nil, nil, err
+			}
+	*/
 
 	maxStream := uint32(conf.GrpcBurstServerConn) + uint32(conf.GrpcMaxServerConn)
 
 	gServer := grpc.NewServer(
-		grpc.Creds(c),
+		//grpc.Creds(c),
 		ServerInterceptor(),
 		grpc.InTapHandle(s.rateLimiter),
 		grpc.MaxConcurrentStreams(maxStream),
@@ -121,18 +135,27 @@ func (s *server) connect(conf *Config) (*grpc.Server, net.Listener, error) {
 
 func (s *server) rateLimiter(ctx context.Context, info *tap.Info) (context.Context, error) {
 
-	var limiter *rate.Limiter
+	var limiter *limiter.RateLimit
 	switch info.FullMethodName {
 	case "/proto.Timeseries/Write":
 		limiter = s.wLimiter
 	case "/proto.Timeseries/Read":
 		limiter = s.rLimiter
+	case "/proto.Timeseries/WriteMeta":
+		limiter = s.mLimiter
 	default:
-		limiter = s.limiter
+		limiter = s.wLimiter
 	}
 
-	if !limiter.Allow() {
-		return nil, errors.New("too many requests, grpc server busy")
+	if err := limiter.Reserve(); err != nil {
+		logger.Error(
+			err.Message(),
+			zap.Error(err),
+			zap.String("package", "cluster"),
+			zap.String("struct", "server"),
+			zap.String("func", "rateLimiter"),
+		)
+		return nil, err
 	}
 
 	return ctx, nil
@@ -196,11 +219,9 @@ func (s *server) Write(stream pb.Timeseries_WriteServer) error {
 			)
 
 		}
-
 		return err
 
 	case <-ctx.Done():
-
 		return ctx.Err()
 	}
 
@@ -211,7 +232,8 @@ func (s *server) Read(q *pb.Query, stream pb.Timeseries_ReadServer) error {
 
 	log := logger.With(
 		zap.String("package", "cluster"),
-		zap.String("func", "server/Read"),
+		zap.String("struct", "server"),
+		zap.String("func", "Read"),
 		zap.String("ksid", q.GetKsid()),
 		zap.String("tsid", q.GetTsid()),
 		zap.Int64("start", q.GetStart()),
@@ -219,10 +241,11 @@ func (s *server) Read(q *pb.Query, stream pb.Timeseries_ReadServer) error {
 	)
 
 	ctx := stream.Context()
-	_, ok := ctx.Deadline()
+	d, ok := ctx.Deadline()
 	if !ok {
 		return errors.New("missing ctx with timeout")
 	}
+	log = log.With(zap.Time("deadline", d))
 
 	cErr := make(chan error, 1)
 	cPts := make(chan []*pb.Point, 1)
@@ -265,56 +288,42 @@ func (s *server) Read(q *pb.Query, stream pb.Timeseries_ReadServer) error {
 }
 
 // GetMeta(Timeseries_GetMetaServer)  error
-func (s *server) GetMeta(stream pb.Timeseries_GetMetaServer) error {
+func (s *server) WriteMeta(stream pb.Timeseries_WriteMetaServer) error {
 
 	log := logger.With(
 		zap.String("package", "cluster"),
-		zap.String("func", "server/GetMeta"),
+		zap.String("struct", "server"),
+		zap.String("func", "WriteMeta"),
 	)
 
 	ctx := stream.Context()
-	_, ok := ctx.Deadline()
+	d, ok := ctx.Deadline()
 	if !ok {
 		log.Error("missing ctx with timeout")
 		return errors.New("missing ctx with timeout")
 	}
+	log = log.With(zap.Time("deadline", d))
 
-	c := make(chan error, 1)
-
-	go func() {
-		defer close(c)
-
-		for {
-			m, err := stream.Recv()
-			if err == io.EOF {
-				c <- nil
-				return
-			}
-			if err != nil {
-				log.Error("gRPC communication problema", zap.Error(err))
-				c <- err
-			}
-
-			err = stream.Send(&pb.MetaFound{
-				Ok:   s.meta.Handle(m),
-				Ksts: string(utils.KSTS(m.GetKsid(), m.GetTsid())),
-			})
-
-			if err != nil {
-				log.Error("gRPC streaming problem", zap.Error(err))
-				c <- err
-				return
-			}
+	var c int
+	for {
+		m, err := stream.Recv()
+		if err == io.EOF {
+			return stream.SendAndClose(&pb.MetaFound{})
 		}
-	}()
+		if err != nil {
+			log.Error(err.Error())
+			return err
+		}
+		c++
 
-	select {
-	case err := <-c:
-		return err
-
-	case <-ctx.Done():
-		log.Error("grpc communication problem/timeout", zap.Error(ctx.Err()))
-		return ctx.Err()
+		select {
+		case <-ctx.Done():
+			log.Debug("finished", zap.Error(ctx.Err()))
+			return ctx.Err()
+		default:
+			go s.meta.Handle(m)
+		}
+		log.Debug("meta received", zap.Int("count", c))
 	}
 
 }
@@ -360,23 +369,17 @@ func serverInterceptor(
 ) error {
 
 	start := time.Now()
+	defer statsProcTime(info.FullMethod, time.Since(start))
+
 	err := handler(srv, ss)
 	status, ok := status.FromError(err)
 	if !ok {
 		return err
 	}
-
 	statsProcCount(info.FullMethod, strconv.Itoa(int(status.Code())))
 	if err != nil {
-		logger.Error(
-			"invoke grpc server",
-			zap.String("method", info.FullMethod),
-			zap.Duration("duration", time.Since(start)),
-			zap.Error(err),
-		)
 		return err
 	}
-	statsProcTime(info.FullMethod, time.Since(start))
 
 	return nil
 }

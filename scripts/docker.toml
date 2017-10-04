@@ -54,6 +54,9 @@ BoltPath = "/tmp/mycenae/cache.db"
 # Max number of concurrent points being processed
 MaxConcurrentPoints = 1000
 
+# Max number of concurrent UDP points being processed
+MaxConcurrentUDPPoints = 10000
+
 MaxRateLimit = 2000
 Burst = 10000
 

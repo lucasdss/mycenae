@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -30,8 +31,9 @@ type Config struct {
 	//Time, in seconds, to wait before applying cluster changes to consistency hashing
 	ApplyWait int64
 
-	GrpcTimeout         string
-	gRPCtimeout         time.Duration
+	GrpcWriteTimeout    string
+	GrpcReadTimeout     string
+	GrpcMetaTimeout     string
 	GrpcMaxServerConn   int64
 	GrpcBurstServerConn int
 	MaxListenerConn     int
@@ -63,14 +65,6 @@ func New(
 		log.Error("", zap.Error(err))
 		return nil, errInit("New", err)
 	}
-
-	gRPCtimeout, err := time.ParseDuration(conf.GrpcTimeout)
-	if err != nil {
-		log.Error("", zap.Error(err))
-		return nil, errInit("New", err)
-	}
-
-	conf.gRPCtimeout = gRPCtimeout
 
 	c, gerr := newConsul(conf.Consul)
 	if gerr != nil {
@@ -179,7 +173,7 @@ func (c *Cluster) Classifier(tsid []byte) ([]string, gobol.Error) {
 	return nodes, nil
 }
 
-func (c *Cluster) Write(nodes []string, pts []*pb.Point) gobol.Error {
+func (c *Cluster) Write(nodes []string, pts []*pb.Point) {
 
 	if len(nodes) > 1 {
 		n0 := nodes[0]
@@ -194,7 +188,6 @@ func (c *Cluster) Write(nodes []string, pts []*pb.Point) gobol.Error {
 		if prefered == n1 {
 			nodes = []string{n1, n0}
 		}
-
 	}
 
 	for i, node := range nodes {
@@ -240,7 +233,6 @@ func (c *Cluster) Write(nodes []string, pts []*pb.Point) gobol.Error {
 		}
 	}
 
-	return nil
 }
 
 func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.Error) {
@@ -312,7 +304,7 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 
 		pts, gerr = n.Read(ksid, tsid, start, end)
 		if gerr != nil {
-			log.Error(gerr.Error(), zap.Error(gerr))
+			log.Error(gerr.Message(), zap.Error(gerr))
 			continue
 		}
 
@@ -371,7 +363,7 @@ func (c *Cluster) SelfID() string {
 	return c.self
 }
 
-func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) (<-chan *pb.MetaFound, error) {
+func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) error {
 
 	c.nMutex.RLock()
 	node := c.nodes[nodeID]
@@ -381,9 +373,7 @@ func (c *Cluster) Meta(nodeID string, metas []*pb.Meta) (<-chan *pb.MetaFound, e
 		return node.Meta(metas)
 	}
 
-	ch := make(chan *pb.MetaFound)
-	defer close(ch)
-	return ch, nil
+	return fmt.Errorf("node %s not found", nodeID)
 }
 
 func (c *Cluster) getNodes() {
