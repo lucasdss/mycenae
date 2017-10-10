@@ -49,16 +49,24 @@ type workerMsg struct {
 
 func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (GrpcServer, error) {
 
-	w, gerr := limiter.New(int(conf.GrpcMaxServerConn/10)*8, int(conf.GrpcBurstServerConn/10)*8, logger)
+	w, gerr := limiter.New((conf.GrpcMaxServerConn/10)*8, int(conf.GrpcBurstServerConn/10)*8, logger)
 	if gerr != nil {
 		return nil, gerr
 	}
-	r, gerr := limiter.New(int(conf.GrpcMaxServerConn/10), int(conf.GrpcBurstServerConn/10), logger)
+	r, gerr := limiter.New(
+		conf.GrpcMaxServerConn/10,
+		int(conf.GrpcBurstServerConn/10),
+		logger,
+	)
 	if gerr != nil {
 		return nil, gerr
 	}
 
-	ml, gerr := limiter.New(int(conf.GrpcMaxServerConn/10), int(conf.GrpcBurstServerConn/10), logger)
+	ml, gerr := limiter.New(
+		conf.GrpcMaxServerConn/2,
+		int(conf.GrpcBurstServerConn/10),
+		logger,
+	)
 	if gerr != nil {
 		return nil, gerr
 	}
@@ -165,66 +173,44 @@ func (s *server) Write(stream pb.Timeseries_WriteServer) error {
 
 	ctx := stream.Context()
 
-	if _, ok := ctx.Deadline(); !ok {
+	d, ok := ctx.Deadline()
+	if !ok {
 		return errors.New("missing ctx with timeout")
 	}
+	log := logger.With(
+		zap.String("func", "Write"),
+		zap.String("struct", "server"),
+		zap.String("package", "cluster"),
+		zap.Time("deadline", d),
+	)
 
-	c := make(chan error, 1)
+	for {
+		p, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			log.Error(
+				"problem to save point while writing through gRPC",
+				zap.Error(err),
+			)
+			return err
+		}
 
-	go func() {
-		defer close(c)
-
-		for {
-			p, err := stream.Recv()
-			if err == io.EOF {
-				c <- nil
-				return
-			}
-			if err != nil {
-				logger.Error(
-					"problem to save point while writing through gRPC",
-					zap.String("func", "server/Write"),
-					zap.String("package", "cluster"),
+		select {
+		default:
+			if gerr := s.storage.Write(p); gerr != nil {
+				log.Error(
+					gerr.Message(),
 					zap.Error(err),
 				)
-				c <- err
-				return
+				return gerr
 			}
 
-			if gerr := s.storage.Write(p); gerr != nil {
-				c <- err
-				return
-			}
-
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-
-	}()
-
-	select {
-	case err := <-c:
-		if err != nil {
-			logger.Error(
-				"gorilla storage problem",
-				zap.String("func", "server/Write"),
-				zap.String("package", "cluster"),
-				zap.Error(err),
-			)
-		}
-		if err := stream.SendAndClose(&pb.TSResponse{}); err != nil {
-			logger.Error(
-				"unable to send close stream",
-				zap.String("func", "server/Write"),
-				zap.String("package", "cluster"),
-				zap.Error(err),
-			)
-
-		}
-		return err
-
-	case <-ctx.Done():
-		return ctx.Err()
 	}
-
 }
 
 // Read(*Query, Timeseries_ReadServer)

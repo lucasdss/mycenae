@@ -54,7 +54,11 @@ func New(
 		return nil, err
 	}
 
-	udpLimiter, err := limiter.New(set.MaxConcurrentUDPPoints, set.MaxConcurrentPoints, log)
+	udpLimiter, err := limiter.New(
+		set.MaxConcurrentUDPPoints,
+		set.MaxConcurrentPoints,
+		log,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -327,24 +331,22 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 
 	go func() {
 		timeout := time.After(collect.metaValidationTimeout)
-		metaCh := make(chan struct{}, 1)
 		for n, m := range metas {
-			metaCh <- struct{}{}
 			select {
 			case <-timeout:
 				return
-			case <-metaCh:
+			default:
 				collect.metaHandler(n, m)
 			}
 		}
 	}()
 
 	wg.Wait()
-	go func() {
-		for ks := range keyspaces {
-			statsProcTime(ks, time.Since(start))
-		}
-	}()
+
+	d := time.Since(start)
+	for ks := range keyspaces {
+		statsProcTime(ks, d)
+	}
 
 	return returnPoints, nil
 }

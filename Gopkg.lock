@@ -149,7 +149,7 @@
   branch = "master"
   name = "github.com/uol/gobol"
   packages = [".","cassandra","loader","rip","rubber","saw","snitch"]
-  revision = "b5de0948b9af7722d6536a2b522c1daec4f3e4f7"
+  revision = "354a8f0c16c80dcac134db819db7e5403c4b3919"
 
 [[projects]]
   name = "go.uber.org/atomic"

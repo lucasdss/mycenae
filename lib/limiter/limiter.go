@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/uol/gobol"
@@ -12,7 +13,11 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func New(limit int, burst int, log *zap.Logger) (*RateLimit, error) {
+var (
+	logger *zap.Logger
+)
+
+func New(limit int64, burst int, log *zap.Logger) (*RateLimit, error) {
 	if limit == 0 {
 		return nil, errors.New(fmt.Sprintf("Limiter: limit less than 1. %d", limit))
 	}
@@ -21,59 +26,76 @@ func New(limit int, burst int, log *zap.Logger) (*RateLimit, error) {
 		return nil, errors.New(fmt.Sprintf("Limiter: burst less than 1. %d", burst))
 	}
 
-	return &RateLimit{
-		max:     burst,
-		count:   0,
-		limiter: rate.NewLimiter(rate.Limit(limit), burst),
+	logger = log.With(
+		zap.String("package", "limiter"),
+		zap.String("struct", "RateLimit"),
+	)
 
-		gblog: log,
+	return &RateLimit{
+		limit:   limit,
+		max:     int64(burst) + limit,
+		limiter: rate.NewLimiter(rate.Limit(limit), burst),
 	}, nil
 
 }
 
 type RateLimit struct {
-	max     int
-	count   int
+	limit   int64
+	max     int64
+	count   int64
 	limiter *rate.Limiter
 
-	gblog *zap.Logger
+	log *zap.Logger
 }
 
 func (rt *RateLimit) Reserve() gobol.Error {
 
-	reservation := rt.limiter.Reserve()
-	if !reservation.OK() {
-		rt.gblog.Info("Reserve not allowed, burst number")
+	atomic.AddInt64(&rt.count, 1)
+	defer atomic.AddInt64(&rt.count, -1)
 
-		return rt.error()
+	reservation := rt.limiter.Reserve()
+	defer reservation.Cancel()
+	if !reservation.OK() {
+		return rt.error(
+			"reserve not allowed, burst number",
+			"Reserve",
+		)
 	}
+
 	wait := reservation.Delay()
 	if wait == time.Duration(0) {
 		return nil
 	}
 
-	if rt.count >= rt.max {
-		reservation.Cancel()
-		rt.gblog.Info("Reserve not allowed, max event at same time")
-		return rt.error()
+	c := atomic.LoadInt64(&rt.count)
+	if c >= rt.max {
+		return rt.error(
+			"reserve not allowed, max event at same time",
+			"Reserve",
+		)
 	}
-	rt.count++
 
-	rt.gblog.Debug(fmt.Sprintf("waiting %s for event", wait.String()))
+	logger.Debug(
+		"waiting for event",
+		zap.Duration("wait_time", wait),
+	)
 	time.Sleep(wait)
-
-	rt.count--
 
 	return nil
 }
 
-func (rt *RateLimit) error() gobol.Error {
+func (rt *RateLimit) error(msg, function string) gobol.Error {
+	c := atomic.LoadInt64(&rt.count)
 	return tserr.New(
-		fmt.Errorf("too many events"),
-		"too many events",
+		fmt.Errorf(msg),
+		msg,
 		http.StatusTooManyRequests,
 		map[string]interface{}{
 			"limiter": "reserve",
+			"func":    function,
+			"burst":   rt.max,
+			"count":   c,
+			"limit":   rt.limit,
 		},
 	)
 }

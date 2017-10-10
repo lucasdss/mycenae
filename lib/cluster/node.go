@@ -149,31 +149,12 @@ func (n *node) writePoints(timeout time.Duration, pts []*pb.Point) error {
 	}
 
 	for _, p := range pts {
-		var attempts int
-		var err error
-		for {
-			attempts++
-			err = stream.Send(p)
-			if err == io.EOF {
-				break
-			}
-			if err == nil {
-				break
-			}
-
-			logger.Error(
-				"retry write stream",
-				zap.String("package", "cluster"),
-				zap.String("func", "write"),
-				zap.Int("attempt", attempts),
-				zap.Error(err),
-			)
-			if attempts >= 5 {
-				break
-			}
+		err := stream.Send(p)
+		if err == io.EOF {
+			break
 		}
-
-		if err != nil && err != io.EOF {
+		if err != nil {
+			stream.CloseSend()
 			return err
 		}
 	}
@@ -282,7 +263,7 @@ func (n *node) Meta(metas []*pb.Meta) error {
 
 	logger.Debug("all meta send", zap.Int("count", len(metas)))
 	_, err = stream.CloseAndRecv()
-	if err != nil {
+	if err != nil && err != io.EOF {
 		logger.Error(
 			"meta gRPC CloseSend problem",
 			zap.String("package", "cluster"),
