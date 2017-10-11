@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/uol/gobol"
 	"github.com/uol/mycenae/lib/gorilla"
@@ -31,16 +32,16 @@ func (collector *Collector) HandleUDPpacket(buf []byte, addr string) {
 		return
 	}
 
-	if gerr := collector.udpLimiter.Reserve(); gerr != nil {
-		gblog.Error(
-			"too many udp requests",
-			zap.String("struct", "Collector"),
-			zap.String("func", "HandleUDPpacket"),
-			zap.Error(gerr),
-		)
-
+	rl := collector.udpLimiter.Reserve()
+	if !rl.OK() {
+		ks := "invalid"
+		if collector.isKSIDValid(rcvMsg.Tags["ksid"]) {
+			ks = rcvMsg.Tags["ksid"]
+		}
+		statsUDPRate(ks)
 		return
 	}
+	time.Sleep(rl.Delay())
 
 	gerr := collector.HandlePointUDP(rcvMsg)
 	if gerr != nil {

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 
+	"golang.org/x/time/rate"
+
 	"github.com/uol/gobol"
 
 	"github.com/uol/mycenae/lib/tserr"
@@ -53,4 +55,17 @@ func errMarshal(f string, e error) gobol.Error {
 
 func errPersist(f string, e error) gobol.Error {
 	return errISE(f, e.Error(), e)
+}
+
+func errRateLimit(function string, limit rate.Limit, burst int) gobol.Error {
+	return tserr.New(
+		errors.New("too many requests"),
+		"too many requests",
+		http.StatusTooManyRequests,
+		map[string]interface{}{
+			"func":  function,
+			"burst": burst,
+			"limit": limit,
+		},
+	)
 }

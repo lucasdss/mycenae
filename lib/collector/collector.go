@@ -13,12 +13,12 @@ import (
 
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rubber"
+	"golang.org/x/time/rate"
 
 	"github.com/uol/mycenae/lib/bcache"
 	"github.com/uol/mycenae/lib/cluster"
 	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/gorilla"
-	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/tsstats"
@@ -43,7 +43,6 @@ func New(
 	es *rubber.Elastic,
 	bc *bcache.Bcache,
 	set *structs.Settings,
-	wLimiter *limiter.RateLimit,
 ) (*Collector, error) {
 
 	gblog = log.With(zap.String("package", "collector"))
@@ -54,14 +53,15 @@ func New(
 		return nil, err
 	}
 
-	udpLimiter, err := limiter.New(
-		set.MaxConcurrentUDPPoints,
+	ul := rate.NewLimiter(
+		rate.Limit(set.MaxConcurrentUDPPoints),
 		set.MaxConcurrentPoints,
-		log,
 	)
-	if err != nil {
-		return nil, err
-	}
+
+	wl := rate.NewLimiter(
+		rate.Limit(set.MaxRateLimit),
+		set.Burst,
+	)
 
 	collect := &Collector{
 		boltc:   bc,
@@ -75,11 +75,11 @@ func New(
 		validKSID:             regexp.MustCompile(`^[0-9a-z_]+$`),
 		settings:              set,
 		concPoints:            make(chan struct{}, set.MaxConcurrentPoints),
-		wLimiter:              wLimiter,
+		wLimiter:              wl,
 		metas:                 make(map[string][]*pb.Meta),
-		limiter:               ksLimiter{limite: make(map[string]*limiter.RateLimit)},
+		limiter:               ksLimiter{limite: make(map[string]*rate.Limiter)},
 		metaValidationTimeout: metaValidationTimeout,
-		udpLimiter:            udpLimiter,
+		udpLimiter:            ul,
 	}
 
 	return collect, nil
@@ -100,8 +100,8 @@ type Collector struct {
 	errorsSinceLastProbe   int64
 	saving                 int64
 	shutdown               bool
-	wLimiter               *limiter.RateLimit
-	udpLimiter             *limiter.RateLimit
+	wLimiter               *rate.Limiter
+	udpLimiter             *rate.Limiter
 	limiter                ksLimiter
 	metas                  map[string][]*pb.Meta
 	mtxMetas               sync.RWMutex
@@ -109,7 +109,7 @@ type Collector struct {
 }
 
 type ksLimiter struct {
-	limite map[string]*limiter.RateLimit
+	limite map[string]*rate.Limiter
 	mtx    sync.RWMutex
 }
 
@@ -291,32 +291,28 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 
 	for ks := range keyspaces {
 		collect.limiter.mtx.RLock()
-		l, ok := collect.limiter.limite[ks]
+		l, found := collect.limiter.limite[ks]
 		collect.limiter.mtx.RUnlock()
-		if !ok {
-			li, err := limiter.New(
-				collect.settings.MaxKeyspaceWriteRequests,
+		if !found {
+			li := rate.NewLimiter(
+				rate.Limit(collect.settings.MaxKeyspaceWriteRequests),
 				collect.settings.BurstKeyspaceWriteRequests,
-				gblog,
 			)
-			if err != nil {
-				gblog.Error(
-					err.Error(),
-					zap.String("struct", "CollectorV2"),
-					zap.String("func", "HandlePoint"),
-					zap.Error(err),
-				)
-				return RestErrors{}, errISE("handlePoint", "unable to create a new limiter", err)
-			}
 			collect.limiter.mtx.Lock()
 			collect.limiter.limite[ks] = li
 			collect.limiter.mtx.Unlock()
 			l = li
 		}
-		if gerr := l.Reserve(); gerr != nil {
-			return RestErrors{}, gerr
+		r := l.Reserve()
+		if !r.OK() {
+			return RestErrors{},
+				errRateLimit(
+					"HandlePoint",
+					l.Limit(),
+					l.Burst(),
+				)
 		}
-
+		time.Sleep(r.Delay())
 	}
 
 	for n, points := range pts {
@@ -339,14 +335,14 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 				collect.metaHandler(n, m)
 			}
 		}
+
+		d := time.Since(start)
+		for ks := range keyspaces {
+			statsProcTime(ks, d)
+		}
 	}()
 
 	wg.Wait()
-
-	d := time.Since(start)
-	for ks := range keyspaces {
-		statsProcTime(ks, d)
-	}
 
 	return returnPoints, nil
 }

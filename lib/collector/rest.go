@@ -2,6 +2,7 @@ package collector
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/uol/gobol/rip"
@@ -9,11 +10,6 @@ import (
 )
 
 func (collect *Collector) Scollector(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	if err := collect.wLimiter.Reserve(); err != nil {
-		rip.Fail(w, err)
-		return
-	}
-
 	points := gorilla.TSDBpoints{}
 
 	gerr := rip.FromJSON(r, &points)
@@ -42,10 +38,19 @@ func (collect *Collector) Scollector(w http.ResponseWriter, r *http.Request, ps 
 }
 
 func (collect *Collector) Text(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	if err := collect.wLimiter.Reserve(); err != nil {
-		rip.Fail(w, err)
+	rl := collect.wLimiter.Reserve()
+	if !rl.OK() {
+		rip.Fail(
+			w,
+			errRateLimit(
+				"Text",
+				collect.wLimiter.Limit(),
+				collect.wLimiter.Burst(),
+			),
+		)
 		return
 	}
+	time.Sleep(rl.Delay())
 
 	points := gorilla.TSDBpoints{}
 

@@ -10,11 +10,12 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"golang.org/x/net/netutil"
 
 	"github.com/pkg/errors"
 	"github.com/uol/mycenae/lib/gorilla"
-	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
 	"go.uber.org/zap"
@@ -37,9 +38,9 @@ type server struct {
 	storage    gorilla.Gorilla
 	meta       meta.MetaData
 	grpcServer *grpc.Server
-	wLimiter   *limiter.RateLimit
-	rLimiter   *limiter.RateLimit
-	mLimiter   *limiter.RateLimit
+	wLimiter   *rate.Limiter
+	rLimiter   *rate.Limiter
+	mLimiter   *rate.Limiter
 }
 
 type workerMsg struct {
@@ -49,27 +50,20 @@ type workerMsg struct {
 
 func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (GrpcServer, error) {
 
-	w, gerr := limiter.New((conf.GrpcMaxServerConn/10)*8, int(conf.GrpcBurstServerConn/10)*8, logger)
-	if gerr != nil {
-		return nil, gerr
-	}
-	r, gerr := limiter.New(
-		conf.GrpcMaxServerConn/10,
-		int(conf.GrpcBurstServerConn/10),
-		logger,
+	w := rate.NewLimiter(
+		rate.Limit(conf.GrpcMaxServerConn)*0.8,
+		int(conf.GrpcBurstServerConn/10)*8,
 	)
-	if gerr != nil {
-		return nil, gerr
-	}
 
-	ml, gerr := limiter.New(
-		conf.GrpcMaxServerConn/2,
+	r := rate.NewLimiter(
+		rate.Limit(conf.GrpcMaxServerConn)*0.1,
 		int(conf.GrpcBurstServerConn/10),
-		logger,
 	)
-	if gerr != nil {
-		return nil, gerr
-	}
+
+	ml := rate.NewLimiter(
+		rate.Limit(conf.GrpcMaxServerConn)*0.5,
+		int(conf.GrpcBurstServerConn/10),
+	)
 
 	s := &server{
 		storage:  strg,
@@ -143,7 +137,7 @@ func (s *server) connect(conf *Config) (*grpc.Server, net.Listener, error) {
 
 func (s *server) rateLimiter(ctx context.Context, info *tap.Info) (context.Context, error) {
 
-	var limiter *limiter.RateLimit
+	var limiter *rate.Limiter
 	switch info.FullMethodName {
 	case "/proto.Timeseries/Write":
 		limiter = s.wLimiter
@@ -155,9 +149,9 @@ func (s *server) rateLimiter(ctx context.Context, info *tap.Info) (context.Conte
 		limiter = s.wLimiter
 	}
 
-	if err := limiter.Reserve(); err != nil {
-		logger.Error(
-			err.Message(),
+	if err := limiter.Wait(ctx); err != nil {
+		logger.Info(
+			"gRPC server rate limit",
 			zap.Error(err),
 			zap.String("package", "cluster"),
 			zap.String("struct", "server"),
