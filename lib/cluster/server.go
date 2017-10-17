@@ -61,7 +61,7 @@ func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (GrpcServer,
 	)
 
 	ml := rate.NewLimiter(
-		rate.Limit(conf.GrpcMaxServerConn)*0.5,
+		rate.Limit(conf.GrpcMaxServerConn)*0.1,
 		int(conf.GrpcBurstServerConn/10),
 	)
 
@@ -181,13 +181,9 @@ func (s *server) Write(stream pb.Timeseries_WriteServer) error {
 	for {
 		p, err := stream.Recv()
 		if err == io.EOF {
-			return nil
+			return stream.SendAndClose(&pb.TSResponse{})
 		}
 		if err != nil {
-			log.Error(
-				"problem to save point while writing through gRPC",
-				zap.Error(err),
-			)
 			return err
 		}
 
@@ -195,10 +191,11 @@ func (s *server) Write(stream pb.Timeseries_WriteServer) error {
 		default:
 			if gerr := s.storage.Write(p); gerr != nil {
 				log.Error(
-					gerr.Message(),
-					zap.Error(err),
+					"unable to write to storage",
+					zap.Error(gerr),
 				)
-				return gerr
+
+				return stream.SendAndClose(&pb.TSResponse{})
 			}
 
 		case <-ctx.Done():
@@ -227,43 +224,29 @@ func (s *server) Read(q *pb.Query, stream pb.Timeseries_ReadServer) error {
 	}
 	log = log.With(zap.Time("deadline", d))
 
-	cErr := make(chan error, 1)
-	cPts := make(chan []*pb.Point, 1)
+	pts, err := s.storage.Read(q.GetKsid(), q.GetTsid(), q.GetStart(), q.GetEnd())
+	if err != nil {
+		log.Error("grpc server reading problem", zap.Error(err))
+		return err
+	}
 
-	go func() {
-		defer close(cErr)
-		defer close(cPts)
+	for _, p := range pts {
 
-		pts, err := s.storage.Read(q.GetKsid(), q.GetTsid(), q.GetStart(), q.GetEnd())
+		select {
+		default:
 
-		if err != nil {
-			cErr <- err
-			return
-		}
-
-		cPts <- pts
-
-	}()
-
-	select {
-	case pts := <-cPts:
-		for _, p := range pts {
 			err := stream.Send(p)
 			if err != nil {
 				log.Error("grpc streaming problem", zap.Error(err))
 				return err
 			}
+		case <-ctx.Done():
+			log.Error("grpc communication problem", zap.Error(ctx.Err()))
+			return ctx.Err()
 		}
-
-		return nil
-
-	case err := <-cErr:
-		return err
-
-	case <-ctx.Done():
-		log.Error("grpc communication problem", zap.Error(ctx.Err()))
-		return ctx.Err()
 	}
+
+	return nil
 
 }
 

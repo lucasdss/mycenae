@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/gocql/gocql"
 	"go.uber.org/zap"
@@ -137,6 +138,7 @@ func main() {
 		wLimiter := make(chan struct{}, settings.MaxConcurrentPoints/2)
 		var wg sync.WaitGroup
 
+		time.Sleep(time.Minute)
 		for lp := range w.Load() {
 			if lp.Points == nil {
 				continue

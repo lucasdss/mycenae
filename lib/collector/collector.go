@@ -55,7 +55,7 @@ func New(
 
 	ul := rate.NewLimiter(
 		rate.Limit(set.MaxConcurrentUDPPoints),
-		set.MaxConcurrentPoints,
+		int(set.MaxConcurrentUDPPoints)*2,
 	)
 
 	wl := rate.NewLimiter(
@@ -80,7 +80,18 @@ func New(
 		limiter:               ksLimiter{limite: make(map[string]*rate.Limiter)},
 		metaValidationTimeout: metaValidationTimeout,
 		udpLimiter:            ul,
+		udpPointC:             make(chan udpPoint, set.MaxConcurrentUDPPoints),
+		udpWorkerLimit:        make(chan struct{}, 100),
 	}
+
+	go func() {
+
+		for {
+			collect.udpWorkerLimit <- struct{}{}
+			collect.workerUDP()
+		}
+
+	}()
 
 	return collect, nil
 }
@@ -106,6 +117,9 @@ type Collector struct {
 	metas                  map[string][]*pb.Meta
 	mtxMetas               sync.RWMutex
 	metaValidationTimeout  time.Duration
+
+	udpPointC      chan udpPoint
+	udpWorkerLimit chan struct{}
 }
 
 type ksLimiter struct {
@@ -199,10 +213,78 @@ func (collect *Collector) HandlePointUDP(point gorilla.TSDBpoint) gobol.Error {
 
 	//atomic.AddInt64(&collect.receivedSinceLastProbe, 1)
 	statsUDP(ks, "number")
-	collect.cluster.Write(nodePoint, []*pb.Point{packet})
-	collect.metaHandler(nodeMeta, []*pb.Meta{m})
+	//collect.cluster.Write(nodePoint, []*pb.Point{packet})
+	collect.udpPointC <- udpPoint{
+		nodes:    nodePoint,
+		point:    packet,
+		nodeMeta: nodeMeta,
+		meta:     m,
+	}
+	//collect.metaHandler(nodeMeta, []*pb.Meta{m})
 
 	return nil
+}
+
+type udpPoint struct {
+	nodes    []string
+	point    *pb.Point
+	nodeMeta string
+	meta     *pb.Meta
+}
+
+func (collect *Collector) workerUDP() {
+
+	go func() {
+		defer func() { <-collect.udpWorkerLimit }()
+		ticker := time.NewTicker(500 * time.Millisecond)
+		points := make(map[string][]*pb.Point)
+		metas := make(map[string][]*pb.Meta)
+		for {
+
+			select {
+			case udp := <-collect.udpPointC:
+				nodePoint := udp.nodes
+				np := []byte(nodePoint[0])
+				if len(nodePoint) > 1 {
+					n0 := nodePoint[0]
+					n1 := nodePoint[1]
+					if n1 > n0 {
+						n0 = n1
+						n1 = nodePoint[0]
+					}
+
+					np = make([]byte, len(n0)+len(n1)+1)
+					copy(np, n0)
+					copy(np[len(n0):], "|")
+					copy(np[len(n0)+1:], n1)
+				}
+				n := string(np)
+				points[n] = append(points[n], udp.point)
+				metas[udp.nodeMeta] = append(metas[udp.nodeMeta], udp.meta)
+
+				if len(points) > 100 {
+					for n, p := range points {
+						nodes := strings.Split(n, "|")
+						collect.cluster.Write(nodes, p)
+					}
+					for n, m := range metas {
+						collect.cluster.Meta(n, m)
+					}
+					return
+				}
+
+			case <-ticker.C:
+				for n, p := range points {
+					nodes := strings.Split(n, "|")
+					collect.cluster.Write(nodes, p)
+				}
+				return
+			}
+
+		}
+
+	}()
+
 }
 
 func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, gobol.Error) {
@@ -305,6 +387,7 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 		}
 		r := l.Reserve()
 		if !r.OK() {
+			statsPointsRate(ks)
 			return RestErrors{},
 				errRateLimit(
 					"HandlePoint",
@@ -364,6 +447,11 @@ func (collect *Collector) metaHandler(nodeID string, metas []*pb.Meta) {
 		return
 	}
 
+	for _, m := range metas {
+		ksts := string(utils.KSTS(m.GetKsid(), m.GetTsid()))
+		collect.boltc.Set(ksts)
+	}
+
 	gblog.Debug(
 		"processing meta using gRPC",
 		zap.String("struct", "CollectorV2"),
@@ -382,12 +470,6 @@ func (collect *Collector) metaHandler(nodeID string, metas []*pb.Meta) {
 		)
 		return
 	}
-
-	for _, m := range metas {
-		ksts := string(utils.KSTS(m.GetKsid(), m.GetTsid()))
-		collect.boltc.Set(ksts)
-	}
-
 }
 
 func (collect *Collector) HandleGerr(ks string, returnPoints *RestErrors, rcvMsg gorilla.TSDBpoint, gerr gobol.Error) {

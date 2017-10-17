@@ -115,6 +115,13 @@ func statsPointsError(ks, vt string) {
 	)
 }
 
+func statsPointsRate(ks string) {
+	statsIncrement(
+		"rate.exceded",
+		map[string]string{"protocol": "http", "api": "v2", "keyspace": ks},
+	)
+}
+
 func statsIncrement(metric string, tags map[string]string) {
 	stats.Increment("collector", metric, tags)
 }
