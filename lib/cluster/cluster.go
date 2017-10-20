@@ -160,11 +160,11 @@ func (c *Cluster) checkCluster(interval time.Duration) {
 
 }
 
-func (c *Cluster) Classifier(tsid []byte) ([]string, gobol.Error) {
-	nodes, err := c.ch.GetN(tsid, 2)
+func (c *Cluster) Classifier(ksid []byte) ([]string, gobol.Error) {
+	nodes, err := c.ch.GetN(ksid, 2)
 	if err != nil {
 		logger.Debug("running as single node?", zap.String("consistent hash", err.Error()))
-		node, err := c.ch.Get(tsid)
+		node, err := c.ch.Get(ksid)
 		if err != nil {
 			return nil, errRequest("Write", http.StatusInternalServerError, err)
 		}
@@ -247,7 +247,7 @@ func (c *Cluster) Read(ksid, tsid string, start, end int64) ([]*pb.Point, gobol.
 		zap.Int64("end", end),
 	)
 
-	nodes, err := c.Classifier([]byte(tsid))
+	nodes, err := c.Classifier([]byte(ksid))
 	if err != nil {
 		return nil, errRequest("Read", http.StatusInternalServerError, err)
 	}

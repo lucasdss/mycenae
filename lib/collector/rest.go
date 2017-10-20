@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -15,6 +16,12 @@ func (collect *Collector) Scollector(w http.ResponseWriter, r *http.Request, ps 
 	gerr := rip.FromJSON(r, &points)
 	if gerr != nil {
 		rip.Fail(w, gerr)
+		return
+	}
+
+	if len(points) < 1 {
+		msg := "must send at least one point"
+		rip.Fail(w, errBR("Scollector", msg, errors.New(msg)))
 		return
 	}
 
