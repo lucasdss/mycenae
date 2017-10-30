@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/gocql/gocql"
 	"go.uber.org/zap"
@@ -27,7 +28,6 @@ import (
 	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/gorilla"
 	"github.com/uol/mycenae/lib/keyspace"
-	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/plot"
 	"github.com/uol/mycenae/lib/rest"
@@ -134,14 +134,11 @@ func main() {
 	}
 
 	go func() {
-		log := tsLogger.With(
-			zap.String("func", "main"),
-			zap.String("package", "main"),
-		)
 
-		wLimiter := make(chan interface{}, settings.MaxConcurrentPoints/2)
+		wLimiter := make(chan struct{}, settings.MaxConcurrentPoints/2)
 		var wg sync.WaitGroup
 
+		time.Sleep(time.Minute)
 		for lp := range w.Load() {
 			if lp.Points == nil {
 				continue
@@ -152,9 +149,11 @@ func main() {
 			go func(lp wal.LoadPoints) {
 				gerr := strg.WAL(lp.KSTS, lp.BlockID, lp.Points)
 				if gerr != nil {
-					log.Error(
+					tsLogger.Error(
 						"unable to write in local node",
 						zap.Error(gerr),
+						zap.String("func", "main"),
+						zap.String("package", "main"),
 					)
 				}
 				wg.Done()
@@ -165,7 +164,11 @@ func main() {
 		wg.Wait()
 		close(wLimiter)
 
-		log.Debug("finished loading points")
+		tsLogger.Info(
+			"finished loading points",
+			zap.String("func", "main"),
+			zap.String("package", "main"),
+		)
 	}()
 
 	cluster, err := cluster.New(tsLogger, tssts, strg, meta, settings.Cluster)
@@ -173,12 +176,7 @@ func main() {
 		tsLogger.Fatal("", zap.Error(err))
 	}
 
-	limiter, err := limiter.New(settings.MaxRateLimit, settings.Burst, tsLogger)
-	if err != nil {
-		tsLogger.Fatal(err.Error())
-	}
-
-	coll, err := collector.New(tsLogger, tssts, cluster, meta, d, es, bc, settings, limiter)
+	coll, err := collector.New(tsLogger, tssts, cluster, meta, d, es, bc, settings)
 	if err != nil {
 		tsLogger.Fatal(err.Error())
 	}

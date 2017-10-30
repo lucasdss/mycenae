@@ -27,13 +27,13 @@ type Settings struct {
 	WAL                        *wal.Settings
 	MaxTimeseries              int
 	MaxConcurrentTimeseries    int
-	MaxKeyspaceWriteRequests   int
+	MaxKeyspaceWriteRequests   int64
 	BurstKeyspaceWriteRequests int
 	MaxConcurrentReads         int
 	MaxConcurrentPoints        int
-	MaxConcurrentUDPPoints     int
+	MaxConcurrentUDPPoints     int64
 	LogQueryTSthreshold        int
-	MaxRateLimit               int
+	MaxRateLimit               int64
 	Burst                      int
 	CompactionStrategy         string
 	Meta                       *meta.Settings

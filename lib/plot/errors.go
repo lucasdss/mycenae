@@ -2,6 +2,7 @@ package plot
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/uol/gobol"
@@ -34,6 +35,11 @@ func errBasic(f, s string, code int, e error) gobol.Error {
 		)
 	}
 	return nil
+}
+
+func errPointsOverflow(function string, received, max int) gobol.Error {
+	m := fmt.Sprintf("points received %v overflow max %v", received, max)
+	return errBasic(function, m, http.StatusRequestEntityTooLarge, errors.New(m))
 }
 
 func errValidationS(f, s string) gobol.Error {

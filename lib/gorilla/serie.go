@@ -16,16 +16,17 @@ import (
 )
 
 type serie struct {
-	mtx        sync.RWMutex
-	mtxDepot   sync.Mutex
-	ksid       string
-	tsid       string
-	blocks     [utils.MaxBlocks]*block
-	index      int
-	lastWrite  int64
-	lastAccess int64
-	cleanup    bool
-	persist    depot.Persistence
+	mtx         sync.RWMutex
+	mtxDepot    sync.Mutex
+	ksid        string
+	tsid        string
+	blocks      [utils.MaxBlocks]*block
+	index       int
+	lastWrite   int64
+	lastAccess  int64
+	cleanup     bool
+	persist     depot.Persistence
+	initialized bool
 }
 
 type query struct {
@@ -44,7 +45,22 @@ func newSerie(persist depot.Persistence, ksid, tsid string) *serie {
 		blocks:     [utils.MaxBlocks]*block{},
 	}
 
-	s.init()
+	gblog.Debug(
+		"initializing serie",
+		zap.String("package", "gorilla"),
+		zap.String("func", "newSerie"),
+		zap.String("ksid", ksid),
+		zap.String("tsid", tsid),
+	)
+
+	now := time.Now().Unix()
+
+	s.index = utils.GetIndex(now)
+
+	blkid := utils.BlockID(now)
+	i := utils.GetIndex(blkid)
+	s.blocks[i] = &block{id: blkid}
+	//s.init()
 
 	return s
 }
@@ -60,18 +76,11 @@ func (t *serie) init() {
 
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
+	if t.initialized {
+		return
+	}
 
-	log.Debug("initializing serie")
-
-	now := time.Now().Unix()
-
-	t.index = utils.GetIndex(now)
-
-	blkid := utils.BlockID(now)
-	i := utils.GetIndex(blkid)
-
-	t.blocks[i] = &block{id: blkid}
-
+	blkid := t.blocks[t.index].id
 	blkPoints, err := t.persist.Read(t.ksid, t.tsid, blkid)
 	if err != nil {
 		log.Error(
@@ -82,7 +91,8 @@ func (t *serie) init() {
 		return
 	}
 
-	t.blocks[i].SetPoints(blkPoints)
+	t.initialized = true
+	t.blocks[t.index].Merge(blkPoints)
 
 }
 
@@ -186,6 +196,9 @@ func (t *serie) addPoint(p *pb.Point) gobol.Error {
 }
 
 func (t *serie) toDepot() bool {
+	if !t.initialized {
+		t.init()
+	}
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
 
@@ -360,6 +373,9 @@ func (t *serie) update(p *pb.Point) gobol.Error {
 }
 
 func (t *serie) read(start, end int64) ([]*pb.Point, gobol.Error) {
+	if !t.initialized {
+		t.init()
+	}
 	t.mtx.RLock()
 	defer t.mtx.RUnlock()
 

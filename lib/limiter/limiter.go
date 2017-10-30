@@ -8,11 +8,10 @@ import (
 
 	"github.com/uol/gobol"
 	"github.com/uol/mycenae/lib/tserr"
-	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
 
-func New(limit int, burst int, log *zap.Logger) (*RateLimit, error) {
+func New(limit int64, burst int) (*RateLimit, error) {
 	if limit == 0 {
 		return nil, errors.New(fmt.Sprintf("Limiter: limit less than 1. %d", limit))
 	}
@@ -22,58 +21,43 @@ func New(limit int, burst int, log *zap.Logger) (*RateLimit, error) {
 	}
 
 	return &RateLimit{
-		max:     burst,
-		count:   0,
 		limiter: rate.NewLimiter(rate.Limit(limit), burst),
-
-		gblog: log,
 	}, nil
 
 }
 
 type RateLimit struct {
-	max     int
-	count   int
 	limiter *rate.Limiter
-
-	gblog *zap.Logger
 }
 
 func (rt *RateLimit) Reserve() gobol.Error {
 
-	reservation := rt.limiter.Reserve()
-	if !reservation.OK() {
-		rt.gblog.Info("Reserve not allowed, burst number")
+	r := rt.limiter.Reserve()
 
-		return rt.error()
+	if !r.OK() {
+		return rt.error(
+			"reserve not allowed, burst number",
+			"Reserve",
+			float64(rt.limiter.Limit()),
+			rt.limiter.Burst(),
+		)
 	}
-	wait := reservation.Delay()
-	if wait == time.Duration(0) {
-		return nil
-	}
 
-	if rt.count >= rt.max {
-		reservation.Cancel()
-		rt.gblog.Info("Reserve not allowed, max event at same time")
-		return rt.error()
-	}
-	rt.count++
-
-	rt.gblog.Debug(fmt.Sprintf("waiting %s for event", wait.String()))
-	time.Sleep(wait)
-
-	rt.count--
+	time.Sleep(r.Delay())
 
 	return nil
 }
 
-func (rt *RateLimit) error() gobol.Error {
+func (rt *RateLimit) error(msg, function string, limit float64, burst int) gobol.Error {
 	return tserr.New(
-		fmt.Errorf("too many events"),
-		"too many events",
+		fmt.Errorf(msg),
+		msg,
 		http.StatusTooManyRequests,
 		map[string]interface{}{
 			"limiter": "reserve",
+			"func":    function,
+			"burst":   burst,
+			"limit":   limit,
 		},
 	)
 }

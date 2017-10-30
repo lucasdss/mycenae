@@ -7,10 +7,12 @@ import (
 )
 
 const (
-	Hour       = 3600
-	Day        = 24 * Hour
-	MaxBlocks  = 12
-	HeaderSize = 19
+	Hour         = 3600
+	Day          = 24 * Hour
+	MaxBlocks    = 12
+	HeaderSize   = 19
+	MaxPoints    = 2000000
+	MaxOldBlocks = 252
 )
 
 // BlockID returns an UTC timestamp at

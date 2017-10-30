@@ -68,8 +68,8 @@ func (us UDPserver) asyncStart() {
 		gblog.Info("set buffer: setted")
 	}
 
+	buf := make([]byte, 1024)
 	for {
-		buf := make([]byte, 1024)
 
 		rlen, addr, err := sock.ReadFromUDP(buf)
 
@@ -79,23 +79,25 @@ func (us UDPserver) asyncStart() {
 			saddr = addr.IP.String()
 		}
 		if err != nil {
-			gblog.Sugar().Errorf("read buffer from %s : %s", saddr, zap.Error(err))
-		} else {
-			go us.handler.HandleUDPpacket(buf[0:rlen], saddr)
+			gblog.Error(
+				"read buffer problem",
+				zap.String("address", saddr),
+				zap.Error(err),
+			)
+			continue
 		}
 
-		if us.shutdown {
-			us.closed <- struct{}{}
+		select {
+		case <-us.closed:
+			us.handler.Stop()
 			return
+		default:
+			us.handler.HandleUDPpacket(buf[0:rlen], saddr)
 		}
+
 	}
 }
 
 func (us *UDPserver) Stop() {
-	us.shutdown = true
-	select {
-	case <-us.closed:
-		us.handler.Stop()
-		return
-	}
+	us.closed <- struct{}{}
 }

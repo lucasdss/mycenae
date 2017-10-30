@@ -75,10 +75,6 @@ func newNode(address string, port int, conf *Config) (Client, gobol.Error) {
 	*/
 
 	//conn, err := grpc.Dial(fmt.Sprintf("%v:%d", address, port), grpc.WithTransportCredentials(cred))
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%d", address, port), grpc.WithInsecure())
-	if err != nil {
-		return nil, errInit("newNode", err)
-	}
 
 	logger.Debug(
 		"new node",
@@ -108,22 +104,38 @@ func newNode(address string, port int, conf *Config) (Client, gobol.Error) {
 		address:  address,
 		port:     port,
 		conf:     conf,
-		conn:     conn,
 		ptsCh:    make(chan []*pb.Point, 5),
 		metaCh:   make(chan []*pb.Meta, 5),
 		wLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.8, conf.GrpcBurstServerConn),
 		rLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
 		mLimiter: rate.NewLimiter(rate.Limit(conf.GrpcMaxServerConn)*0.1, conf.GrpcBurstServerConn),
-		client:   pb.NewTimeseriesClient(conn),
+
 		wal:      w,
 		wTimeout: wTimeout,
 		rTimeout: rTimeout,
 		mTimeout: mTimeout,
 	}
 
-	node.replay()
+	conn, err := node.newClient()
+	if err != nil {
+		return nil, errInit("newNode", err)
+	}
+
+	node.conn = conn
+	node.client = pb.NewTimeseriesClient(conn)
+
+	go node.replay()
 
 	return node, nil
+}
+
+func (n *node) newClient() (*grpc.ClientConn, error) {
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%d", n.address, n.port), grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 
 func (n *node) Address() string {
@@ -134,7 +146,7 @@ func (n *node) Port() int {
 	return n.port
 }
 
-func (n *node) writePoints(timeout time.Duration, pts []*pb.Point) error {
+func (n *node) writePoints(client pb.TimeseriesClient, timeout time.Duration, pts []*pb.Point) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -149,31 +161,11 @@ func (n *node) writePoints(timeout time.Duration, pts []*pb.Point) error {
 	}
 
 	for _, p := range pts {
-		var attempts int
-		var err error
-		for {
-			attempts++
-			err = stream.Send(p)
-			if err == io.EOF {
-				break
-			}
-			if err == nil {
-				break
-			}
-
-			logger.Error(
-				"retry write stream",
-				zap.String("package", "cluster"),
-				zap.String("func", "write"),
-				zap.Int("attempt", attempts),
-				zap.Error(err),
-			)
-			if attempts >= 5 {
-				break
-			}
+		err := stream.Send(p)
+		if err == io.EOF {
+			return nil
 		}
-
-		if err != nil && err != io.EOF {
+		if err != nil {
 			return err
 		}
 	}
@@ -188,7 +180,7 @@ func (n *node) writePoints(timeout time.Duration, pts []*pb.Point) error {
 
 func (n *node) Write(pts []*pb.Point) error {
 
-	err := n.writePoints(n.wTimeout, pts)
+	err := n.writePoints(n.client, n.wTimeout, pts)
 	if err != nil {
 		logger.Error(
 			"sending points to replay log",
@@ -272,7 +264,7 @@ func (n *node) Meta(metas []*pb.Meta) error {
 	for _, m := range metas {
 		err := stream.Send(m)
 		if err == io.EOF {
-			break
+			return nil
 		}
 		if err != nil {
 			stream.CloseSend()
@@ -282,7 +274,7 @@ func (n *node) Meta(metas []*pb.Meta) error {
 
 	logger.Debug("all meta send", zap.Int("count", len(metas)))
 	_, err = stream.CloseAndRecv()
-	if err != nil {
+	if err != nil && err != io.EOF {
 		logger.Error(
 			"meta gRPC CloseSend problem",
 			zap.String("package", "cluster"),
@@ -385,6 +377,17 @@ func (n *node) replay() int {
 
 	count := len(names)
 
+	conn, err := n.newClient()
+	if err != nil {
+		log.Error(
+			err.Error(),
+			zap.Error(err),
+		)
+		return 0
+	}
+	defer conn.Close()
+	client := pb.NewTimeseriesClient(conn)
+
 	for i, segmentFile := range names {
 		pts, err := n.wal.Replay(segmentFile)
 		if err != nil {
@@ -397,22 +400,43 @@ func (n *node) replay() int {
 		}
 
 		timeout := time.Minute
-		err = n.writePoints(timeout, pts)
-		if err != nil {
-			log.Error(
-				"replaying points",
-				zap.String("error", err.Error()),
-				zap.Error(err),
-			)
-			errCount++
+
+		size := len(pts)
+		if size == 0 {
 			continue
 		}
+		rs := size
+		for {
 
-		log.Debug(
-			"points replayed",
-			zap.Int("count", len(pts)),
-			zap.String("logfile", segmentFile),
-		)
+			if size > 100 {
+				rs = 100
+			} else {
+				rs = len(pts)
+			}
+
+			err = n.writePoints(client, timeout, pts[:rs])
+			if err != nil {
+				log.Error(
+					"replaying points",
+					zap.String("error", err.Error()),
+					zap.Error(err),
+				)
+				errCount++
+				break
+			}
+			pts = pts[rs:]
+			size = len(pts)
+
+			log.Debug(
+				"points replayed",
+				zap.Int("count", rs),
+				zap.String("logfile", segmentFile),
+			)
+		}
+
+		if errCount > 0 {
+			continue
+		}
 
 		if i+1 == count {
 			continue

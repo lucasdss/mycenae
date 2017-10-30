@@ -10,11 +10,12 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"golang.org/x/net/netutil"
 
 	"github.com/pkg/errors"
 	"github.com/uol/mycenae/lib/gorilla"
-	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	pb "github.com/uol/mycenae/lib/proto"
 	"go.uber.org/zap"
@@ -37,9 +38,9 @@ type server struct {
 	storage    gorilla.Gorilla
 	meta       meta.MetaData
 	grpcServer *grpc.Server
-	wLimiter   *limiter.RateLimit
-	rLimiter   *limiter.RateLimit
-	mLimiter   *limiter.RateLimit
+	wLimiter   *rate.Limiter
+	rLimiter   *rate.Limiter
+	mLimiter   *rate.Limiter
 }
 
 type workerMsg struct {
@@ -49,19 +50,20 @@ type workerMsg struct {
 
 func newServer(conf *Config, strg gorilla.Gorilla, m meta.MetaData) (GrpcServer, error) {
 
-	w, gerr := limiter.New(int(conf.GrpcMaxServerConn/10)*8, int(conf.GrpcBurstServerConn/10)*8, logger)
-	if gerr != nil {
-		return nil, gerr
-	}
-	r, gerr := limiter.New(int(conf.GrpcMaxServerConn/10), int(conf.GrpcBurstServerConn/10), logger)
-	if gerr != nil {
-		return nil, gerr
-	}
+	w := rate.NewLimiter(
+		rate.Limit(conf.GrpcMaxServerConn)*0.8,
+		int(conf.GrpcBurstServerConn/10)*8,
+	)
 
-	ml, gerr := limiter.New(int(conf.GrpcMaxServerConn/10), int(conf.GrpcBurstServerConn/10), logger)
-	if gerr != nil {
-		return nil, gerr
-	}
+	r := rate.NewLimiter(
+		rate.Limit(conf.GrpcMaxServerConn)*0.1,
+		int(conf.GrpcBurstServerConn/10),
+	)
+
+	ml := rate.NewLimiter(
+		rate.Limit(conf.GrpcMaxServerConn)*0.1,
+		int(conf.GrpcBurstServerConn/10),
+	)
 
 	s := &server{
 		storage:  strg,
@@ -135,7 +137,7 @@ func (s *server) connect(conf *Config) (*grpc.Server, net.Listener, error) {
 
 func (s *server) rateLimiter(ctx context.Context, info *tap.Info) (context.Context, error) {
 
-	var limiter *limiter.RateLimit
+	var limiter *rate.Limiter
 	switch info.FullMethodName {
 	case "/proto.Timeseries/Write":
 		limiter = s.wLimiter
@@ -147,9 +149,9 @@ func (s *server) rateLimiter(ctx context.Context, info *tap.Info) (context.Conte
 		limiter = s.wLimiter
 	}
 
-	if err := limiter.Reserve(); err != nil {
-		logger.Error(
-			err.Message(),
+	if err := limiter.Wait(ctx); err != nil {
+		logger.Info(
+			"gRPC server rate limit",
 			zap.Error(err),
 			zap.String("package", "cluster"),
 			zap.String("struct", "server"),
@@ -165,66 +167,41 @@ func (s *server) Write(stream pb.Timeseries_WriteServer) error {
 
 	ctx := stream.Context()
 
-	if _, ok := ctx.Deadline(); !ok {
+	d, ok := ctx.Deadline()
+	if !ok {
 		return errors.New("missing ctx with timeout")
 	}
+	log := logger.With(
+		zap.String("func", "Write"),
+		zap.String("struct", "server"),
+		zap.String("package", "cluster"),
+		zap.Time("deadline", d),
+	)
 
-	c := make(chan error, 1)
-
-	go func() {
-		defer close(c)
-
-		for {
-			p, err := stream.Recv()
-			if err == io.EOF {
-				c <- nil
-				return
-			}
-			if err != nil {
-				logger.Error(
-					"problem to save point while writing through gRPC",
-					zap.String("func", "server/Write"),
-					zap.String("package", "cluster"),
-					zap.Error(err),
-				)
-				c <- err
-				return
-			}
-
-			if gerr := s.storage.Write(p); gerr != nil {
-				c <- err
-				return
-			}
-
+	for {
+		p, err := stream.Recv()
+		if err == io.EOF {
+			return stream.SendAndClose(&pb.TSResponse{})
 		}
-
-	}()
-
-	select {
-	case err := <-c:
 		if err != nil {
-			logger.Error(
-				"gorilla storage problem",
-				zap.String("func", "server/Write"),
-				zap.String("package", "cluster"),
-				zap.Error(err),
-			)
+			return err
 		}
-		if err := stream.SendAndClose(&pb.TSResponse{}); err != nil {
-			logger.Error(
-				"unable to send close stream",
-				zap.String("func", "server/Write"),
-				zap.String("package", "cluster"),
-				zap.Error(err),
-			)
 
+		select {
+		default:
+			if gerr := s.storage.Write(p); gerr != nil {
+				log.Error(
+					"unable to write to storage",
+					zap.Error(gerr),
+				)
+
+				return stream.SendAndClose(&pb.TSResponse{})
+			}
+
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		return err
-
-	case <-ctx.Done():
-		return ctx.Err()
 	}
-
 }
 
 // Read(*Query, Timeseries_ReadServer)
@@ -247,43 +224,29 @@ func (s *server) Read(q *pb.Query, stream pb.Timeseries_ReadServer) error {
 	}
 	log = log.With(zap.Time("deadline", d))
 
-	cErr := make(chan error, 1)
-	cPts := make(chan []*pb.Point, 1)
+	pts, err := s.storage.Read(q.GetKsid(), q.GetTsid(), q.GetStart(), q.GetEnd())
+	if err != nil {
+		log.Error("grpc server reading problem", zap.Error(err))
+		return err
+	}
 
-	go func() {
-		defer close(cErr)
-		defer close(cPts)
+	for _, p := range pts {
 
-		pts, err := s.storage.Read(q.GetKsid(), q.GetTsid(), q.GetStart(), q.GetEnd())
+		select {
+		default:
 
-		if err != nil {
-			cErr <- err
-			return
-		}
-
-		cPts <- pts
-
-	}()
-
-	select {
-	case pts := <-cPts:
-		for _, p := range pts {
 			err := stream.Send(p)
 			if err != nil {
 				log.Error("grpc streaming problem", zap.Error(err))
 				return err
 			}
+		case <-ctx.Done():
+			log.Error("grpc communication problem", zap.Error(ctx.Err()))
+			return ctx.Err()
 		}
-
-		return nil
-
-	case err := <-cErr:
-		return err
-
-	case <-ctx.Done():
-		log.Error("grpc communication problem", zap.Error(ctx.Err()))
-		return ctx.Err()
 	}
+
+	return nil
 
 }
 

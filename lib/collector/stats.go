@@ -18,6 +18,13 @@ func statsUDP(ks, vt string) {
 	)
 }
 
+func statsUDPRate(ks string) {
+	statsIncrement(
+		"rate.exceded",
+		map[string]string{"protocol": "udp", "api": "v2", "keyspace": ks},
+	)
+}
+
 func statsProcTime(ks string, d time.Duration) {
 	statsValueAdd(
 		"points.processes_time",
@@ -105,6 +112,13 @@ func statsPointsError(ks, vt string) {
 	statsIncrement(
 		"points.received.error",
 		map[string]string{"protocol": "http", "api": "v2", "keyspace": ks, "type": vt},
+	)
+}
+
+func statsPointsRate(ks string) {
+	statsIncrement(
+		"rate.exceded",
+		map[string]string{"protocol": "http", "api": "v2", "keyspace": ks},
 	)
 }
 

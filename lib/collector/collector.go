@@ -13,12 +13,12 @@ import (
 
 	"github.com/uol/gobol"
 	"github.com/uol/gobol/rubber"
+	"golang.org/x/time/rate"
 
 	"github.com/uol/mycenae/lib/bcache"
 	"github.com/uol/mycenae/lib/cluster"
 	"github.com/uol/mycenae/lib/depot"
 	"github.com/uol/mycenae/lib/gorilla"
-	"github.com/uol/mycenae/lib/limiter"
 	"github.com/uol/mycenae/lib/meta"
 	"github.com/uol/mycenae/lib/structs"
 	"github.com/uol/mycenae/lib/tsstats"
@@ -43,7 +43,6 @@ func New(
 	es *rubber.Elastic,
 	bc *bcache.Bcache,
 	set *structs.Settings,
-	wLimiter *limiter.RateLimit,
 ) (*Collector, error) {
 
 	gblog = log.With(zap.String("package", "collector"))
@@ -54,10 +53,10 @@ func New(
 		return nil, err
 	}
 
-	udpLimiter, err := limiter.New(set.MaxConcurrentUDPPoints, set.MaxConcurrentPoints, log)
-	if err != nil {
-		return nil, err
-	}
+	wl := rate.NewLimiter(
+		rate.Limit(set.MaxRateLimit),
+		set.Burst,
+	)
 
 	collect := &Collector{
 		boltc:   bc,
@@ -71,12 +70,23 @@ func New(
 		validKSID:             regexp.MustCompile(`^[0-9a-z_]+$`),
 		settings:              set,
 		concPoints:            make(chan struct{}, set.MaxConcurrentPoints),
-		wLimiter:              wLimiter,
+		wLimiter:              wl,
 		metas:                 make(map[string][]*pb.Meta),
-		limiter:               ksLimiter{limite: make(map[string]*limiter.RateLimit)},
+		limiter:               ksLimiter{limite: make(map[string]*rate.Limiter)},
+		udpLimiter:            ksLimiter{limite: make(map[string]*rate.Limiter)},
 		metaValidationTimeout: metaValidationTimeout,
-		udpLimiter:            udpLimiter,
+		workerPointC:          make(chan workerPoint, set.MaxConcurrentUDPPoints),
+		workerLimit:           make(chan struct{}, 500),
 	}
+
+	go func() {
+
+		for {
+			collect.workerLimit <- struct{}{}
+			collect.worker()
+		}
+
+	}()
 
 	return collect, nil
 }
@@ -96,16 +106,19 @@ type Collector struct {
 	errorsSinceLastProbe   int64
 	saving                 int64
 	shutdown               bool
-	wLimiter               *limiter.RateLimit
-	udpLimiter             *limiter.RateLimit
+	wLimiter               *rate.Limiter
 	limiter                ksLimiter
+	udpLimiter             ksLimiter
 	metas                  map[string][]*pb.Meta
 	mtxMetas               sync.RWMutex
 	metaValidationTimeout  time.Duration
+
+	workerPointC chan workerPoint
+	workerLimit  chan struct{}
 }
 
 type ksLimiter struct {
-	limite map[string]*limiter.RateLimit
+	limite map[string]*rate.Limiter
 	mtx    sync.RWMutex
 }
 
@@ -166,7 +179,6 @@ func (collect *Collector) HandlePointUDP(point gorilla.TSDBpoint) gobol.Error {
 
 	start := time.Now()
 	ks := "invalid"
-	defer statsProcTime(ks, time.Since(start))
 
 	if collect.isKSIDValid(point.Tags["ksid"]) {
 		ks = point.Tags["ksid"]
@@ -181,7 +193,7 @@ func (collect *Collector) HandlePointUDP(point gorilla.TSDBpoint) gobol.Error {
 		return gerr
 	}
 
-	nodePoint, gerr := collect.cluster.Classifier([]byte(packet.GetTsid()))
+	nodePoint, gerr := collect.cluster.Classifier([]byte(packet.GetKsid()))
 	if gerr != nil {
 		statsUDPerror(ks, "number")
 		return gerr
@@ -195,22 +207,130 @@ func (collect *Collector) HandlePointUDP(point gorilla.TSDBpoint) gobol.Error {
 
 	//atomic.AddInt64(&collect.receivedSinceLastProbe, 1)
 	statsUDP(ks, "number")
-	collect.cluster.Write(nodePoint, []*pb.Point{packet})
-	collect.metaHandler(nodeMeta, []*pb.Meta{m})
+	//collect.cluster.Write(nodePoint, []*pb.Point{packet})
+	collect.workerPointC <- workerPoint{
+		nodes:    nodePoint,
+		point:    packet,
+		nodeMeta: nodeMeta,
+		meta:     m,
+	}
+	//collect.metaHandler(nodeMeta, []*pb.Meta{m})
 
+	statsProcTime(ks, time.Since(start))
 	return nil
+}
+
+type workerPoint struct {
+	nodes    []string
+	point    *pb.Point
+	nodeMeta string
+	meta     *pb.Meta
+}
+
+func (collect *Collector) worker() {
+
+	go func() {
+		defer func() { <-collect.workerLimit }()
+		ticker := time.NewTicker(time.Second)
+		points := make(map[string][]*pb.Point)
+		metas := make(map[string][]*pb.Meta)
+		for {
+
+			select {
+			case wp := <-collect.workerPointC:
+				nodePoint := wp.nodes
+				np := []byte(nodePoint[0])
+				if len(nodePoint) > 1 {
+					n0 := nodePoint[0]
+					n1 := nodePoint[1]
+					if n1 > n0 {
+						n0 = n1
+						n1 = nodePoint[0]
+					}
+
+					np = make([]byte, len(n0)+len(n1)+1)
+					copy(np, n0)
+					copy(np[len(n0):], "|")
+					copy(np[len(n0)+1:], n1)
+				}
+				n := string(np)
+				points[n] = append(points[n], wp.point)
+				metas[wp.nodeMeta] = append(metas[wp.nodeMeta], wp.meta)
+
+				if len(points) > 100 {
+					for n, p := range points {
+						nodes := strings.Split(n, "|")
+						collect.cluster.Write(nodes, p)
+					}
+					collect.metaWorker(metas)
+					return
+				}
+
+			case <-ticker.C:
+				for n, p := range points {
+					nodes := strings.Split(n, "|")
+					collect.cluster.Write(nodes, p)
+				}
+				collect.metaWorker(metas)
+				return
+			}
+
+		}
+
+	}()
+
+}
+
+func (collect *Collector) metaWorker(metas map[string][]*pb.Meta) {
+	go func() {
+		timeout := time.After(collect.metaValidationTimeout)
+		for n, m := range metas {
+			select {
+			case <-timeout:
+				return
+			default:
+				collect.metaHandler(n, m)
+			}
+		}
+	}()
+
 }
 
 func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, gobol.Error) {
 
 	start := time.Now()
+	ks := "invalid"
+	if collect.isKSIDValid(points[0].Tags["ksid"]) {
+		ks = points[0].Tags["ksid"]
+	}
+
+	collect.limiter.mtx.RLock()
+	l, found := collect.limiter.limite[ks]
+	collect.limiter.mtx.RUnlock()
+	if !found {
+		li := rate.NewLimiter(
+			rate.Limit(collect.settings.MaxKeyspaceWriteRequests),
+			collect.settings.BurstKeyspaceWriteRequests,
+		)
+		collect.limiter.mtx.Lock()
+		collect.limiter.limite[ks] = li
+		collect.limiter.mtx.Unlock()
+		l = li
+	}
+	r := l.Reserve()
+	if !r.OK() {
+		statsPointsRate(ks)
+		return RestErrors{},
+			errRateLimit(
+				"HandlePoint",
+				l.Limit(),
+				l.Burst(),
+			)
+	}
+	time.Sleep(r.Delay())
 
 	returnPoints := RestErrors{}
 	var wg sync.WaitGroup
-
-	pts := make(map[string][]*pb.Point, len(points))
-	keyspaces := make(map[string]interface{})
-	metas := make(map[string][]*pb.Meta)
 
 	var mtx sync.Mutex
 
@@ -239,29 +359,12 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 				return
 			}
 
-			nodePoint, gerr := collect.cluster.Classifier([]byte(packet.GetTsid()))
+			nodePoint, gerr := collect.cluster.Classifier([]byte(packet.GetKsid()))
 			if gerr != nil {
 				mtx.Lock()
 				collect.HandleGerr(ks, &returnPoints, rcvMsg, gerr)
 				mtx.Unlock()
 				return
-			}
-
-			np := []byte(nodePoint[0])
-
-			if len(nodePoint) > 1 {
-
-				n0 := nodePoint[0]
-				n1 := nodePoint[1]
-				if n1 > n0 {
-					n0 = n1
-					n1 = nodePoint[0]
-				}
-
-				np = make([]byte, len(n0)+len(n1)+1)
-				copy(np, n0)
-				copy(np[len(n0):], "|")
-				copy(np[len(n0)+1:], n1)
 			}
 
 			nodeMeta, gerr := collect.cluster.MetaClassifier([]byte(m.GetKsid()))
@@ -272,80 +375,19 @@ func (collect *Collector) HandlePoint(points gorilla.TSDBpoints) (RestErrors, go
 				return
 			}
 
-			mtx.Lock()
-			keyspaces[ks] = nil
-			pts[string(np)] = append(pts[string(np)], packet)
-			if !collect.boltc.Get(string(utils.KSTS(m.GetKsid(), m.GetTsid()))) {
-				metas[nodeMeta] = append(metas[nodeMeta], m)
+			collect.workerPointC <- workerPoint{
+				nodes:    nodePoint,
+				point:    packet,
+				nodeMeta: nodeMeta,
+				meta:     m,
 			}
-			mtx.Unlock()
 
 		}(rcvMsg)
 	}
 
 	wg.Wait()
 
-	for ks := range keyspaces {
-		collect.limiter.mtx.RLock()
-		l, ok := collect.limiter.limite[ks]
-		collect.limiter.mtx.RUnlock()
-		if !ok {
-			li, err := limiter.New(
-				collect.settings.MaxKeyspaceWriteRequests,
-				collect.settings.BurstKeyspaceWriteRequests,
-				gblog,
-			)
-			if err != nil {
-				gblog.Error(
-					err.Error(),
-					zap.String("struct", "CollectorV2"),
-					zap.String("func", "HandlePoint"),
-					zap.Error(err),
-				)
-				return RestErrors{}, errISE("handlePoint", "unable to create a new limiter", err)
-			}
-			collect.limiter.mtx.Lock()
-			collect.limiter.limite[ks] = li
-			collect.limiter.mtx.Unlock()
-			l = li
-		}
-		if gerr := l.Reserve(); gerr != nil {
-			return RestErrors{}, gerr
-		}
-
-	}
-
-	for n, points := range pts {
-		//gblog.Debug("saving map", zap.String("node", n), zap.Any("points", points))
-		wg.Add(1)
-		go func(n string, points []*pb.Point) {
-			defer wg.Done()
-			nodes := strings.Split(n, "|")
-			collect.cluster.Write(nodes, points)
-		}(n, points)
-	}
-
-	go func() {
-		timeout := time.After(collect.metaValidationTimeout)
-		metaCh := make(chan struct{}, 1)
-		for n, m := range metas {
-			metaCh <- struct{}{}
-			select {
-			case <-timeout:
-				return
-			case <-metaCh:
-				collect.metaHandler(n, m)
-			}
-		}
-	}()
-
-	wg.Wait()
-	go func() {
-		for ks := range keyspaces {
-			statsProcTime(ks, time.Since(start))
-		}
-	}()
-
+	statsProcTime(ks, time.Since(start))
 	return returnPoints, nil
 }
 

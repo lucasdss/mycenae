@@ -129,35 +129,24 @@ func (st *Stats) runtimeLoop() {
 }
 
 func (st *Stats) clientUDP() {
-	conn, err := net.Dial("udp", fmt.Sprintf("%v:%v", st.address, st.port))
-	if err != nil {
-		st.logger.Error("connect", zap.Error(err))
-	} else {
-		defer conn.Close()
-	}
-
 	for {
-		select {
-		case messageData := <-st.receiver:
-			payload, err := json.Marshal(messageData)
-			if err != nil {
-				st.logger.Error("marshal", zap.Error(err))
-			}
-
-			if conn != nil {
-				_, err = conn.Write(payload)
-				if err != nil {
-					st.logger.Error("write", zap.Error(err))
-				}
-			} else {
-				conn, err = net.Dial("udp", fmt.Sprintf("%v:%v", st.address, st.port))
-				if err != nil {
-					st.logger.Error("connect", zap.Error(err))
-				} else {
-					defer conn.Close()
-				}
-			}
+		messageData := <-st.receiver
+		payload, err := json.Marshal(messageData)
+		if err != nil {
+			st.logger.Error("marshal", zap.Error(err))
 		}
+
+		conn, err := net.Dial("udp", fmt.Sprintf("%v:%v", st.address, st.port))
+		if err != nil {
+			continue
+			st.logger.Error("connect", zap.Error(err))
+		}
+
+		_, err = conn.Write(payload)
+		if err != nil {
+			st.logger.Error("write", zap.Error(err))
+		}
+		conn.Close()
 	}
 }
 
