@@ -4,8 +4,9 @@ Description=Mycenae timeseries database
 [Service]
 WorkingDirectory=/usr/local/bin/
 Type=forking
-ExecStart=/bin/bash mycenaeStart.sh
-ExecStop=/bin/bash mycenaeStop.sh
+ExecStart=/bin/bash mycStart.sh
+ExecStop=/bin/bash mycStop.sh
+LimitNOFILE=99999
 User=mycenae
 Group=mycenae
 KillMode=process
